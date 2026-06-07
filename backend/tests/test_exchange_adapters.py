@@ -5,18 +5,13 @@ import pytest
 
 from app.db.models.exchange_account import ExchangeName
 from app.db.models.trading import OrderSide, OrderType
+from app.exchanges import read_only
 from app.exchanges.binance import BinanceAdapter
 from app.exchanges.bybit import BybitAdapter
 from app.exchanges.factory import create_exchange_adapter
 from app.exchanges.http_client import ExchangeCredentials, ExchangeSecurityType
 from app.exchanges.mock import MockExchange
 from app.exchanges.okx import OKXAdapter
-from app.exchanges.read_only import (
-    TestnetAdapterCredentialsError as AdapterCredentialsError,
-    TestnetAdapterDisabledError as AdapterDisabledError,
-    TestnetAdapterNotImplementedError as AdapterNotImplementedError,
-    TestnetTradingNotSupportedError as TradingNotSupportedError,
-)
 
 PublicResponseKey = tuple[str, tuple[tuple[str, str], ...]]
 PrivateResponseKey = tuple[str, tuple[tuple[str, str], ...], ExchangeSecurityType]
@@ -87,11 +82,11 @@ def test_factory_passes_credentials_to_testnet_adapters() -> None:
 def test_testnet_read_only_methods_are_disabled_by_default() -> None:
     adapter = BinanceAdapter()
 
-    with pytest.raises(AdapterDisabledError):
+    with pytest.raises(read_only.TestnetAdapterDisabledError):
         adapter.get_symbol_rules(symbol="btcusdt")
-    with pytest.raises(AdapterDisabledError):
+    with pytest.raises(read_only.TestnetAdapterDisabledError):
         adapter.get_balances()
-    with pytest.raises(AdapterDisabledError):
+    with pytest.raises(read_only.TestnetAdapterDisabledError):
         adapter.get_positions()
 
 
@@ -105,11 +100,11 @@ def test_enabled_testnet_adapter_requires_http_client_for_public_methods() -> No
 def test_authenticated_read_only_methods_require_credentials() -> None:
     adapter = BybitAdapter(adapters_enabled=True, http_client=FakeHttpClient({}))
 
-    with pytest.raises(AdapterCredentialsError):
+    with pytest.raises(read_only.TestnetAdapterCredentialsError):
         adapter.get_balances()
-    with pytest.raises(AdapterCredentialsError):
+    with pytest.raises(read_only.TestnetAdapterCredentialsError):
         adapter.get_positions()
-    with pytest.raises(AdapterNotImplementedError):
+    with pytest.raises(read_only.TestnetAdapterNotImplementedError):
         adapter.get_open_orders()
 
 
@@ -387,7 +382,7 @@ def test_okx_symbol_rules_use_fake_client() -> None:
 def test_testnet_trading_methods_are_not_supported() -> None:
     adapter = OKXAdapter(adapters_enabled=True)
 
-    with pytest.raises(TradingNotSupportedError):
+    with pytest.raises(read_only.TestnetTradingNotSupportedError):
         adapter.place_order(
             client_order_id="test-client-order-id",
             symbol="BTCUSDT",
@@ -396,7 +391,7 @@ def test_testnet_trading_methods_are_not_supported() -> None:
             quantity=Decimal("0.1"),
             price=None,
         )
-    with pytest.raises(TradingNotSupportedError):
+    with pytest.raises(read_only.TestnetTradingNotSupportedError):
         adapter.cancel_order(exchange_order_id="test-order-id")
 
 
