@@ -1,7 +1,7 @@
 from typing import Any
 
 from app.db.models.exchange_account import ExchangeName
-from app.exchanges.http_client import ExchangeHttpClient
+from app.exchanges.http_client import ExchangeCredentials, ExchangeHttpClient, ExchangeSecurityType
 from app.exchanges.read_only import ReadOnlyTestnetAdapter
 from app.exchanges.testnet_config import get_testnet_endpoint_config
 
@@ -10,17 +10,22 @@ class OKXAdapter(ReadOnlyTestnetAdapter):
     server_time_path = "/api/v5/public/time"
     exchange_info_path = "/api/v5/public/instruments"
     symbol_rules_path = "/api/v5/public/instruments"
+    balances_path = "/api/v5/account/balance"
+    positions_path = "/api/v5/account/positions"
+    private_security_type = ExchangeSecurityType.OKX_DEMO_SIGNED
 
     def __init__(
         self,
         *,
         adapters_enabled: bool = False,
         http_client: ExchangeHttpClient | None = None,
+        credentials: ExchangeCredentials | None = None,
     ) -> None:
         super().__init__(
             endpoint_config=get_testnet_endpoint_config(ExchangeName.OKX),
             adapters_enabled=adapters_enabled,
             http_client=http_client,
+            credentials=credentials,
         )
 
     def _symbol_rules_params(self, symbol: str) -> dict[str, str]:
@@ -46,3 +51,33 @@ class OKXAdapter(ReadOnlyTestnetAdapter):
             "tick_size": symbol_data.get("tickSz"),
             "raw": symbol_data,
         }
+
+    def _normalize_balances(self, response: dict[str, Any]) -> list[dict[str, Any]]:
+        balances: list[dict[str, Any]] = []
+        for account in response.get("data", []):
+            for detail in account.get("details", []):
+                balances.append(
+                    {
+                        "exchange": ExchangeName.OKX.value,
+                        "asset": detail.get("ccy"),
+                        "free": detail.get("availBal"),
+                        "locked": detail.get("frozenBal"),
+                        "total": detail.get("cashBal"),
+                        "raw": detail,
+                    }
+                )
+        return balances
+
+    def _normalize_positions(self, response: dict[str, Any]) -> list[dict[str, Any]]:
+        return [
+            {
+                "exchange": ExchangeName.OKX.value,
+                "symbol": item.get("instId"),
+                "side": item.get("posSide"),
+                "quantity": item.get("pos"),
+                "entry_price": item.get("avgPx"),
+                "unrealized_pnl": item.get("upl"),
+                "raw": item,
+            }
+            for item in response.get("data", [])
+        ]
