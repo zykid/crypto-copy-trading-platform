@@ -3,23 +3,19 @@ from collections.abc import Generator
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
+from app.db import models as models  # noqa: F401
 from app.db.base import Base
-from app.db.models import (
-    ApiKeySecret,
-    ExchangeAccount,
-    OrderExecution,
-    Position,
-    RiskSetting,
-    TradingSignal,
-    User,
-    UserPermission,
-)
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_session() -> Generator[Session, None, None]:
-    engine = create_engine("sqlite:///:memory:")
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     session = session_factory()
@@ -28,15 +24,4 @@ def db_session() -> Generator[Session, None, None]:
     finally:
         session.close()
         Base.metadata.drop_all(engine)
-
-
-__all__ = [
-    "ApiKeySecret",
-    "ExchangeAccount",
-    "OrderExecution",
-    "Position",
-    "RiskSetting",
-    "TradingSignal",
-    "User",
-    "UserPermission",
-]
+        engine.dispose()
