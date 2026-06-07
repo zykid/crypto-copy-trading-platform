@@ -1,7 +1,7 @@
 from typing import Any
 
 from app.db.models.exchange_account import ExchangeName
-from app.exchanges.http_client import ExchangeHttpClient
+from app.exchanges.http_client import ExchangeCredentials, ExchangeHttpClient
 from app.exchanges.read_only import ReadOnlyTestnetAdapter
 from app.exchanges.testnet_config import get_testnet_endpoint_config
 
@@ -10,17 +10,21 @@ class BinanceAdapter(ReadOnlyTestnetAdapter):
     server_time_path = "/api/v3/time"
     exchange_info_path = "/api/v3/exchangeInfo"
     symbol_rules_path = "/api/v3/exchangeInfo"
+    balances_path = "/api/v3/account"
+    positions_path = "/api/v3/account"
 
     def __init__(
         self,
         *,
         adapters_enabled: bool = False,
         http_client: ExchangeHttpClient | None = None,
+        credentials: ExchangeCredentials | None = None,
     ) -> None:
         super().__init__(
             endpoint_config=get_testnet_endpoint_config(ExchangeName.BINANCE),
             adapters_enabled=adapters_enabled,
             http_client=http_client,
+            credentials=credentials,
         )
 
     def _normalize_symbol_rules(self, symbol: str, response: dict[str, Any]) -> dict[str, Any]:
@@ -42,3 +46,19 @@ class BinanceAdapter(ReadOnlyTestnetAdapter):
             "min_notional": min_notional.get("minNotional"),
             "raw": symbol_data,
         }
+
+    def _normalize_balances(self, response: dict[str, Any]) -> list[dict[str, Any]]:
+        return [
+            {
+                "exchange": ExchangeName.BINANCE.value,
+                "asset": item.get("asset"),
+                "free": item.get("free"),
+                "locked": item.get("locked"),
+                "total": None,
+                "raw": item,
+            }
+            for item in response.get("balances", [])
+        ]
+
+    def _normalize_positions(self, response: dict[str, Any]) -> list[dict[str, Any]]:
+        return []
