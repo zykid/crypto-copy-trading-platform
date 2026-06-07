@@ -5,10 +5,16 @@ from app.db.models.user import UserPermission
 
 
 def list_permissions_for_owner(db: Session, *, owner_user_id: str) -> list[UserPermission]:
-    return list(db.scalars(select(UserPermission).where(UserPermission.owner_user_id == owner_user_id)))
+    statement = select(UserPermission).where(UserPermission.owner_user_id == owner_user_id)
+    return list(db.scalars(statement))
 
 
-def create_permission(db: Session, *, owner_user_id: str, data: dict[str, object]) -> UserPermission:
+def create_permission(
+    db: Session,
+    *,
+    owner_user_id: str,
+    data: dict[str, object],
+) -> UserPermission:
     permission = UserPermission(owner_user_id=owner_user_id, **data)
     db.add(permission)
     db.commit()
@@ -30,7 +36,11 @@ def get_owned_permission(
     )
 
 
-def update_permission(permission: UserPermission, data: dict[str, object], db: Session) -> UserPermission:
+def update_permission(
+    permission: UserPermission,
+    data: dict[str, object],
+    db: Session,
+) -> UserPermission:
     for key, value in data.items():
         if value is not None:
             setattr(permission, key, value)
