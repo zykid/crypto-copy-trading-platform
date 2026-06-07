@@ -31,7 +31,10 @@ def add_permission(
     db: Session = Depends(get_db),
 ):
     if payload.grantee_user_id == current_user.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="cannot share with self")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cannot share with self",
+        )
     return create_permission(
         db,
         owner_user_id=current_user.id,
