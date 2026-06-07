@@ -1,11 +1,47 @@
+from typing import Any
+
 from app.db.models.exchange_account import ExchangeName
+from app.exchanges.http_client import ExchangeHttpClient
 from app.exchanges.read_only import ReadOnlyTestnetAdapter
 from app.exchanges.testnet_config import get_testnet_endpoint_config
 
 
 class BybitAdapter(ReadOnlyTestnetAdapter):
-    def __init__(self, *, adapters_enabled: bool = False) -> None:
+    server_time_path = "/v5/market/time"
+    exchange_info_path = "/v5/market/instruments-info"
+    symbol_rules_path = "/v5/market/instruments-info"
+
+    def __init__(
+        self,
+        *,
+        adapters_enabled: bool = False,
+        http_client: ExchangeHttpClient | None = None,
+    ) -> None:
         super().__init__(
             endpoint_config=get_testnet_endpoint_config(ExchangeName.BYBIT),
             adapters_enabled=adapters_enabled,
+            http_client=http_client,
         )
+
+    def _symbol_rules_params(self, symbol: str) -> dict[str, str]:
+        return {"category": "spot", "symbol": symbol}
+
+    def _normalize_symbol_rules(self, symbol: str, response: dict[str, Any]) -> dict[str, Any]:
+        instruments = response.get("result", {}).get("list", [])
+        symbol_data = next((item for item in instruments if item.get("symbol") == symbol), None)
+        if symbol_data is None:
+            raise ValueError(f"symbol rules not found: {symbol}")
+        lot_filter = symbol_data.get("lotSizeFilter", {})
+        price_filter = symbol_data.get("priceFilter", {})
+        return {
+            "exchange": ExchangeName.BYBIT.value,
+            "symbol": symbol,
+            "base_asset": symbol_data.get("baseCoin"),
+            "quote_asset": symbol_data.get("quoteCoin"),
+            "min_quantity": lot_filter.get("minOrderQty"),
+            "max_quantity": lot_filter.get("maxOrderQty"),
+            "quantity_step": lot_filter.get("basePrecision"),
+            "min_notional": lot_filter.get("minOrderAmt"),
+            "tick_size": price_filter.get("tickSize"),
+            "raw": symbol_data,
+        }
