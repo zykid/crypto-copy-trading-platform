@@ -8,7 +8,12 @@ from app.db.models.trading import OrderExecutionStatus, OrderSide, OrderType, Ri
 from app.services.exchange_accounts import create_account, get_owned_account, upsert_api_key_secret
 from app.services.order_engine import execute_signal_for_account
 from app.services.position_engine import apply_fill, get_or_create_position
-from app.services.risk_engine import RiskOrderInput, check_order_risk, get_or_create_risk_settings
+from app.services.risk_engine import (
+    RiskOrderInput,
+    check_order_risk,
+    get_or_create_risk_settings,
+    update_risk_settings,
+)
 from app.services.signal_engine import create_manual_signal
 from app.services.users import create_user
 
@@ -84,6 +89,47 @@ def test_default_risk_settings_reject_order(db_session: Session) -> None:
 
     assert result.decision.value == "REJECTED"
     assert "risk settings trading is disabled" in result.reasons
+
+
+def test_update_risk_settings_enables_mock_fill(db_session: Session) -> None:
+    user = create_test_user(db_session, "risk_enabled")
+    account = create_mock_account(db_session, user.id, trading_enabled=True)
+    settings = get_or_create_risk_settings(
+        db_session,
+        user_id=user.id,
+        exchange_account_id=account.id,
+    )
+    update_risk_settings(
+        db_session,
+        settings,
+        {
+            "trading_enabled": True,
+            "min_order_quantity": Decimal("0.01"),
+            "max_order_quantity": Decimal("1"),
+            "blocked_symbols": ["ethusdt", "BTCUSDT", "ethusdt"],
+        },
+    )
+    signal = create_manual_signal(
+        db_session,
+        user_id=user.id,
+        symbol="BTCUSDT",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        price=None,
+        quantity=Decimal("0.1"),
+        target_position_quantity=None,
+    )
+
+    execution = execute_signal_for_account(
+        db_session,
+        user_id=user.id,
+        signal_id=signal.id,
+        exchange_account_id=account.id,
+    )
+
+    assert settings.blocked_symbols == ["BTCUSDT", "ETHUSDT"]
+    assert execution.status == OrderExecutionStatus.FAILED
+    assert execution.error_message == "symbol is blocked"
 
 
 def test_execute_signal_is_idempotent_for_same_account(db_session: Session) -> None:
