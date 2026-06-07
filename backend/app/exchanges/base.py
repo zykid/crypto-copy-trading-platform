@@ -7,6 +7,14 @@ from app.db.models.trading import OrderSide, OrderType
 
 class ExchangeAdapter(ABC):
     @abstractmethod
+    def get_server_time(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_exchange_info(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_balances(self) -> list[dict[str, Any]]:
         raise NotImplementedError
 
