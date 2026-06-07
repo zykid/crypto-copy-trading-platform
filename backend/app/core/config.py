@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://redis:6379/0")
 
     jwt_secret_key: str = Field(default="change-me-in-local-env")
+    jwt_expires_minutes: int = Field(default=60)
     secret_encryption_key: str = Field(default="change-me-32-byte-key")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
