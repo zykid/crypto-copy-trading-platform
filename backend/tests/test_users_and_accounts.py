@@ -4,7 +4,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.encryption import decrypt_secret
+from app.core.security import hash_password
 from app.db.models.exchange_account import AccountMode, ApiKeySecret, ExchangeName
+from app.db.models.user import User
 from app.schemas.exchange_account import ApiKeySecretMetadata
 from app.services.exchange_accounts import (
     create_account,
@@ -41,15 +43,19 @@ def test_authenticate_user_by_username_or_email(db_session: Session) -> None:
         password="very-strong-password",
     )
 
-    assert authenticate_user(db_session, username_or_email="alice", password="very-strong-password") == user
-    assert (
-        authenticate_user(
-            db_session,
-            username_or_email="alice@example.com",
-            password="very-strong-password",
-        )
-        == user
+    username_login = authenticate_user(
+        db_session,
+        username_or_email="alice",
+        password="very-strong-password",
     )
+    email_login = authenticate_user(
+        db_session,
+        username_or_email="alice@example.com",
+        password="very-strong-password",
+    )
+
+    assert username_login == user
+    assert email_login == user
     assert authenticate_user(db_session, username_or_email="alice", password="bad-password") is None
 
 
@@ -87,7 +93,9 @@ def test_exchange_account_queries_are_scoped_by_user_id(db_session: Session) -> 
         },
     )
 
-    assert [account.user_id for account in list_accounts(db_session, user_id=alice.id)] == [alice.id]
+    alice_accounts = list_accounts(db_session, user_id=alice.id)
+
+    assert [account.user_id for account in alice_accounts] == [alice.id]
     assert get_owned_account(db_session, user_id=bob.id, account_id=alice_account.id) is None
 
 
@@ -154,9 +162,6 @@ def test_database_unique_constraint_blocks_duplicate_email(db_session: Session) 
     db_session.rollback()
 
     # Service-level duplicate checks are primary; this guards accidental bypasses.
-    from app.db.models.user import User
-    from app.core.security import hash_password
-
     db_session.add(
         User(
             email="alice@example.com",
