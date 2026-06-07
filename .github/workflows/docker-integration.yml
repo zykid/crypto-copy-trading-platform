@@ -23,8 +23,11 @@ jobs:
       - name: Start database, cache, and backend
         run: docker compose up --detach postgres redis backend
 
-      - name: Run mock integration checks
+      - name: Run container health check
         run: docker compose run --rm integration-test
+
+      - name: Run mock API integration checks
+        run: python scripts/integration/mock_compose_check.py
 
       - name: Show backend logs on failure
         if: failure()
