@@ -43,6 +43,10 @@ select = [
 ]
 ignore = ["B008"]
 
+[tool.ruff.lint.per-file-ignores]
+"alembic/*.py" = ["I001"]
+"alembic/versions/*.py" = ["I001"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
