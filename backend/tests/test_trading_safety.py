@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+import pytest
 from sqlalchemy.orm import Session
 
 from app.db.models.exchange_account import AccountMode, ExchangeName
@@ -116,6 +117,37 @@ def test_execute_signal_is_idempotent_for_same_account(db_session: Session) -> N
     assert first.execution_id == second.execution_id
     assert first.client_order_id == second.client_order_id
     assert first.status == OrderExecutionStatus.FAILED
+
+
+def test_idempotency_does_not_bypass_tenant_isolation(db_session: Session) -> None:
+    owner = create_test_user(db_session, "idempotent_owner")
+    other = create_test_user(db_session, "idempotent_other")
+    account = create_mock_account(db_session, owner.id, trading_enabled=True)
+    signal = create_manual_signal(
+        db_session,
+        user_id=owner.id,
+        symbol="BTCUSDT",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        price=None,
+        quantity=Decimal("0.1"),
+        target_position_quantity=None,
+    )
+
+    execute_signal_for_account(
+        db_session,
+        user_id=owner.id,
+        signal_id=signal.id,
+        exchange_account_id=account.id,
+    )
+
+    with pytest.raises(ValueError, match="signal not found"):
+        execute_signal_for_account(
+            db_session,
+            user_id=other.id,
+            signal_id=signal.id,
+            exchange_account_id=account.id,
+        )
 
 
 def test_position_target_executes_delta_not_full_target(db_session: Session) -> None:
