@@ -6,6 +6,7 @@ from app.api.v1.health import router as health_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.permissions import router as permissions_router
 from app.api.v1.positions import router as positions_router
+from app.api.v1.risk_settings import router as risk_settings_router
 from app.api.v1.signals import router as signals_router
 from app.api.v1.users import router as users_router
 from app.core.config import settings
@@ -30,6 +31,11 @@ def create_app() -> FastAPI:
     app.include_router(signals_router, prefix="/api/v1/signals", tags=["signals"])
     app.include_router(orders_router, prefix="/api/v1/orders", tags=["orders"])
     app.include_router(positions_router, prefix="/api/v1/positions", tags=["positions"])
+    app.include_router(
+        risk_settings_router,
+        prefix="/api/v1/risk-settings",
+        tags=["risk-settings"],
+    )
     return app
 
 
