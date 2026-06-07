@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -14,6 +15,17 @@ from app.exchanges.read_only import (
     TestnetAdapterNotImplementedError,
     TestnetTradingNotSupportedError,
 )
+
+
+class FakeHttpClient:
+    def __init__(self, responses: dict[tuple[str, tuple[tuple[str, str], ...]], dict[str, Any]]):
+        self.responses = responses
+        self.calls: list[tuple[str, dict[str, str] | None]] = []
+
+    def get_public(self, path: str, params: dict[str, str] | None = None) -> dict[str, Any]:
+        self.calls.append((path, params))
+        key = (path, tuple(sorted((params or {}).items())))
+        return self.responses[key]
 
 
 def test_factory_returns_mock_adapter() -> None:
@@ -39,13 +51,136 @@ def test_testnet_read_only_methods_are_disabled_by_default() -> None:
         adapter.get_positions()
 
 
-def test_enabled_testnet_adapter_still_has_no_http_client() -> None:
+def test_enabled_testnet_adapter_requires_http_client_for_public_methods() -> None:
     adapter = BybitAdapter(adapters_enabled=True)
 
-    with pytest.raises(TestnetAdapterNotImplementedError):
+    with pytest.raises(RuntimeError, match="exchange HTTP client is not configured"):
         adapter.get_symbol_rules(symbol="BTCUSDT")
+
+
+def test_authenticated_read_only_methods_are_not_implemented() -> None:
+    adapter = BybitAdapter(adapters_enabled=True, http_client=FakeHttpClient({}))
+
+    with pytest.raises(TestnetAdapterNotImplementedError):
+        adapter.get_balances()
+    with pytest.raises(TestnetAdapterNotImplementedError):
+        adapter.get_positions()
     with pytest.raises(TestnetAdapterNotImplementedError):
         adapter.get_open_orders()
+
+
+def test_binance_public_methods_use_fake_client() -> None:
+    client = FakeHttpClient(
+        {
+            ("/api/v3/time", ()): {"serverTime": 123456789},
+            ("/api/v3/exchangeInfo", ()): {"timezone": "UTC", "symbols": []},
+            (
+                "/api/v3/exchangeInfo",
+                (("symbol", "BTCUSDT"),),
+            ): {
+                "symbols": [
+                    {
+                        "symbol": "BTCUSDT",
+                        "baseAsset": "BTC",
+                        "quoteAsset": "USDT",
+                        "filters": [
+                            {
+                                "filterType": "LOT_SIZE",
+                                "minQty": "0.00001000",
+                                "maxQty": "9000.00000000",
+                                "stepSize": "0.00001000",
+                            },
+                            {"filterType": "MIN_NOTIONAL", "minNotional": "5.00000000"},
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+    adapter = BinanceAdapter(adapters_enabled=True, http_client=client)
+
+    assert adapter.get_server_time() == {"serverTime": 123456789}
+    assert adapter.get_exchange_info() == {"timezone": "UTC", "symbols": []}
+    rules = adapter.get_symbol_rules(symbol="btcusdt")
+
+    assert rules["exchange"] == "binance"
+    assert rules["symbol"] == "BTCUSDT"
+    assert rules["base_asset"] == "BTC"
+    assert rules["quote_asset"] == "USDT"
+    assert rules["min_quantity"] == "0.00001000"
+    assert rules["quantity_step"] == "0.00001000"
+    assert rules["min_notional"] == "5.00000000"
+
+
+def test_bybit_symbol_rules_use_fake_client() -> None:
+    client = FakeHttpClient(
+        {
+            (
+                "/v5/market/instruments-info",
+                (("category", "spot"), ("symbol", "BTCUSDT")),
+            ): {
+                "result": {
+                    "list": [
+                        {
+                            "symbol": "BTCUSDT",
+                            "baseCoin": "BTC",
+                            "quoteCoin": "USDT",
+                            "lotSizeFilter": {
+                                "minOrderQty": "0.00001",
+                                "maxOrderQty": "71",
+                                "basePrecision": "0.000001",
+                                "minOrderAmt": "1",
+                            },
+                            "priceFilter": {"tickSize": "0.01"},
+                        }
+                    ]
+                }
+            },
+        }
+    )
+    adapter = BybitAdapter(adapters_enabled=True, http_client=client)
+
+    rules = adapter.get_symbol_rules(symbol="BTCUSDT")
+
+    assert rules["exchange"] == "bybit"
+    assert rules["base_asset"] == "BTC"
+    assert rules["quote_asset"] == "USDT"
+    assert rules["min_quantity"] == "0.00001"
+    assert rules["min_notional"] == "1"
+    assert rules["tick_size"] == "0.01"
+
+
+def test_okx_symbol_rules_use_fake_client() -> None:
+    client = FakeHttpClient(
+        {
+            (
+                "/api/v5/public/instruments",
+                (("instId", "BTC-USDT"), ("instType", "SPOT")),
+            ): {
+                "data": [
+                    {
+                        "instId": "BTC-USDT",
+                        "baseCcy": "BTC",
+                        "quoteCcy": "USDT",
+                        "minSz": "0.00001",
+                        "lotSz": "0.00000001",
+                        "tickSz": "0.1",
+                    }
+                ]
+            },
+        }
+    )
+    adapter = OKXAdapter(adapters_enabled=True, http_client=client)
+
+    rules = adapter.get_symbol_rules(symbol="BTCUSDT")
+
+    assert rules["exchange"] == "okx"
+    assert rules["exchange_symbol"] == "BTC-USDT"
+    assert rules["base_asset"] == "BTC"
+    assert rules["quote_asset"] == "USDT"
+    assert rules["min_quantity"] == "0.00001"
+    assert rules["quantity_step"] == "0.00000001"
+    assert rules["tick_size"] == "0.1"
 
 
 def test_testnet_trading_methods_are_not_supported() -> None:
