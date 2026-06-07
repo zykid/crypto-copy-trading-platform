@@ -45,10 +45,21 @@ Implemented in step 3:
 - Fake-client tests for public connectivity mappings
 - Interface expansion for `get_server_time()` and `get_exchange_info()`
 
+Implemented in step 4:
+
+- `ExchangeCredentials` value object for adapter-level credential injection
+- Private HTTP client contract with explicit security type metadata
+- Authenticated read-only balance and position method structure
+- Binance, Bybit, and OKX fake-client balance normalization tests
+- Bybit and OKX fake-client position normalization tests
+- OKX Demo Trading signed request marker
+- Adapter factory credential wiring
+
 Not implemented yet:
 
-- Real HTTP client implementation
-- Authenticated exchange requests
+- Real signed HTTP client implementation
+- Decrypting stored API secrets into adapter credentials
+- Real authenticated exchange requests
 - Testnet order placement
 - WebSocket connections
 - Balance or position synchronization
@@ -81,7 +92,8 @@ Current adapter skeletons behave as follows:
 - `TESTNET_ADAPTERS_ENABLED=false` blocks all testnet read-only calls.
 - Enabling testnet adapters without an HTTP client still fails closed.
 - Public connectivity methods are only tested through fake clients.
-- Authenticated read-only methods still raise immediately.
+- Authenticated read-only methods require injected credentials.
+- Authenticated read-only methods are only tested through fake clients.
 - `place_order()` and `cancel_order()` raise immediately for testnet/demo adapters.
 - MockExchange remains the only adapter that can execute orders in the current codebase.
 
@@ -101,7 +113,7 @@ For testnet/demo API keys:
 
 1. Add read-only adapter clients without order placement. Done.
 2. Implement public connectivity checks: server time, exchange info, symbol rules. Done with fake-client tests.
-3. Implement authenticated read-only checks: balances and positions.
+3. Implement authenticated read-only structure: balances and positions. Done with fake-client tests.
 4. Add adapter-specific rate-limit metadata.
 5. Add testnet-only order placement behind explicit manual gate.
 6. Add WebSocket user stream connections for order and position updates.
