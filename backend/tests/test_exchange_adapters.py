@@ -12,6 +12,7 @@ from app.exchanges.factory import create_exchange_adapter
 from app.exchanges.http_client import ExchangeCredentials, ExchangeSecurityType
 from app.exchanges.mock import MockExchange
 from app.exchanges.okx import OKXAdapter
+from app.exchanges.rate_limit import RateLimitScope, get_exchange_rate_limit_config
 
 PublicResponseKey = tuple[str, tuple[tuple[str, str], ...]]
 PrivateResponseKey = tuple[str, tuple[tuple[str, str], ...], ExchangeSecurityType]
@@ -400,3 +401,40 @@ def test_adapter_endpoint_metadata_is_available_without_network() -> None:
 
     assert adapter.endpoint_config.rest_base_url == "https://openapi.okx.com"
     assert adapter.endpoint_config.demo_header_required is True
+
+
+def test_testnet_adapters_expose_rate_limit_metadata() -> None:
+    assert BinanceAdapter().rate_limit_config.exchange_name == ExchangeName.BINANCE
+    assert BybitAdapter().rate_limit_config.exchange_name == ExchangeName.BYBIT
+    assert OKXAdapter().rate_limit_config.exchange_name == ExchangeName.OKX
+
+
+def test_binance_rate_limit_metadata_uses_dynamic_exchange_info() -> None:
+    config = get_exchange_rate_limit_config(ExchangeName.BINANCE)
+
+    assert config.retry_after_header == "Retry-After"
+    assert "X-MBX-USED-WEIGHT-*" in config.usage_headers
+    assert config.rule("REQUEST_WEIGHT").scope == RateLimitScope.IP
+    assert config.rule("REQUEST_WEIGHT").limit is None
+    assert "exchangeInfo" in config.rule("REQUEST_WEIGHT").notes
+    assert config.rule("RAW_REQUESTS").limit == 300_000
+    assert config.rule("RAW_REQUESTS").interval_seconds == 300
+
+
+def test_bybit_rate_limit_metadata_has_ip_and_header_rules() -> None:
+    config = get_exchange_rate_limit_config(ExchangeName.BYBIT)
+    http_ip = config.rule("HTTP_IP")
+
+    assert "X-Bapi-Limit-Reset-Timestamp" in config.usage_headers
+    assert http_ip.scope == RateLimitScope.IP
+    assert http_ip.limit == 600
+    assert http_ip.interval_seconds == 5
+
+
+def test_okx_rate_limit_metadata_uses_user_id_for_private_requests() -> None:
+    config = get_exchange_rate_limit_config(ExchangeName.OKX)
+
+    assert config.rule("PUBLIC_REST").scope == RateLimitScope.IP
+    assert config.rule("PRIVATE_REST").scope == RateLimitScope.USER_ID
+    assert config.rule("ORDER_MANAGEMENT").scope == RateLimitScope.USER_ID
+    assert "50011" in config.notes
