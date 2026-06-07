@@ -8,24 +8,56 @@ from app.db.models.trading import OrderSide, OrderType
 from app.exchanges.binance import BinanceAdapter
 from app.exchanges.bybit import BybitAdapter
 from app.exchanges.factory import create_exchange_adapter
+from app.exchanges.http_client import ExchangeCredentials, ExchangeSecurityType
 from app.exchanges.mock import MockExchange
 from app.exchanges.okx import OKXAdapter
 from app.exchanges.read_only import (
+    TestnetAdapterCredentialsError,
     TestnetAdapterDisabledError,
     TestnetAdapterNotImplementedError,
     TestnetTradingNotSupportedError,
 )
 
+PublicResponseKey = tuple[str, tuple[tuple[str, str], ...]]
+PrivateResponseKey = tuple[str, tuple[tuple[str, str], ...], ExchangeSecurityType]
+PrivateCall = tuple[str, dict[str, str] | None, ExchangeSecurityType, str]
+
 
 class FakeHttpClient:
-    def __init__(self, responses: dict[tuple[str, tuple[tuple[str, str], ...]], dict[str, Any]]):
+    def __init__(
+        self,
+        responses: dict[PublicResponseKey, dict[str, Any]],
+        private_responses: dict[PrivateResponseKey, dict[str, Any]] | None = None,
+    ):
         self.responses = responses
+        self.private_responses = private_responses or {}
         self.calls: list[tuple[str, dict[str, str] | None]] = []
+        self.private_calls: list[PrivateCall] = []
 
     def get_public(self, path: str, params: dict[str, str] | None = None) -> dict[str, Any]:
         self.calls.append((path, params))
         key = (path, tuple(sorted((params or {}).items())))
         return self.responses[key]
+
+    def get_private(
+        self,
+        path: str,
+        *,
+        credentials: ExchangeCredentials,
+        params: dict[str, str] | None = None,
+        security_type: ExchangeSecurityType = ExchangeSecurityType.SIGNED,
+    ) -> dict[str, Any]:
+        self.private_calls.append((path, params, security_type, credentials.api_key))
+        key = (path, tuple(sorted((params or {}).items())), security_type)
+        return self.private_responses[key]
+
+
+def credentials() -> ExchangeCredentials:
+    return ExchangeCredentials(
+        api_key="test-api-key",
+        api_secret="test-api-secret",
+        passphrase="test-passphrase",
+    )
 
 
 def test_factory_returns_mock_adapter() -> None:
@@ -38,6 +70,18 @@ def test_factory_returns_testnet_adapter_skeletons() -> None:
     assert isinstance(create_exchange_adapter(ExchangeName.BINANCE), BinanceAdapter)
     assert isinstance(create_exchange_adapter(ExchangeName.BYBIT), BybitAdapter)
     assert isinstance(create_exchange_adapter(ExchangeName.OKX), OKXAdapter)
+
+
+def test_factory_passes_credentials_to_testnet_adapters() -> None:
+    adapter = create_exchange_adapter(
+        ExchangeName.BINANCE,
+        testnet_adapters_enabled=True,
+        http_client=FakeHttpClient({}),
+        credentials=credentials(),
+    )
+
+    assert isinstance(adapter, BinanceAdapter)
+    assert adapter.credentials.api_key == "test-api-key"
 
 
 def test_testnet_read_only_methods_are_disabled_by_default() -> None:
@@ -58,15 +102,167 @@ def test_enabled_testnet_adapter_requires_http_client_for_public_methods() -> No
         adapter.get_symbol_rules(symbol="BTCUSDT")
 
 
-def test_authenticated_read_only_methods_are_not_implemented() -> None:
+def test_authenticated_read_only_methods_require_credentials() -> None:
     adapter = BybitAdapter(adapters_enabled=True, http_client=FakeHttpClient({}))
 
-    with pytest.raises(TestnetAdapterNotImplementedError):
+    with pytest.raises(TestnetAdapterCredentialsError):
         adapter.get_balances()
-    with pytest.raises(TestnetAdapterNotImplementedError):
+    with pytest.raises(TestnetAdapterCredentialsError):
         adapter.get_positions()
     with pytest.raises(TestnetAdapterNotImplementedError):
         adapter.get_open_orders()
+
+
+def test_binance_authenticated_read_only_methods_use_fake_client() -> None:
+    client = FakeHttpClient(
+        {},
+        {
+            (
+                "/api/v3/account",
+                (),
+                ExchangeSecurityType.SIGNED,
+            ): {
+                "balances": [
+                    {"asset": "USDT", "free": "100", "locked": "2"},
+                    {"asset": "BTC", "free": "0.1", "locked": "0"},
+                ]
+            }
+        },
+    )
+    adapter = BinanceAdapter(
+        adapters_enabled=True,
+        http_client=client,
+        credentials=credentials(),
+    )
+
+    balances = adapter.get_balances()
+    positions = adapter.get_positions()
+
+    assert balances[0] == {
+        "asset": "USDT",
+        "free": "100",
+        "locked": "2",
+        "total": None,
+        "raw": {"asset": "USDT", "free": "100", "locked": "2"},
+    }
+    assert balances[1]["asset"] == "BTC"
+    assert positions == []
+    assert client.private_calls == [
+        ("/api/v3/account", None, ExchangeSecurityType.SIGNED, "test-api-key"),
+        ("/api/v3/account", None, ExchangeSecurityType.SIGNED, "test-api-key"),
+    ]
+
+
+def test_bybit_authenticated_read_only_methods_use_fake_client() -> None:
+    client = FakeHttpClient(
+        {},
+        {
+            (
+                "/v5/account/wallet-balance",
+                (("accountType", "UNIFIED"),),
+                ExchangeSecurityType.SIGNED,
+            ): {
+                "result": {
+                    "list": [
+                        {
+                            "coin": [
+                                {"coin": "USDT", "walletBalance": "100", "locked": "1"}
+                            ]
+                        }
+                    ]
+                }
+            },
+            (
+                "/v5/position/list",
+                (("category", "linear"), ("settleCoin", "USDT")),
+                ExchangeSecurityType.SIGNED,
+            ): {
+                "result": {
+                    "list": [
+                        {
+                            "symbol": "BTCUSDT",
+                            "side": "Buy",
+                            "size": "0.1",
+                            "avgPrice": "100",
+                            "unrealisedPnl": "1",
+                        }
+                    ]
+                }
+            },
+        },
+    )
+    adapter = BybitAdapter(
+        adapters_enabled=True,
+        http_client=client,
+        credentials=credentials(),
+    )
+
+    balances = adapter.get_balances()
+    positions = adapter.get_positions()
+
+    assert balances[0]["asset"] == "USDT"
+    assert balances[0]["total"] == "100"
+    assert balances[0]["locked"] == "1"
+    assert positions[0]["symbol"] == "BTCUSDT"
+    assert positions[0]["side"] == "Buy"
+    assert positions[0]["quantity"] == "0.1"
+
+
+def test_okx_authenticated_read_only_methods_use_demo_security_type() -> None:
+    client = FakeHttpClient(
+        {},
+        {
+            (
+                "/api/v5/account/balance",
+                (),
+                ExchangeSecurityType.OKX_DEMO_SIGNED,
+            ): {
+                "data": [
+                    {
+                        "details": [
+                            {
+                                "ccy": "USDT",
+                                "availBal": "100",
+                                "frozenBal": "1",
+                                "cashBal": "101",
+                            }
+                        ]
+                    }
+                ]
+            },
+            (
+                "/api/v5/account/positions",
+                (),
+                ExchangeSecurityType.OKX_DEMO_SIGNED,
+            ): {
+                "data": [
+                    {
+                        "instId": "BTC-USDT",
+                        "posSide": "long",
+                        "pos": "0.1",
+                        "avgPx": "100",
+                        "upl": "1",
+                    }
+                ]
+            },
+        },
+    )
+    adapter = OKXAdapter(
+        adapters_enabled=True,
+        http_client=client,
+        credentials=credentials(),
+    )
+
+    balances = adapter.get_balances()
+    positions = adapter.get_positions()
+
+    assert balances[0]["asset"] == "USDT"
+    assert balances[0]["free"] == "100"
+    assert balances[0]["locked"] == "1"
+    assert positions[0]["symbol"] == "BTC-USDT"
+    assert positions[0]["side"] == "long"
+    assert client.private_calls[0][2] == ExchangeSecurityType.OKX_DEMO_SIGNED
+    assert client.private_calls[1][2] == ExchangeSecurityType.OKX_DEMO_SIGNED
 
 
 def test_binance_public_methods_use_fake_client() -> None:
