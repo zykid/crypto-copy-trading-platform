@@ -9,6 +9,7 @@ from app.exchanges.http_client import (
     ExchangeSecurityType,
     NoopExchangeHttpClient,
 )
+from app.exchanges.rate_limit import ExchangeRateLimitConfig, get_exchange_rate_limit_config
 from app.exchanges.testnet_config import ExchangeEndpointConfig
 
 
@@ -45,6 +46,9 @@ class ReadOnlyTestnetAdapter(ExchangeAdapter):
         credentials: ExchangeCredentials | None = None,
     ) -> None:
         self.endpoint_config = endpoint_config
+        self.rate_limit_config: ExchangeRateLimitConfig = get_exchange_rate_limit_config(
+            endpoint_config.exchange_name
+        )
         self.adapters_enabled = adapters_enabled
         self.http_client = http_client or NoopExchangeHttpClient()
         self.credentials = credentials
