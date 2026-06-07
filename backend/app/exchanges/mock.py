@@ -9,6 +9,12 @@ class MockExchange(ExchangeAdapter):
     def __init__(self) -> None:
         self.orders: dict[str, dict[str, Any]] = {}
 
+    def get_server_time(self) -> dict[str, Any]:
+        return {"server_time": 0, "source": "mock"}
+
+    def get_exchange_info(self) -> dict[str, Any]:
+        return {"exchange": "mock", "symbols": ["BTCUSDT"]}
+
     def get_balances(self) -> list[dict[str, Any]]:
         return [{"asset": "USDT", "free": "100000", "locked": "0", "total": "100000"}]
 
