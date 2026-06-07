@@ -26,7 +26,11 @@ def get_owned_account(db: Session, *, user_id: str, account_id: str) -> Exchange
     )
 
 
-def update_account(account: ExchangeAccount, data: dict[str, object], db: Session) -> ExchangeAccount:
+def update_account(
+    account: ExchangeAccount,
+    data: dict[str, object],
+    db: Session,
+) -> ExchangeAccount:
     for key, value in data.items():
         if value is not None:
             setattr(account, key, value)
