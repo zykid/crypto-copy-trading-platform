@@ -50,6 +50,20 @@ def get_or_create_risk_settings(
     return settings
 
 
+def update_risk_settings(
+    db: Session,
+    settings: RiskSetting,
+    data: dict[str, object],
+) -> RiskSetting:
+    for key, value in data.items():
+        if key == "blocked_symbols" and value is not None:
+            value = sorted({str(symbol).upper() for symbol in value})
+        setattr(settings, key, value)
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
 def check_order_risk(
     *,
     account: ExchangeAccount,
