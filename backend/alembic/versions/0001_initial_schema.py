@@ -7,51 +7,23 @@ Create Date: 2026-06-07 18:55:00
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "0001_initial_schema"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-account_mode = sa.Enum("SIMULATION", "TESTNET", "REAL", name="accountmode")
-exchange_name = sa.Enum("BINANCE", "OKX", "BYBIT", "MOCK", name="exchangename")
-order_execution_status = sa.Enum(
-    "CREATED",
-    "RISK_PASSED",
-    "SUBMITTED",
-    "ACCEPTED",
-    "PARTIALLY_FILLED",
-    "FILLED",
-    "CANCELLED",
-    "REJECTED",
-    "FAILED",
-    "TIMEOUT",
-    name="orderexecutionstatus",
-)
-order_side = sa.Enum("BUY", "SELL", name="orderside")
-order_type = sa.Enum("MARKET", "LIMIT", name="ordertype")
-signal_source = sa.Enum("MANUAL", "COPY_TRADE", "AI", "STRATEGY", "WEBHOOK", name="signalsource")
-user_role = sa.Enum("ADMIN", "NORMAL_USER", "TEAM_ADMIN", name="userrole")
-
 
 def upgrade() -> None:
-    account_mode.create(op.get_bind(), checkfirst=True)
-    exchange_name.create(op.get_bind(), checkfirst=True)
-    order_execution_status.create(op.get_bind(), checkfirst=True)
-    order_side.create(op.get_bind(), checkfirst=True)
-    order_type.create(op.get_bind(), checkfirst=True)
-    signal_source.create(op.get_bind(), checkfirst=True)
-    user_role.create(op.get_bind(), checkfirst=True)
-
     op.create_table(
         "users",
         sa.Column("id", sa.String(length=36), primary_key=True),
         sa.Column("email", sa.String(length=255), nullable=False),
         sa.Column("username", sa.String(length=80), nullable=False),
         sa.Column("password_hash", sa.String(length=255), nullable=False),
-        sa.Column("role", user_role, nullable=False),
+        sa.Column("role", sa.String(length=40), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
@@ -63,8 +35,8 @@ def upgrade() -> None:
         "exchange_accounts",
         sa.Column("id", sa.String(length=36), primary_key=True),
         sa.Column("user_id", sa.String(length=36), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("exchange_name", exchange_name, nullable=False),
-        sa.Column("account_mode", account_mode, nullable=False),
+        sa.Column("exchange_name", sa.String(length=40), nullable=False),
+        sa.Column("account_mode", sa.String(length=20), nullable=False),
         sa.Column("account_label", sa.String(length=120), nullable=False),
         sa.Column("trading_enabled", sa.Boolean(), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
@@ -100,8 +72,18 @@ def upgrade() -> None:
     op.create_table(
         "user_permissions",
         sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column("owner_user_id", sa.String(length=36), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("grantee_user_id", sa.String(length=36), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column(
+            "owner_user_id",
+            sa.String(length=36),
+            sa.ForeignKey("users.id"),
+            nullable=False,
+        ),
+        sa.Column(
+            "grantee_user_id",
+            sa.String(length=36),
+            sa.ForeignKey("users.id"),
+            nullable=False,
+        ),
         sa.Column("view_only", sa.Boolean(), nullable=False),
         sa.Column("copy_follow", sa.Boolean(), nullable=False),
         sa.Column("pause_follow", sa.Boolean(), nullable=False),
@@ -111,17 +93,25 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.UniqueConstraint("owner_user_id", "grantee_user_id"),
     )
-    op.create_index("ix_user_permissions_owner_user_id", "user_permissions", ["owner_user_id"])
-    op.create_index("ix_user_permissions_grantee_user_id", "user_permissions", ["grantee_user_id"])
+    op.create_index(
+        "ix_user_permissions_owner_user_id",
+        "user_permissions",
+        ["owner_user_id"],
+    )
+    op.create_index(
+        "ix_user_permissions_grantee_user_id",
+        "user_permissions",
+        ["grantee_user_id"],
+    )
 
     op.create_table(
         "trading_signals",
         sa.Column("id", sa.String(length=36), primary_key=True),
         sa.Column("user_id", sa.String(length=36), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("source", signal_source, nullable=False),
+        sa.Column("source", sa.String(length=40), nullable=False),
         sa.Column("symbol", sa.String(length=40), nullable=False),
-        sa.Column("side", order_side, nullable=False),
-        sa.Column("order_type", order_type, nullable=False),
+        sa.Column("side", sa.String(length=10), nullable=False),
+        sa.Column("order_type", sa.String(length=20), nullable=False),
         sa.Column("price", sa.Numeric(28, 10), nullable=True),
         sa.Column("quantity", sa.Numeric(28, 10), nullable=True),
         sa.Column("target_position_quantity", sa.Numeric(28, 10), nullable=True),
@@ -152,7 +142,11 @@ def upgrade() -> None:
         sa.UniqueConstraint("exchange_account_id"),
     )
     op.create_index("ix_risk_settings_user_id", "risk_settings", ["user_id"])
-    op.create_index("ix_risk_settings_exchange_account_id", "risk_settings", ["exchange_account_id"])
+    op.create_index(
+        "ix_risk_settings_exchange_account_id",
+        "risk_settings",
+        ["exchange_account_id"],
+    )
 
     op.create_table(
         "positions",
@@ -176,7 +170,12 @@ def upgrade() -> None:
         "order_executions",
         sa.Column("id", sa.String(length=36), primary_key=True),
         sa.Column("user_id", sa.String(length=36), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("signal_id", sa.String(length=36), sa.ForeignKey("trading_signals.id"), nullable=True),
+        sa.Column(
+            "signal_id",
+            sa.String(length=36),
+            sa.ForeignKey("trading_signals.id"),
+            nullable=True,
+        ),
         sa.Column("execution_id", sa.String(length=36), nullable=False, unique=True),
         sa.Column(
             "exchange_account_id",
@@ -188,11 +187,11 @@ def upgrade() -> None:
         sa.Column("client_order_id", sa.String(length=80), nullable=False, unique=True),
         sa.Column("exchange_order_id", sa.String(length=120), nullable=True),
         sa.Column("symbol", sa.String(length=40), nullable=False),
-        sa.Column("side", order_side, nullable=False),
-        sa.Column("order_type", order_type, nullable=False),
+        sa.Column("side", sa.String(length=10), nullable=False),
+        sa.Column("order_type", sa.String(length=20), nullable=False),
         sa.Column("price", sa.Numeric(28, 10), nullable=True),
         sa.Column("quantity", sa.Numeric(28, 10), nullable=False),
-        sa.Column("status", order_execution_status, nullable=False),
+        sa.Column("status", sa.String(length=40), nullable=False),
         sa.Column("risk_result", sa.JSON(), nullable=True),
         sa.Column("exchange_response", sa.JSON(), nullable=True),
         sa.Column("error_message", sa.String(length=500), nullable=True),
@@ -220,11 +219,3 @@ def downgrade() -> None:
     op.drop_index("ix_users_username", table_name="users")
     op.drop_index("ix_users_email", table_name="users")
     op.drop_table("users")
-
-    user_role.drop(op.get_bind(), checkfirst=True)
-    signal_source.drop(op.get_bind(), checkfirst=True)
-    order_type.drop(op.get_bind(), checkfirst=True)
-    order_side.drop(op.get_bind(), checkfirst=True)
-    order_execution_status.drop(op.get_bind(), checkfirst=True)
-    exchange_name.drop(op.get_bind(), checkfirst=True)
-    account_mode.drop(op.get_bind(), checkfirst=True)
