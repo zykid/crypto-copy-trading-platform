@@ -34,7 +34,8 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
-    expires_at = datetime.now(UTC) + (expires_delta or timedelta(minutes=settings.jwt_expires_minutes))
+    token_lifetime = expires_delta or timedelta(minutes=settings.jwt_expires_minutes)
+    expires_at = datetime.now(UTC) + token_lifetime
     header = {"alg": "HS256", "typ": "JWT"}
     payload = {"sub": subject, "exp": int(expires_at.timestamp())}
     signing_input = f"{_json_b64(header)}.{_json_b64(payload)}"
