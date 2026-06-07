@@ -93,6 +93,50 @@ def register_and_login(suffix: str) -> tuple[dict[str, Any], str]:
     return user, token
 
 
+def create_manual_signal(
+    token: str,
+    *,
+    symbol: str,
+    side: str,
+    quantity: str | None = None,
+    target_position_quantity: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "symbol": symbol,
+        "side": side,
+        "order_type": "MARKET",
+    }
+    if quantity is not None:
+        payload["quantity"] = quantity
+    if target_position_quantity is not None:
+        payload["target_position_quantity"] = target_position_quantity
+    signal = request(
+        "POST",
+        "/signals/manual",
+        payload,
+        token=token,
+        expected_status=201,
+    )
+    assert isinstance(signal, dict)
+    return signal
+
+
+def preview_position(
+    token: str,
+    *,
+    account_id: str,
+    symbol: str,
+    target_quantity: str,
+) -> dict[str, Any]:
+    preview = request(
+        "POST",
+        f"/positions/{account_id}/target-preview?symbol={symbol}&target_quantity={target_quantity}",
+        token=token,
+    )
+    assert isinstance(preview, dict)
+    return preview
+
+
 def main() -> None:
     wait_for_backend()
 
@@ -199,31 +243,24 @@ def main() -> None:
     assert isinstance(persisted_secret_metadata, dict)
     assert persisted_secret_metadata == secret_metadata
 
-    preview = request(
-        "POST",
-        f"/positions/{account_id}/target-preview?symbol=BTCUSDT&target_quantity=1.0",
-        token=owner_token,
+    preview = preview_position(
+        owner_token,
+        account_id=account_id,
+        symbol="BTCUSDT",
+        target_quantity="1.0",
     )
-    assert isinstance(preview, dict)
     assert preview["symbol"] == "BTCUSDT"
     assert_decimal(preview["current_quantity"], "0")
     assert_decimal(preview["target_quantity"], "1.0")
     assert_decimal(preview["delta_quantity"], "1.0")
     assert preview["side"] == "BUY"
 
-    signal = request(
-        "POST",
-        "/signals/manual",
-        {
-            "symbol": "BTCUSDT",
-            "side": "BUY",
-            "order_type": "MARKET",
-            "quantity": "0.1",
-        },
-        token=owner_token,
-        expected_status=201,
+    signal = create_manual_signal(
+        owner_token,
+        symbol="BTCUSDT",
+        side="BUY",
+        quantity="0.1",
     )
-    assert isinstance(signal, dict)
     signal_id = str(signal["id"])
 
     execution = request(
@@ -254,6 +291,76 @@ def main() -> None:
         token=other_token,
         expected_status=404,
     )
+
+    risk_settings = request(
+        "PATCH",
+        f"/risk-settings/{account_id}",
+        {
+            "trading_enabled": True,
+            "min_order_quantity": "0.01",
+            "max_order_quantity": "1",
+            "max_single_order_notional": "1000",
+        },
+        token=owner_token,
+    )
+    assert isinstance(risk_settings, dict)
+    assert risk_settings["trading_enabled"] is True
+    assert risk_settings["exchange_account_id"] == account_id
+
+    fill_signal = create_manual_signal(
+        owner_token,
+        symbol="BTCUSDT",
+        side="BUY",
+        quantity="0.2",
+    )
+    fill_execution = request(
+        "POST",
+        f"/orders/execute-signal/{fill_signal['id']}",
+        {"exchange_account_id": account_id},
+        token=owner_token,
+    )
+    assert isinstance(fill_execution, dict)
+    assert fill_execution["status"] == "FILLED"
+    assert fill_execution["risk_result"]["decision"] == "PASSED"
+    assert_decimal(fill_execution["quantity"], "0.2")
+
+    post_fill_preview = preview_position(
+        owner_token,
+        account_id=account_id,
+        symbol="BTCUSDT",
+        target_quantity="0.2",
+    )
+    assert_decimal(post_fill_preview["current_quantity"], "0.2")
+    assert_decimal(post_fill_preview["target_quantity"], "0.2")
+    assert_decimal(post_fill_preview["delta_quantity"], "0")
+    assert post_fill_preview["side"] is None
+
+    target_signal = create_manual_signal(
+        owner_token,
+        symbol="BTCUSDT",
+        side="BUY",
+        target_position_quantity="0.5",
+    )
+    target_execution = request(
+        "POST",
+        f"/orders/execute-signal/{target_signal['id']}",
+        {"exchange_account_id": account_id},
+        token=owner_token,
+    )
+    assert isinstance(target_execution, dict)
+    assert target_execution["status"] == "FILLED"
+    assert_decimal(target_execution["quantity"], "0.3")
+
+    post_target_preview = preview_position(
+        owner_token,
+        account_id=account_id,
+        symbol="BTCUSDT",
+        target_quantity="0.5",
+    )
+    assert_decimal(post_target_preview["current_quantity"], "0.5")
+    assert_decimal(post_target_preview["target_quantity"], "0.5")
+    assert_decimal(post_target_preview["delta_quantity"], "0")
+    assert post_target_preview["side"] is None
 
     print("mock compose integration checks passed")
 
