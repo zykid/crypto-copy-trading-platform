@@ -1,4 +1,4 @@
-import enum
+from enum import StrEnum
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -7,14 +7,14 @@ from app.db.base import Base
 from app.db.models.user import new_uuid
 
 
-class ExchangeName(str, enum.Enum):
+class ExchangeName(StrEnum):
     BINANCE = "binance"
     OKX = "okx"
     BYBIT = "bybit"
     MOCK = "mock"
 
 
-class AccountMode(str, enum.Enum):
+class AccountMode(StrEnum):
     SIMULATION = "SIMULATION"
     TESTNET = "TESTNET"
     REAL = "REAL"
