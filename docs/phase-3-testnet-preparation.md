@@ -36,9 +36,18 @@ Implemented in step 2:
 - Tests proving testnet adapters are disabled by default
 - Tests proving testnet trading methods are not implemented
 
+Implemented in step 3:
+
+- Exchange HTTP client protocol
+- No-op HTTP client that fails closed
+- Public adapter methods for server time and exchange info
+- Public symbol rule normalization for Binance, Bybit, and OKX
+- Fake-client tests for public connectivity mappings
+- Interface expansion for `get_server_time()` and `get_exchange_info()`
+
 Not implemented yet:
 
-- Real HTTP calls to exchanges
+- Real HTTP client implementation
 - Authenticated exchange requests
 - Testnet order placement
 - WebSocket connections
@@ -70,7 +79,9 @@ This intentionally separates readiness checks from order placement.
 Current adapter skeletons behave as follows:
 
 - `TESTNET_ADAPTERS_ENABLED=false` blocks all testnet read-only calls.
-- Enabling testnet adapters still does not perform HTTP calls yet.
+- Enabling testnet adapters without an HTTP client still fails closed.
+- Public connectivity methods are only tested through fake clients.
+- Authenticated read-only methods still raise immediately.
 - `place_order()` and `cancel_order()` raise immediately for testnet/demo adapters.
 - MockExchange remains the only adapter that can execute orders in the current codebase.
 
@@ -89,7 +100,7 @@ For testnet/demo API keys:
 ## Phase 3 Recommended Order
 
 1. Add read-only adapter clients without order placement. Done.
-2. Implement public connectivity checks: server time, exchange info, symbol rules.
+2. Implement public connectivity checks: server time, exchange info, symbol rules. Done with fake-client tests.
 3. Implement authenticated read-only checks: balances and positions.
 4. Add adapter-specific rate-limit metadata.
 5. Add testnet-only order placement behind explicit manual gate.
