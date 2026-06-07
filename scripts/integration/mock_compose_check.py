@@ -2,6 +2,7 @@ import json
 import time
 import urllib.error
 import urllib.request
+from decimal import Decimal
 from typing import Any
 
 BASE_URL = "http://localhost:8000/api/v1"
@@ -40,6 +41,13 @@ def request(
             f"{method} {path} returned {status_code}, expected {expected_status}: {body}"
         )
     return None if body == "" else json.loads(body)
+
+
+def assert_decimal(value: object, expected: str) -> None:
+    actual_decimal = Decimal(str(value))
+    expected_decimal = Decimal(expected)
+    if actual_decimal != expected_decimal:
+        raise AssertionError(f"expected decimal {expected_decimal}, got {actual_decimal}")
 
 
 def wait_for_backend() -> None:
@@ -198,9 +206,9 @@ def main() -> None:
     )
     assert isinstance(preview, dict)
     assert preview["symbol"] == "BTCUSDT"
-    assert preview["current_quantity"] == "0E-10"
-    assert preview["target_quantity"] == "1.0"
-    assert preview["delta_quantity"] == "1.0000000000"
+    assert_decimal(preview["current_quantity"], "0")
+    assert_decimal(preview["target_quantity"], "1.0")
+    assert_decimal(preview["delta_quantity"], "1.0")
     assert preview["side"] == "BUY"
 
     signal = request(
