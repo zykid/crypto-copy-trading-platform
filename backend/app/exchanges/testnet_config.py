@@ -45,7 +45,10 @@ TESTNET_ENDPOINTS: dict[ExchangeName, ExchangeEndpointConfig] = {
         public_ws_url="wss://wspap.okx.com:8443/ws/v5/public",
         private_ws_url="wss://wspap.okx.com:8443/ws/v5/private",
         demo_header_required=True,
-        notes="OKX Demo Trading REST uses the OKX REST domain with demo trading authentication context.",
+        notes=(
+            "OKX Demo Trading REST uses the OKX REST domain with demo trading "
+            "authentication context."
+        ),
     ),
 }
 
