@@ -1,6 +1,11 @@
 from datetime import timedelta
 
-from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
 
 
 def test_password_hash_is_not_plaintext_and_verifies() -> None:
