@@ -113,7 +113,11 @@ def read_api_key_metadata(
     account = get_owned_account(db, user_id=current_user.id, account_id=account_id)
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
-    secret = get_api_key_secret_metadata(db, user_id=current_user.id, exchange_account_id=account.id)
+    secret = get_api_key_secret_metadata(
+        db,
+        user_id=current_user.id,
+        exchange_account_id=account.id,
+    )
     return ApiKeySecretMetadata(
         exchange_account_id=account.id,
         configured=secret is not None,
@@ -130,7 +134,11 @@ def remove_api_key(
     account = get_owned_account(db, user_id=current_user.id, account_id=account_id)
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="account not found")
-    secret = get_api_key_secret_metadata(db, user_id=current_user.id, exchange_account_id=account.id)
+    secret = get_api_key_secret_metadata(
+        db,
+        user_id=current_user.id,
+        exchange_account_id=account.id,
+    )
     if secret is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="api key not found")
     delete_api_key_secret(secret, db)
