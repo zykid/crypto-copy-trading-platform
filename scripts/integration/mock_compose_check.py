@@ -54,26 +54,35 @@ def wait_for_backend() -> None:
     raise TimeoutError("backend did not become healthy")
 
 
-def register_and_login(suffix: str) -> str:
-    password = "ChangeMe12345!"
-    username = f"it_user_{suffix}"
-    request(
+def register_user(suffix: str) -> dict[str, Any]:
+    user = request(
         "POST",
         "/auth/register",
         {
             "email": f"it_{suffix}@example.com",
-            "username": username,
-            "password": password,
+            "username": f"it_user_{suffix}",
+            "password": "ChangeMe12345!",
         },
         expected_status=201,
     )
+    assert isinstance(user, dict)
+    return user
+
+
+def login_user(suffix: str) -> str:
     token_response = request(
         "POST",
         "/auth/login",
-        {"username_or_email": username, "password": password},
+        {"username_or_email": f"it_user_{suffix}", "password": "ChangeMe12345!"},
     )
     assert isinstance(token_response, dict)
     return str(token_response["access_token"])
+
+
+def register_and_login(suffix: str) -> tuple[dict[str, Any], str]:
+    user = register_user(suffix)
+    token = login_user(suffix)
+    return user, token
 
 
 def main() -> None:
@@ -83,8 +92,29 @@ def main() -> None:
     assert dependencies == {"status": "ok", "database": "ok", "redis": "ok"}
 
     suffix = str(int(time.time()))
-    owner_token = register_and_login(suffix)
-    other_token = register_and_login(f"{suffix}_other")
+    owner, owner_token = register_and_login(suffix)
+    other, other_token = register_and_login(f"{suffix}_other")
+
+    request(
+        "POST",
+        "/auth/register",
+        {
+            "email": owner["email"],
+            "username": f"it_user_{suffix}_duplicate_email",
+            "password": "ChangeMe12345!",
+        },
+        expected_status=409,
+    )
+    request(
+        "POST",
+        "/auth/register",
+        {
+            "email": f"it_{suffix}_duplicate_username@example.com",
+            "username": owner["username"],
+            "password": "ChangeMe12345!",
+        },
+        expected_status=409,
+    )
 
     account = request(
         "POST",
@@ -101,6 +131,11 @@ def main() -> None:
     assert isinstance(account, dict)
     account_id = str(account["id"])
 
+    persisted_account = request("GET", f"/exchange-accounts/{account_id}", token=owner_token)
+    assert isinstance(persisted_account, dict)
+    assert persisted_account["id"] == account_id
+    assert persisted_account["user_id"] == owner["id"]
+
     accounts = request("GET", "/exchange-accounts", token=owner_token)
     assert isinstance(accounts, list)
     assert any(item["id"] == account_id for item in accounts)
@@ -108,6 +143,27 @@ def main() -> None:
     request(
         "GET",
         f"/exchange-accounts/{account_id}",
+        token=other_token,
+        expected_status=404,
+    )
+
+    permission = request(
+        "POST",
+        "/permissions",
+        {"grantee_user_id": other["id"], "view_only": True},
+        token=owner_token,
+        expected_status=201,
+    )
+    assert isinstance(permission, dict)
+    assert permission["owner_user_id"] == owner["id"]
+    assert permission["grantee_user_id"] == other["id"]
+    assert permission["view_only"] is True
+    assert permission["trade_manual"] is False
+
+    request(
+        "PATCH",
+        f"/permissions/{permission['id']}",
+        {"trade_manual": True},
         token=other_token,
         expected_status=404,
     )
@@ -126,6 +182,26 @@ def main() -> None:
     assert secret_metadata["configured"] is True
     assert "api_secret" not in secret_metadata
     assert "mock-secret-never-return" not in json.dumps(secret_metadata)
+
+    persisted_secret_metadata = request(
+        "GET",
+        f"/exchange-accounts/{account_id}/api-key",
+        token=owner_token,
+    )
+    assert isinstance(persisted_secret_metadata, dict)
+    assert persisted_secret_metadata == secret_metadata
+
+    preview = request(
+        "POST",
+        f"/positions/{account_id}/target-preview?symbol=BTCUSDT&target_quantity=1.0",
+        token=owner_token,
+    )
+    assert isinstance(preview, dict)
+    assert preview["symbol"] == "BTCUSDT"
+    assert preview["current_quantity"] == "0E-10"
+    assert preview["target_quantity"] == "1.0"
+    assert preview["delta_quantity"] == "1.0000000000"
+    assert preview["side"] == "BUY"
 
     signal = request(
         "POST",
@@ -162,6 +238,14 @@ def main() -> None:
     assert isinstance(duplicate_execution, dict)
     assert duplicate_execution["execution_id"] == execution["execution_id"]
     assert duplicate_execution["client_order_id"] == execution["client_order_id"]
+
+    request(
+        "POST",
+        f"/orders/execute-signal/{signal_id}",
+        {"exchange_account_id": account_id},
+        token=other_token,
+        expected_status=404,
+    )
 
     print("mock compose integration checks passed")
 
