@@ -166,7 +166,11 @@ def test_bybit_authenticated_read_only_methods_use_fake_client() -> None:
                     "list": [
                         {
                             "coin": [
-                                {"coin": "USDT", "walletBalance": "100", "locked": "1"}
+                                {
+                                    "coin": "USDT",
+                                    "walletBalance": "100",
+                                    "locked": "1",
+                                }
                             ]
                         }
                     ]
