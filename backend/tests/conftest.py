@@ -5,7 +5,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
-from app.db.models import ApiKeySecret, ExchangeAccount, User, UserPermission
+from app.db.models import (
+    ApiKeySecret,
+    ExchangeAccount,
+    OrderExecution,
+    Position,
+    RiskSetting,
+    TradingSignal,
+    User,
+    UserPermission,
+)
 
 
 @pytest.fixture()
@@ -24,6 +33,10 @@ def db_session() -> Generator[Session, None, None]:
 __all__ = [
     "ApiKeySecret",
     "ExchangeAccount",
+    "OrderExecution",
+    "Position",
+    "RiskSetting",
+    "TradingSignal",
     "User",
     "UserPermission",
 ]
