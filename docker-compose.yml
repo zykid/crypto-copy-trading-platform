@@ -46,6 +46,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   frontend:
     build:
@@ -56,7 +63,22 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+
+  integration-test:
+    image: curlimages/curl:8.16.0
+    container_name: trading-dev-integration-test
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - >
+        curl --fail --silent http://backend:8000/api/v1/health
 
 volumes:
   postgres_data:
