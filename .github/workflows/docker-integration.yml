@@ -1,0 +1,35 @@
+name: Docker Integration
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  compose:
+    name: Compose Mock Integration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build services
+        run: docker compose build
+
+      - name: Start database, cache, and backend
+        run: docker compose up --detach postgres redis backend
+
+      - name: Run mock integration checks
+        run: docker compose run --rm integration-test
+
+      - name: Show backend logs on failure
+        if: failure()
+        run: docker compose logs backend postgres redis
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down --remove-orphans
