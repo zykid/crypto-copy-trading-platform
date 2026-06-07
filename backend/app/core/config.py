@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     jwt_expires_minutes: int = Field(default=60)
     secret_encryption_key: str = Field(default="change-me-32-byte-key")
 
+    testnet_adapters_enabled: bool = Field(default=False)
+    binance_testnet_rest_base_url: str = Field(default="https://testnet.binance.vision")
+    bybit_testnet_rest_base_url: str = Field(default="https://api-testnet.bybit.com")
+    okx_demo_rest_base_url: str = Field(default="https://openapi.okx.com")
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
