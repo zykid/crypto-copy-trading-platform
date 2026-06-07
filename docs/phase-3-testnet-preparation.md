@@ -16,9 +16,9 @@ Notes from official documentation:
 - Bybit Testnet REST base endpoint is `https://api-testnet.bybit.com`.
 - OKX Demo Trading uses demo trading API keys and demo WebSocket endpoints. OKX documentation notes region-specific production domains; demo setup must be verified against the account region before use.
 
-## Current Phase 3 Step 1 Scope
+## Current Phase 3 Scope
 
-Implemented in this step:
+Implemented in step 1:
 
 - Testnet endpoint configuration constants
 - Testnet readiness gate
@@ -26,7 +26,17 @@ Implemented in this step:
 - `.env.example` entries with testnet adapters disabled by default
 - Documentation for next implementation steps
 
-Not implemented in this step:
+Implemented in step 2:
+
+- `BinanceAdapter` skeleton
+- `BybitAdapter` skeleton
+- `OKXAdapter` skeleton
+- Read-only testnet adapter base class
+- Adapter factory
+- Tests proving testnet adapters are disabled by default
+- Tests proving testnet trading methods are not implemented
+
+Not implemented yet:
 
 - Real HTTP calls to exchanges
 - Authenticated exchange requests
@@ -55,6 +65,15 @@ The readiness gate returns `READY` only when all are true:
 
 This intentionally separates readiness checks from order placement.
 
+## Adapter Safety Behavior
+
+Current adapter skeletons behave as follows:
+
+- `TESTNET_ADAPTERS_ENABLED=false` blocks all testnet read-only calls.
+- Enabling testnet adapters still does not perform HTTP calls yet.
+- `place_order()` and `cancel_order()` raise immediately for testnet/demo adapters.
+- MockExchange remains the only adapter that can execute orders in the current codebase.
+
 ## Required API Key Rules
 
 For testnet/demo API keys:
@@ -69,7 +88,7 @@ For testnet/demo API keys:
 
 ## Phase 3 Recommended Order
 
-1. Add read-only adapter clients without order placement.
+1. Add read-only adapter clients without order placement. Done.
 2. Implement public connectivity checks: server time, exchange info, symbol rules.
 3. Implement authenticated read-only checks: balances and positions.
 4. Add adapter-specific rate-limit metadata.
