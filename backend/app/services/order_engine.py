@@ -24,17 +24,18 @@ def execute_signal_for_account(
     exchange_account_id: str,
     exchange: MockExchange | None = None,
 ) -> OrderExecution:
+    signal = _get_owned_signal(db, user_id=user_id, signal_id=signal_id)
+    account = _get_owned_account(db, user_id=user_id, exchange_account_id=exchange_account_id)
+
     existing = db.scalar(
         select(OrderExecution).where(
-            OrderExecution.signal_id == signal_id,
-            OrderExecution.exchange_account_id == exchange_account_id,
+            OrderExecution.signal_id == signal.id,
+            OrderExecution.exchange_account_id == account.id,
         )
     )
     if existing is not None:
         return existing
 
-    signal = _get_owned_signal(db, user_id=user_id, signal_id=signal_id)
-    account = _get_owned_account(db, user_id=user_id, exchange_account_id=exchange_account_id)
     side, quantity = _resolve_side_and_quantity(db, signal=signal, account=account)
     client_order_id = f"sig-{signal.id[:8]}-acct-{account.id[:8]}"
     execution = OrderExecution(
