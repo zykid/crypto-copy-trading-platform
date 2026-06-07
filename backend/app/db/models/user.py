@@ -1,5 +1,5 @@
-import enum
 import uuid
+from enum import StrEnum
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -11,7 +11,7 @@ def new_uuid() -> str:
     return str(uuid.uuid4())
 
 
-class UserRole(str, enum.Enum):
+class UserRole(StrEnum):
     ADMIN = "admin"
     NORMAL_USER = "normal_user"
     TEAM_ADMIN = "team_admin"
