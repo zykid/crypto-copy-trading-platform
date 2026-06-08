@@ -8,14 +8,16 @@ from app.db.session import get_db
 from app.schemas.trading import (
     ExecuteSignalRequest,
     OrderExecutionResponse,
-    TestnetOrderNotReadyResponse,
     TestnetOrderSubmitRequest,
+    TestnetOrderSubmitResponse,
 )
 from app.services.order_engine import execute_signal_for_account
+from app.services.testnet_http_client import create_testnet_signed_http_client
 from app.services.testnet_order_api import (
     TestnetOrderApiBlockedError,
     build_testnet_order_api_context,
 )
+from app.services.testnet_order_execution import execute_testnet_order
 
 router = APIRouter()
 
@@ -38,7 +40,7 @@ def execute_signal(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.post("/testnet/submit", response_model=TestnetOrderNotReadyResponse)
+@router.post("/testnet/submit", response_model=TestnetOrderSubmitResponse)
 def submit_testnet_order(
     payload: TestnetOrderSubmitRequest,
     current_user: User = Depends(get_current_user),
@@ -51,6 +53,15 @@ def submit_testnet_order(
             payload=payload,
             testnet_adapters_enabled=settings.testnet_adapters_enabled,
         )
+        http_client = create_testnet_signed_http_client(
+            exchange_name=context.account.exchange_name,
+        )
+        result = execute_testnet_order(
+            order=context.order,
+            gate_result=context.gate_result,
+            http_client=http_client,
+            credentials=context.credentials,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except TestnetOrderApiBlockedError as exc:
@@ -58,16 +69,17 @@ def submit_testnet_order(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"reasons": list(exc.reasons)},
         ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="testnet exchange request failed",
+        ) from exc
 
-    response = TestnetOrderNotReadyResponse(
+    return TestnetOrderSubmitResponse(
         exchange_account_id=context.account.id,
-        client_order_id=context.order.client_order_id,
-        detail=(
-            "testnet order API preflight passed, but credential decryption and real testnet "
-            "transport are not enabled yet"
-        ),
-    )
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail=response.model_dump(),
+        exchange_name=result.exchange_name,
+        client_order_id=result.client_order_id,
+        request_method=result.request_method,
+        request_path=result.request_path,
+        exchange_response=result.exchange_response,
     )
