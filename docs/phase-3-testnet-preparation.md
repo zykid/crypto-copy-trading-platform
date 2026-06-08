@@ -53,12 +53,13 @@ Implemented so far:
 - Real testnet/demo REST transport wiring behind the existing preflight gate.
 - Runtime rate-limit enforcement before testnet order HTTP submission.
 - Testnet private user stream connection plan generation.
+- Testnet user stream lifecycle and event parser shell with injected fake socket tests.
 
 Not implemented yet:
 
 - Redis-backed distributed rate-limit counters.
-- Real WebSocket socket lifecycle management.
-- WebSocket event consumption.
+- Real WebSocket transport implementation.
+- Continuous WebSocket event consumption loop.
 - Balance or position synchronization.
 
 ## Endpoint Preparation
@@ -147,8 +148,18 @@ The user stream service can prepare private WebSocket connection material withou
 - OKX prepares the private WebSocket URL and login message.
 - API secrets are used only to compute signatures and are not stored in the returned plan.
 - Tests verify the prepared signatures and ensure the API secret does not appear in the plan string.
-- The service does not connect to WebSocket endpoints yet.
-- The service does not consume order, balance, or position events yet.
+
+## Testnet User Stream Runtime Shell
+
+The runtime shell defines lifecycle and parsing behavior without real exchange connectivity.
+
+- Socket behavior is behind an injected `TestnetUserStreamSocketClient` protocol.
+- Tests use fake socket clients and do not open real network connections.
+- Session states include `CONNECTED`, `AUTHENTICATED`, `CLOSED`, and `FAILED`.
+- Bybit and OKX login messages are sent through the injected client when present.
+- Binance sessions connect without a WebSocket login message after listenKey preparation.
+- Event parsing currently classifies raw payloads into `ORDER`, `BALANCE`, `POSITION`, or `UNKNOWN`.
+- Parsed events keep raw payloads only and do not write balances, positions, or orders to the database.
 
 ## Testnet Order Execution Service
 
@@ -183,7 +194,7 @@ Current adapter skeletons behave as follows:
 - Authenticated read-only methods require injected credentials.
 - Authenticated read-only methods are only tested through fake clients unless a signed client is explicitly injected.
 - Runtime rate-limit enforcement is active for the testnet order API path.
-- User stream support is limited to connection-plan generation.
+- User stream support is limited to connection-plan generation and injected lifecycle shell tests.
 - MockExchange remains the only adapter that can execute SIMULATION orders in the current codebase.
 
 ## Required API Key Rules
@@ -223,7 +234,7 @@ Runtime enforcement currently applies conservative testnet order throttling and 
 11. Add real testnet transport wiring behind the existing preflight gate. Done.
 12. Add runtime rate-limit enforcement. Done with in-memory testnet order enforcement.
 13. Add WebSocket user stream connection plans. Done without opening real sockets.
-14. Add WebSocket socket lifecycle and event parser shell.
+14. Add WebSocket socket lifecycle and event parser shell. Done with injected fake-client tests.
 15. Add reconciliation checks comparing exchange state, database state, and target state.
 
 ## Safety Rules Before Any Testnet Order
