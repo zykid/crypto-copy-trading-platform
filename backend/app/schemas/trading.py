@@ -46,6 +46,30 @@ class ExecuteSignalRequest(BaseModel):
     exchange_account_id: str
 
 
+class TestnetOrderSubmitRequest(BaseModel):
+    exchange_account_id: str
+    symbol: str = Field(min_length=1, max_length=40)
+    side: OrderSide
+    order_type: OrderType = OrderType.MARKET
+    quantity: Decimal = Field(gt=0)
+    price: Decimal | None = Field(default=None, gt=0)
+    client_order_id: str = Field(min_length=1, max_length=80)
+    manual_testnet_order_enable_confirmed: bool = False
+
+    @model_validator(mode="after")
+    def require_price_for_limit(self) -> "TestnetOrderSubmitRequest":
+        if self.order_type == OrderType.LIMIT and self.price is None:
+            raise ValueError("limit orders require price")
+        return self
+
+
+class TestnetOrderNotReadyResponse(BaseModel):
+    exchange_account_id: str
+    client_order_id: str
+    status: str = "NOT_READY"
+    detail: str
+
+
 class OrderExecutionResponse(BaseModel):
     execution_id: str
     signal_id: str
