@@ -33,118 +33,26 @@ Notes from official documentation:
 
 ## Current Phase 3 Scope
 
-Implemented in step 1:
+Implemented so far:
 
-- Testnet endpoint configuration constants
-- Testnet readiness gate
-- Unit tests for safety gate behavior
-- `.env.example` entries with testnet adapters disabled by default
-- Documentation for next implementation steps
-
-Implemented in step 2:
-
-- `BinanceAdapter` skeleton
-- `BybitAdapter` skeleton
-- `OKXAdapter` skeleton
-- Read-only testnet adapter base class
-- Adapter factory
-- Tests proving testnet adapters are disabled by default
-- Tests proving testnet trading methods are not implemented
-
-Implemented in step 3:
-
-- Exchange HTTP client protocol
-- No-op HTTP client that fails closed
-- Public adapter methods for server time and exchange info
-- Public symbol rule normalization for Binance, Bybit, and OKX
-- Fake-client tests for public connectivity mappings
-- Interface expansion for `get_server_time()` and `get_exchange_info()`
-
-Implemented in step 4:
-
-- `ExchangeCredentials` value object for adapter-level credential injection
-- Private HTTP client contract with explicit security type metadata
-- Authenticated read-only balance and position method structure
-- Binance, Bybit, and OKX fake-client balance normalization tests
-- Bybit and OKX fake-client position normalization tests
-- OKX Demo Trading signed request marker
-- Adapter factory credential wiring
-
-Implemented in step 5:
-
-- Exchange rate-limit metadata model
-- Binance, Bybit, and OKX static rate-limit configuration
-- Adapter-level `rate_limit_config` exposure
-- Tests for rate-limit scopes, headers, and conservative dynamic-source markers
-
-Implemented in step 6:
-
-- Testnet order preflight gate
-- Explicit manual testnet order enable confirmation requirement
-- Tests proving SIMULATION and REAL accounts are blocked
-- Tests proving disabled adapters, disabled exchange-account trading, disabled risk trading, missing API key metadata, and missing manual confirmation all block testnet orders
-- Tests proving the gate only approves when every safety condition is true
-
-Implemented in step 7:
-
-- Signed exchange HTTP client
-- Injectable HTTP transport for tests and future runtime wiring
-- Binance signed GET request preparation
-- Bybit V5 signed GET request preparation
-- OKX signed GET request preparation with demo trading header
-- Tests proving signing payloads, headers, timestamps, and transport injection
-
-Implemented in step 8:
-
-- Signed POST request preparation for Binance, Bybit, and OKX
-- Gate-protected testnet order request preparation service
-- Exchange-specific testnet order payload mapping for Binance, Bybit, and OKX
-- Client order ID mapping to `newClientOrderId`, `orderLinkId`, and `clOrdId`
-- Tests proving blocked preflight gates cannot prepare order requests
-- Tests proving LIMIT orders require an explicit price
-- Tests proving prepared order requests use signed query or JSON bodies as expected
-
-Implemented in step 9:
-
-- Gate-protected testnet order execution service
-- Explicit execution path through prepared signed requests
-- Injectable transport execution hook for tests and future runtime wiring
-- Tests proving approved gates can send through fake transport
-- Tests proving blocked gates do not send any request
-- Tests proving execution results do not expose request headers, params, or body
-
-Implemented in step 10:
-
-- Testnet order API request schema
-- `/api/v1/orders/testnet/submit` endpoint wiring
-- API preflight service with user-owned account lookup by `user_id`
-- API key metadata-only check without decrypting or returning secrets
-- Tests proving cross-user account access is blocked
-- Tests proving failed gate conditions return blocked reasons
-- Tests proving approved preflight can build an internal order context without exposing secrets
-
-Implemented in step 11:
-
-- Internal encrypted API key loading into `ExchangeCredentials`
-- Decryption scoped by `user_id` and `exchange_account_id`
-- Testnet API context now carries internal credentials after preflight approval
-- Tests proving another user cannot load the owner's credentials
-- Tests proving credentials are not attached to the public order request object
-
-Implemented in step 12:
-
-- Testnet signed HTTP client factory using configured testnet/demo REST endpoints
-- `/api/v1/orders/testnet/submit` now executes through the signed testnet client after preflight approval
-- Removal of the intentional API `501 NOT_IMPLEMENTED` response
-- Generic exchange transport error wrapping to avoid exposing URL, signature, or secret details
-- Tests proving endpoint URL selection and injected transport behavior without network access
-- Tests proving transport errors surface only as generic RuntimeError messages
+- Testnet endpoint configuration constants and readiness gate.
+- Binance, Bybit, and OKX adapter skeletons, disabled by default.
+- Public connectivity method structure for server time, exchange info, and symbol rules.
+- Authenticated read-only balance and position method structure with fake-client tests.
+- Exchange rate-limit metadata for Binance, Bybit, and OKX.
+- Testnet order preflight gate with explicit manual confirmation.
+- Signed GET and POST HTTP request preparation for Binance, Bybit, and OKX.
+- Gate-protected testnet order request preparation and execution services.
+- `/api/v1/orders/testnet/submit` endpoint with user-owned account lookup by `user_id`.
+- Internal encrypted API key loading into `ExchangeCredentials` after preflight approval.
+- Real testnet/demo REST transport wiring behind the existing preflight gate.
+- Runtime rate-limit enforcement before testnet order HTTP submission.
 
 Not implemented yet:
 
-- Runtime rate-limit enforcement service
-- WebSocket connections
-- Balance or position synchronization
+- Redis-backed distributed rate-limit counters.
+- WebSocket connections.
+- Balance or position synchronization.
 
 ## Endpoint Preparation
 
@@ -211,11 +119,24 @@ The testnet order request service prepares exchange-specific signed POST request
 - LIMIT orders require an explicit price.
 - The service returns a prepared request and does not send it.
 
+## Runtime Rate Limit Service
+
+The runtime rate-limit service is now connected to testnet order execution before the HTTP transport call.
+
+- A conservative per-account safety rule allows one testnet order request per second per exchange account and endpoint.
+- Concrete static exchange metadata is also enforced when the rule has both `limit` and `interval_seconds`.
+- Unknown dynamic limits remain documented metadata and are not guessed as hard exchange limits.
+- If a rate limit is exceeded, the API returns HTTP 429 with a `Retry-After` header.
+- If rate limiting blocks a request, no exchange HTTP request is sent.
+- Current counters are in-memory for GitHub and mock integration testing.
+- Redis-backed distributed counters are still required before multi-process staging or production use.
+
 ## Testnet Order Execution Service
 
-The testnet order execution service sends a prepared request only after the order preflight gate has already approved the request.
+The testnet order execution service sends a prepared request only after the order preflight gate and runtime rate-limit checks approve the request.
 
 - Blocked gates raise before any transport call.
+- Rate-limit blocks raise before any transport call.
 - The service returns exchange response data plus method and path metadata only.
 - Request headers, params, body, API keys, and signatures are not exposed in the execution result.
 - Tests use fake or injected transports and do not perform network requests.
@@ -229,6 +150,7 @@ The testnet order API endpoint is wired at `/api/v1/orders/testnet/submit`.
 - Account lookup is scoped by `user_id` and `exchange_account_id`.
 - API key checks use metadata before internal credential loading.
 - Blocked preflight gates return HTTP 400 with reasons.
+- Runtime rate-limit blocks return HTTP 429 with `Retry-After`.
 - Runtime exchange failures return HTTP 502 with a generic error message.
 - Successful responses do not include request headers, params, body, API keys, or signatures.
 
@@ -241,7 +163,7 @@ Current adapter skeletons behave as follows:
 - Public connectivity methods are only tested through fake clients.
 - Authenticated read-only methods require injected credentials.
 - Authenticated read-only methods are only tested through fake clients unless a signed client is explicitly injected.
-- Rate-limit metadata is available but not enforced at runtime yet.
+- Runtime rate-limit enforcement is active for the testnet order API path.
 - MockExchange remains the only adapter that can execute SIMULATION orders in the current codebase.
 
 ## Required API Key Rules
@@ -258,13 +180,13 @@ For testnet/demo API keys:
 
 ## Rate Limit Preparation
 
-Current metadata exists only to prepare the future Rate Limit Service.
+Current metadata supports both runtime enforcement and future Redis-backed enforcement.
 
 - Binance: tracks `Retry-After`, `X-MBX-USED-WEIGHT-*`, `X-MBX-ORDER-COUNT-*`, and marks `REQUEST_WEIGHT` / `ORDERS` as runtime values from `exchangeInfo` and response headers.
 - Bybit: tracks `X-Bapi-Limit`, `X-Bapi-Limit-Status`, `X-Bapi-Limit-Reset-Timestamp`, the 600 requests / 5 seconds HTTP IP cap, WebSocket connection creation cap, and market-data connection cap.
 - OKX: tracks IP-scoped public REST limits, User ID scoped private REST limits, REST/WebSocket shared order-management limits, and error code `50011` as a rate-limit signal.
 
-Runtime enforcement is intentionally not active yet.
+Runtime enforcement currently applies conservative testnet order throttling and concrete static REST rules only. Dynamic header-driven updates and Redis persistence are intentionally left for later hardening.
 
 ## Phase 3 Recommended Order
 
@@ -279,7 +201,7 @@ Runtime enforcement is intentionally not active yet.
 9. Add API endpoint preflight wiring for testnet-only order placement. Done.
 10. Add internal secret decryption into `ExchangeCredentials`. Done.
 11. Add real testnet transport wiring behind the existing preflight gate. Done.
-12. Add runtime rate-limit enforcement.
+12. Add runtime rate-limit enforcement. Done with in-memory testnet order enforcement.
 13. Add WebSocket user stream connections for order and position updates.
 14. Add reconciliation checks comparing exchange state, database state, and target state.
 
@@ -293,6 +215,7 @@ Before real testnet order submission can pass, the platform must enforce:
 - Risk settings must have `trading_enabled = true`.
 - A per-account explicit testnet enable action must be recorded in audit logs.
 - The order must pass all existing risk checks.
+- Runtime rate-limit checks must pass.
 - The adapter must support idempotent `client_order_id`.
 - The adapter must never run when account mode is `REAL`.
 
