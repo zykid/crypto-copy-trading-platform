@@ -172,4 +172,3 @@ def test_testnet_order_api_context_builds_order_after_all_gate_conditions_pass(
     assert context.credentials.api_key == "testnet-api-key"
     assert context.credentials.api_secret == "testnet-api-secret"
     assert not hasattr(context.order, "api_secret")
-}
