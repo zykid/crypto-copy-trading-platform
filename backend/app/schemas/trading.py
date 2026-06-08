@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.db.models.exchange_account import ExchangeName
 from app.db.models.trading import OrderExecutionStatus, OrderSide, OrderType, SignalSource
 
 
@@ -63,11 +64,13 @@ class TestnetOrderSubmitRequest(BaseModel):
         return self
 
 
-class TestnetOrderNotReadyResponse(BaseModel):
+class TestnetOrderSubmitResponse(BaseModel):
     exchange_account_id: str
+    exchange_name: ExchangeName
     client_order_id: str
-    status: str = "NOT_READY"
-    detail: str
+    request_method: str
+    request_path: str
+    exchange_response: dict[str, object]
 
 
 class OrderExecutionResponse(BaseModel):
