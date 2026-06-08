@@ -133,7 +133,7 @@ def test_binance_signed_post_keeps_signed_order_params_in_query() -> None:
 
     expected_payload = (
         "quantity=0.01&recvWindow=5000&side=BUY&symbol=BTCUSDT"
-        "&type=MARKET&timestamp=1700000000003"
+        "&timestamp=1700000000003&type=MARKET"
     )
     assert prepared.method == "POST"
     assert prepared.body is None
