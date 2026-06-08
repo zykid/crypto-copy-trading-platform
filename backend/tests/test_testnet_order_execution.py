@@ -10,6 +10,7 @@ from app.exchanges.http_client import (
     PreparedExchangeRequest,
     SignedExchangeHttpClient,
 )
+from app.services.rate_limit_service import RateLimitExceededError, RuntimeRateLimitService
 from app.services.testnet_order_execution import execute_testnet_order
 from app.services.testnet_order_gate import check_testnet_order_gate
 from app.services.testnet_order_request import (
@@ -26,6 +27,14 @@ class RecordingTransport:
     def request(self, prepared: PreparedExchangeRequest) -> dict[str, Any]:
         self.requests.append(prepared)
         return self.response
+
+
+class ControlledClock:
+    def __init__(self) -> None:
+        self.now = 1_000.0
+
+    def __call__(self) -> float:
+        return self.now
 
 
 def credentials() -> ExchangeCredentials:
@@ -127,3 +136,34 @@ def test_execute_testnet_order_does_not_send_when_gate_is_blocked() -> None:
         )
 
     assert transport.requests == []
+
+
+def test_execute_testnet_order_does_not_send_when_rate_limited() -> None:
+    transport = RecordingTransport(response={"status": "ACCEPTED"})
+    client = SignedExchangeHttpClient(
+        exchange_name=ExchangeName.BINANCE,
+        rest_base_url="https://testnet.binance.vision",
+        transport=transport,
+    )
+    limiter = RuntimeRateLimitService(clock=ControlledClock())
+
+    execute_testnet_order(
+        order=market_order(),
+        gate_result=gate_result(approved=True),
+        http_client=client,
+        credentials=credentials(),
+        rate_limiter=limiter,
+        exchange_account_id="acct-1",
+    )
+
+    with pytest.raises(RateLimitExceededError):
+        execute_testnet_order(
+            order=market_order(),
+            gate_result=gate_result(approved=True),
+            http_client=client,
+            credentials=credentials(),
+            rate_limiter=limiter,
+            exchange_account_id="acct-1",
+        )
+
+    assert len(transport.requests) == 1
