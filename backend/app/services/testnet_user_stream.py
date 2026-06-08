@@ -41,7 +41,9 @@ def build_testnet_user_stream_connection_plan(
     endpoint = get_testnet_endpoint_config(exchange_name)
     if exchange_name == ExchangeName.BINANCE:
         if endpoint.public_ws_url is None:
-            raise TestnetUserStreamNotSupportedError("Binance user stream endpoint is not configured")
+            raise TestnetUserStreamNotSupportedError(
+                "Binance user stream endpoint is not configured"
+            )
         return TestnetUserStreamConnectionPlan(
             exchange_account_id=exchange_account_id,
             exchange_name=exchange_name,
@@ -57,7 +59,9 @@ def build_testnet_user_stream_connection_plan(
         )
     if exchange_name == ExchangeName.BYBIT:
         if endpoint.private_ws_url is None:
-            raise TestnetUserStreamNotSupportedError("Bybit private WebSocket endpoint is not configured")
+            raise TestnetUserStreamNotSupportedError(
+                "Bybit private WebSocket endpoint is not configured"
+            )
         expires = str(timestamp_ms + 10_000)
         return TestnetUserStreamConnectionPlan(
             exchange_account_id=exchange_account_id,
@@ -75,7 +79,9 @@ def build_testnet_user_stream_connection_plan(
         )
     if exchange_name == ExchangeName.OKX:
         if endpoint.private_ws_url is None:
-            raise TestnetUserStreamNotSupportedError("OKX private WebSocket endpoint is not configured")
+            raise TestnetUserStreamNotSupportedError(
+                "OKX private WebSocket endpoint is not configured"
+            )
         if credentials.passphrase is None:
             raise ValueError("OKX WebSocket login requires an API passphrase")
         sign = _hmac_sha256_base64(
