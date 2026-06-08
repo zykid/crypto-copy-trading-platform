@@ -217,7 +217,11 @@ class SignedExchangeHttpClient:
         request_params = dict(params or {})
         request_body = dict(body or {}) if method == "POST" else None
         timestamp = str(self.timestamp_ms_factory())
-        payload_data = _json_body(request_body) if request_body is not None else _canonical_query(request_params)
+        payload_data = (
+            _json_body(request_body)
+            if request_body is not None
+            else _canonical_query(request_params)
+        )
         payload = f"{timestamp}{credentials.api_key}{self.recv_window}{payload_data}"
         headers = {
             "X-BAPI-API-KEY": credentials.api_key,
