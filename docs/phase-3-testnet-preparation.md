@@ -122,7 +122,6 @@ Implemented in step 10:
 - Tests proving cross-user account access is blocked
 - Tests proving failed gate conditions return blocked reasons
 - Tests proving approved preflight can build an internal order context without exposing secrets
-- Intentional `501 NOT_IMPLEMENTED` response after preflight until secret decryption and real testnet transport are enabled
 
 Implemented in step 11:
 
@@ -132,11 +131,18 @@ Implemented in step 11:
 - Tests proving another user cannot load the owner's credentials
 - Tests proving credentials are not attached to the public order request object
 
+Implemented in step 12:
+
+- Testnet signed HTTP client factory using configured testnet/demo REST endpoints
+- `/api/v1/orders/testnet/submit` now executes through the signed testnet client after preflight approval
+- Removal of the intentional API `501 NOT_IMPLEMENTED` response
+- Generic exchange transport error wrapping to avoid exposing URL, signature, or secret details
+- Tests proving endpoint URL selection and injected transport behavior without network access
+- Tests proving transport errors surface only as generic RuntimeError messages
+
 Not implemented yet:
 
 - Runtime rate-limit enforcement service
-- Real exchange HTTP transport enablement for testnet order submission
-- Removing the intentional API `501 NOT_IMPLEMENTED` response
 - WebSocket connections
 - Balance or position synchronization
 
@@ -183,6 +189,7 @@ The signed HTTP client can prepare and execute authenticated GET and POST reques
 - The client does not retrieve or decrypt API secrets by itself.
 - Tests use an injected transport and do not perform network requests.
 - Secret values must never be logged or returned to the frontend.
+- Transport errors are wrapped in a generic RuntimeError before API conversion.
 
 ## Internal Credential Loading
 
@@ -211,8 +218,8 @@ The testnet order execution service sends a prepared request only after the orde
 - Blocked gates raise before any transport call.
 - The service returns exchange response data plus method and path metadata only.
 - Request headers, params, body, API keys, and signatures are not exposed in the execution result.
-- Current tests use fake transport only.
-- Real testnet HTTP transport enablement remains intentionally unimplemented.
+- Tests use fake or injected transports and do not perform network requests.
+- Runtime API execution uses real testnet/demo REST endpoints only after all preflight gates pass.
 
 ## Testnet Order API Endpoint
 
@@ -222,21 +229,20 @@ The testnet order API endpoint is wired at `/api/v1/orders/testnet/submit`.
 - Account lookup is scoped by `user_id` and `exchange_account_id`.
 - API key checks use metadata before internal credential loading.
 - Blocked preflight gates return HTTP 400 with reasons.
-- A fully approved preflight currently returns HTTP 501 by design.
-- The 501 response prevents real testnet submission until real transport wiring is implemented.
+- Runtime exchange failures return HTTP 502 with a generic error message.
+- Successful responses do not include request headers, params, body, API keys, or signatures.
 
 ## Adapter Safety Behavior
 
 Current adapter skeletons behave as follows:
 
-- `TESTNET_ADAPTERS_ENABLED=false` blocks all testnet read-only calls.
-- Enabling testnet adapters without an HTTP client still fails closed.
+- `TESTNET_ADAPTERS_ENABLED=false` blocks all testnet read-only and order-submission calls.
+- Enabling testnet adapters without passing all order gates still fails closed.
 - Public connectivity methods are only tested through fake clients.
 - Authenticated read-only methods require injected credentials.
 - Authenticated read-only methods are only tested through fake clients unless a signed client is explicitly injected.
 - Rate-limit metadata is available but not enforced at runtime yet.
-- `place_order()` and `cancel_order()` raise immediately for testnet/demo adapters.
-- MockExchange remains the only adapter that can execute orders in the current codebase.
+- MockExchange remains the only adapter that can execute SIMULATION orders in the current codebase.
 
 ## Required API Key Rules
 
@@ -270,16 +276,16 @@ Runtime enforcement is intentionally not active yet.
 6. Add signed HTTP client implementation for testnet read-only requests. Done.
 7. Add gate-protected testnet order request preparation. Done.
 8. Add gate-protected testnet order execution service. Done with fake-transport tests.
-9. Add API endpoint preflight wiring for testnet-only order placement. Done with intentional 501 after preflight.
+9. Add API endpoint preflight wiring for testnet-only order placement. Done.
 10. Add internal secret decryption into `ExchangeCredentials`. Done.
-11. Add real testnet transport wiring behind the existing preflight gate.
+11. Add real testnet transport wiring behind the existing preflight gate. Done.
 12. Add runtime rate-limit enforcement.
 13. Add WebSocket user stream connections for order and position updates.
 14. Add reconciliation checks comparing exchange state, database state, and target state.
 
 ## Safety Rules Before Any Testnet Order
 
-Before real testnet order submission is implemented, the platform must enforce:
+Before real testnet order submission can pass, the platform must enforce:
 
 - Account mode must be `TESTNET`.
 - `TESTNET_ADAPTERS_ENABLED` must be true.
