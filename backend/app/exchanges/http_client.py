@@ -122,6 +122,9 @@ class SignedExchangeHttpClient:
         )
         return self.transport.request(prepared)
 
+    def execute_prepared_request(self, prepared: PreparedExchangeRequest) -> dict[str, Any]:
+        return self.transport.request(prepared)
+
     def prepare_public_request(
         self, path: str, params: dict[str, str] | None = None
     ) -> PreparedExchangeRequest:
