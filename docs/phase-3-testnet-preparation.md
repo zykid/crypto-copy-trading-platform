@@ -113,12 +113,22 @@ Implemented in step 9:
 - Tests proving blocked gates do not send any request
 - Tests proving execution results do not expose request headers, params, or body
 
+Implemented in step 10:
+
+- Testnet order API request schema
+- `/api/v1/orders/testnet/submit` endpoint wiring
+- API preflight service with user-owned account lookup by `user_id`
+- API key metadata-only check without decrypting or returning secrets
+- Tests proving cross-user account access is blocked
+- Tests proving failed gate conditions return blocked reasons
+- Tests proving approved preflight can build an internal order context without exposing secrets
+- Intentional `501 NOT_IMPLEMENTED` response after preflight until secret decryption and real testnet transport are enabled
+
 Not implemented yet:
 
 - Decrypting stored API secrets into adapter credentials
 - Runtime rate-limit enforcement service
-- API endpoint wiring for testnet order submission
-- Enabling real exchange HTTP transport for testnet orders
+- Real exchange HTTP transport enablement for testnet order submission
 - WebSocket connections
 - Balance or position synchronization
 
@@ -184,7 +194,18 @@ The testnet order execution service sends a prepared request only after the orde
 - The service returns exchange response data plus method and path metadata only.
 - Request headers, params, body, API keys, and signatures are not exposed in the execution result.
 - Current tests use fake transport only.
-- API endpoint wiring and real testnet HTTP transport enablement remain intentionally unimplemented.
+- Real testnet HTTP transport enablement remains intentionally unimplemented.
+
+## Testnet Order API Endpoint
+
+The testnet order API endpoint is wired at `/api/v1/orders/testnet/submit`.
+
+- The endpoint requires normal JWT authentication through `get_current_user`.
+- Account lookup is scoped by `user_id` and `exchange_account_id`.
+- API key checks use metadata only and do not decrypt or return secrets.
+- Blocked preflight gates return HTTP 400 with reasons.
+- A fully approved preflight currently returns HTTP 501 by design.
+- The 501 response prevents real testnet submission until secret decryption and real transport wiring are implemented.
 
 ## Adapter Safety Behavior
 
@@ -231,13 +252,14 @@ Runtime enforcement is intentionally not active yet.
 6. Add signed HTTP client implementation for testnet read-only requests. Done.
 7. Add gate-protected testnet order request preparation. Done.
 8. Add gate-protected testnet order execution service. Done with fake-transport tests.
-9. Add API endpoint wiring for testnet-only order placement behind the existing preflight gate.
-10. Add WebSocket user stream connections for order and position updates.
-11. Add reconciliation checks comparing exchange state, database state, and target state.
+9. Add API endpoint preflight wiring for testnet-only order placement. Done with intentional 501 after preflight.
+10. Add secret decryption and real testnet transport wiring behind the existing preflight gate.
+11. Add WebSocket user stream connections for order and position updates.
+12. Add reconciliation checks comparing exchange state, database state, and target state.
 
 ## Safety Rules Before Any Testnet Order
 
-Before API-triggered testnet order submission is implemented, the platform must enforce:
+Before real testnet order submission is implemented, the platform must enforce:
 
 - Account mode must be `TESTNET`.
 - `TESTNET_ADAPTERS_ENABLED` must be true.
