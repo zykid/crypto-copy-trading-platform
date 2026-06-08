@@ -1,8 +1,9 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.encryption import encrypt_secret
+from app.core.encryption import decrypt_secret, encrypt_secret
 from app.db.models.exchange_account import ApiKeySecret, ExchangeAccount
+from app.exchanges.http_client import ExchangeCredentials
 
 
 def list_accounts(db: Session, *, user_id: str) -> list[ExchangeAccount]:
@@ -87,6 +88,31 @@ def get_api_key_secret_metadata(
             ApiKeySecret.user_id == user_id,
             ApiKeySecret.exchange_account_id == exchange_account_id,
         )
+    )
+
+
+def get_exchange_credentials(
+    db: Session,
+    *,
+    user_id: str,
+    exchange_account_id: str,
+) -> ExchangeCredentials | None:
+    secret = get_api_key_secret_metadata(
+        db,
+        user_id=user_id,
+        exchange_account_id=exchange_account_id,
+    )
+    if secret is None:
+        return None
+    passphrase = (
+        decrypt_secret(secret.encrypted_passphrase)
+        if secret.encrypted_passphrase is not None
+        else None
+    )
+    return ExchangeCredentials(
+        api_key=decrypt_secret(secret.encrypted_api_key),
+        api_secret=decrypt_secret(secret.encrypted_api_secret),
+        passphrase=passphrase,
     )
 
 
