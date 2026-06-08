@@ -66,6 +66,14 @@ Implemented in step 5:
 - Adapter-level `rate_limit_config` exposure
 - Tests for rate-limit scopes, headers, and conservative dynamic-source markers
 
+Implemented in step 6:
+
+- Testnet order preflight gate
+- Explicit manual testnet order enable confirmation requirement
+- Tests proving SIMULATION and REAL accounts are blocked
+- Tests proving disabled adapters, disabled exchange-account trading, disabled risk trading, missing API key metadata, and missing manual confirmation all block testnet orders
+- Tests proving the gate only approves when every safety condition is true
+
 Not implemented yet:
 
 - Real signed HTTP client implementation
@@ -96,6 +104,20 @@ The readiness gate returns `READY` only when all are true:
 - API key metadata is configured.
 
 This intentionally separates readiness checks from order placement.
+
+## Testnet Order Gate
+
+The order preflight gate returns `APPROVED` only when all are true:
+
+- Exchange has configured testnet/demo routing.
+- Account mode is exactly `TESTNET`.
+- `TESTNET_ADAPTERS_ENABLED` is true.
+- Exchange account `trading_enabled` is true.
+- Risk settings `trading_enabled` is true.
+- Testnet API key metadata is configured.
+- Manual testnet order enable confirmation has been recorded.
+
+The current gate is a pure preflight check. It does not submit orders and does not talk to an exchange.
 
 ## Adapter Safety Behavior
 
@@ -138,9 +160,11 @@ Runtime enforcement is intentionally not active yet.
 2. Implement public connectivity checks: server time, exchange info, symbol rules. Done with fake-client tests.
 3. Implement authenticated read-only structure: balances and positions. Done with fake-client tests.
 4. Add adapter-specific rate-limit metadata. Done.
-5. Add testnet-only order placement behind explicit manual gate.
-6. Add WebSocket user stream connections for order and position updates.
-7. Add reconciliation checks comparing exchange state, database state, and target state.
+5. Add testnet order preflight gate behind explicit manual confirmation. Done.
+6. Add signed HTTP client implementation for testnet read-only requests.
+7. Add testnet-only order placement behind the existing preflight gate.
+8. Add WebSocket user stream connections for order and position updates.
+9. Add reconciliation checks comparing exchange state, database state, and target state.
 
 ## Safety Rules Before Any Testnet Order
 
