@@ -8,15 +8,20 @@ This phase must preserve the safety rule that the platform default account mode 
 
 - Binance Spot Testnet documentation: `https://developers.binance.com/docs/binance-spot-api-docs/testnet`
 - Binance Spot API limits documentation: `https://developers.binance.com/docs/binance-spot-api-docs/rest-api/limits`
+- Binance signed endpoint security documentation: `https://developers.binance.com/docs/binance-spot-api-docs/rest-api/request-security`
+- Bybit V5 integration guidance: `https://bybit-exchange.github.io/docs/v5/guide`
 - Bybit V5 rate limit documentation: `https://bybit-exchange.github.io/docs/v5/rate-limit`
 - OKX API documentation and demo trading documentation: `https://www.okx.com/docs-v5/` and `https://www.okx.com/en-us/help/api-faq`
 
 Notes from official documentation:
 
 - Binance Spot Testnet is not always synchronized with live exchange and may be periodically reset.
+- Binance signed requests use HMAC-SHA256 over the query string and send `X-MBX-APIKEY`.
 - Binance rate limits must use response headers and `/api/v3/exchangeInfo` rate-limit data as runtime sources of truth.
 - Bybit Testnet REST base endpoint is `https://api-testnet.bybit.com`.
+- Bybit V5 authenticated requests send `X-BAPI-API-KEY`, `X-BAPI-TIMESTAMP`, `X-BAPI-RECV-WINDOW`, and `X-BAPI-SIGN`.
 - Bybit default HTTP IP limit is 600 requests per 5-second window.
+- OKX REST authentication sends `OK-ACCESS-KEY`, `OK-ACCESS-SIGN`, `OK-ACCESS-TIMESTAMP`, and `OK-ACCESS-PASSPHRASE`.
 - OKX Demo Trading uses demo trading API keys and demo WebSocket endpoints. OKX documentation notes region-specific production domains; demo setup must be verified against the account region before use.
 - OKX public REST limits are IP-scoped, private REST limits are User ID scoped, and trading limits can be shared across REST and WebSocket order channels.
 
@@ -74,11 +79,18 @@ Implemented in step 6:
 - Tests proving disabled adapters, disabled exchange-account trading, disabled risk trading, missing API key metadata, and missing manual confirmation all block testnet orders
 - Tests proving the gate only approves when every safety condition is true
 
+Implemented in step 7:
+
+- Signed exchange HTTP client
+- Injectable HTTP transport for tests and future runtime wiring
+- Binance signed GET request preparation
+- Bybit V5 signed GET request preparation
+- OKX signed GET request preparation with demo trading header
+- Tests proving signing payloads, headers, timestamps, and transport injection
+
 Not implemented yet:
 
-- Real signed HTTP client implementation
 - Decrypting stored API secrets into adapter credentials
-- Real authenticated exchange requests
 - Runtime rate-limit enforcement service
 - Testnet order placement
 - WebSocket connections
@@ -119,6 +131,15 @@ The order preflight gate returns `APPROVED` only when all are true:
 
 The current gate is a pure preflight check. It does not submit orders and does not talk to an exchange.
 
+## Signed HTTP Client
+
+The signed HTTP client can prepare and execute authenticated read-only GET requests when explicitly injected.
+
+- Default adapters still use `NoopExchangeHttpClient` and fail closed.
+- The client does not retrieve or decrypt API secrets by itself.
+- Tests use an injected transport and do not perform network requests.
+- Secret values must never be logged or returned to the frontend.
+
 ## Adapter Safety Behavior
 
 Current adapter skeletons behave as follows:
@@ -127,7 +148,7 @@ Current adapter skeletons behave as follows:
 - Enabling testnet adapters without an HTTP client still fails closed.
 - Public connectivity methods are only tested through fake clients.
 - Authenticated read-only methods require injected credentials.
-- Authenticated read-only methods are only tested through fake clients.
+- Authenticated read-only methods are only tested through fake clients unless a signed client is explicitly injected.
 - Rate-limit metadata is available but not enforced at runtime yet.
 - `place_order()` and `cancel_order()` raise immediately for testnet/demo adapters.
 - MockExchange remains the only adapter that can execute orders in the current codebase.
@@ -161,7 +182,7 @@ Runtime enforcement is intentionally not active yet.
 3. Implement authenticated read-only structure: balances and positions. Done with fake-client tests.
 4. Add adapter-specific rate-limit metadata. Done.
 5. Add testnet order preflight gate behind explicit manual confirmation. Done.
-6. Add signed HTTP client implementation for testnet read-only requests.
+6. Add signed HTTP client implementation for testnet read-only requests. Done.
 7. Add testnet-only order placement behind the existing preflight gate.
 8. Add WebSocket user stream connections for order and position updates.
 9. Add reconciliation checks comparing exchange state, database state, and target state.
