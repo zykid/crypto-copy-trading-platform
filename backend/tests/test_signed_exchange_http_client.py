@@ -11,6 +11,7 @@ from app.exchanges.http_client import (
     ExchangeSecurityType,
     PreparedExchangeRequest,
     SignedExchangeHttpClient,
+    UrllibExchangeHttpTransport,
 )
 
 
@@ -233,3 +234,24 @@ def test_signed_client_uses_injected_transport_without_network() -> None:
     assert response == {"ok": True}
     assert len(transport.requests) == 1
     assert transport.requests[0].headers == {"X-MBX-APIKEY": "test-api-key"}
+
+
+def test_urllib_transport_wraps_request_errors_without_sensitive_details(monkeypatch) -> None:
+    def fail_urlopen(*_args: object, **_kwargs: object) -> object:
+        raise OSError("url included signature=secret-signature")
+
+    monkeypatch.setattr("app.exchanges.http_client.urlopen", fail_urlopen)
+    transport = UrllibExchangeHttpTransport()
+    prepared = PreparedExchangeRequest(
+        method="GET",
+        url="https://testnet.binance.vision/api/v3/account",
+        path="/api/v3/account",
+        params={"signature": "secret-signature"},
+        headers={"X-MBX-APIKEY": "test-api-key"},
+    )
+
+    with pytest.raises(RuntimeError) as exc_info:
+        transport.request(prepared)
+
+    assert str(exc_info.value) == "exchange HTTP request failed"
+    assert "secret-signature" not in str(exc_info.value)
