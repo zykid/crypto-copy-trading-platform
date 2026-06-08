@@ -10,9 +10,11 @@ This phase must preserve the safety rule that the platform default account mode 
 - Binance Spot API limits documentation: `https://developers.binance.com/docs/binance-spot-api-docs/rest-api/limits`
 - Binance signed endpoint security documentation: `https://developers.binance.com/docs/binance-spot-api-docs/rest-api/request-security`
 - Binance order endpoint documentation: `https://developers.binance.com/docs/binance-spot-api-docs/rest-api/trading-endpoints`
+- Binance Spot User Data Stream documentation: `https://developers.binance.com/docs/binance-spot-api-docs/user-data-stream`
 - Bybit V5 integration guidance: `https://bybit-exchange.github.io/docs/v5/guide`
 - Bybit V5 rate limit documentation: `https://bybit-exchange.github.io/docs/v5/rate-limit`
 - Bybit V5 create order documentation: `https://bybit-exchange.github.io/docs/v5/order/create-order`
+- Bybit V5 WebSocket connection documentation: `https://bybit-exchange.github.io/docs/v5/ws/connect`
 - OKX API documentation and demo trading documentation: `https://www.okx.com/docs-v5/` and `https://www.okx.com/en-us/help/api-faq`
 - OKX place order documentation: `https://www.okx.com/docs-v5/en/#order-book-trading-trade-post-place-order`
 
@@ -21,12 +23,15 @@ Notes from official documentation:
 - Binance Spot Testnet is not always synchronized with live exchange and may be periodically reset.
 - Binance signed requests use HMAC-SHA256 over the query string and send `X-MBX-APIKEY`.
 - Binance order requests use a signed private trading endpoint and support client order IDs.
+- Binance user data streams require a listenKey before opening the stream WebSocket.
 - Binance rate limits must use response headers and `/api/v3/exchangeInfo` rate-limit data as runtime sources of truth.
 - Bybit Testnet REST base endpoint is `https://api-testnet.bybit.com`.
 - Bybit V5 authenticated requests send `X-BAPI-API-KEY`, `X-BAPI-TIMESTAMP`, `X-BAPI-RECV-WINDOW`, and `X-BAPI-SIGN`.
+- Bybit V5 WebSocket authentication signs `GET/realtime{expires}`.
 - Bybit V5 order creation uses signed JSON request bodies and supports `orderLinkId` for client-side idempotency.
 - Bybit default HTTP IP limit is 600 requests per 5-second window.
 - OKX REST authentication sends `OK-ACCESS-KEY`, `OK-ACCESS-SIGN`, `OK-ACCESS-TIMESTAMP`, and `OK-ACCESS-PASSPHRASE`.
+- OKX WebSocket login signs `timestamp + GET + /users/self/verify`.
 - OKX order creation uses signed JSON request bodies and supports `clOrdId` for client-side idempotency.
 - OKX Demo Trading uses demo trading API keys and demo WebSocket endpoints. OKX documentation notes region-specific production domains; demo setup must be verified against the account region before use.
 - OKX public REST limits are IP-scoped, private REST limits are User ID scoped, and trading limits can be shared across REST and WebSocket order channels.
@@ -47,11 +52,13 @@ Implemented so far:
 - Internal encrypted API key loading into `ExchangeCredentials` after preflight approval.
 - Real testnet/demo REST transport wiring behind the existing preflight gate.
 - Runtime rate-limit enforcement before testnet order HTTP submission.
+- Testnet private user stream connection plan generation.
 
 Not implemented yet:
 
 - Redis-backed distributed rate-limit counters.
-- WebSocket connections.
+- Real WebSocket socket lifecycle management.
+- WebSocket event consumption.
 - Balance or position synchronization.
 
 ## Endpoint Preparation
@@ -60,7 +67,7 @@ Configured endpoint metadata:
 
 | Exchange | Mode | REST | Public WebSocket | Private WebSocket |
 | --- | --- | --- | --- | --- |
-| Binance | Spot Testnet | `https://testnet.binance.vision` | `wss://stream.testnet.binance.vision/ws` | pending |
+| Binance | Spot Testnet | `https://testnet.binance.vision` | `wss://stream.testnet.binance.vision/ws` | listenKey-based |
 | Bybit | Testnet | `https://api-testnet.bybit.com` | `wss://stream-testnet.bybit.com/v5/public/spot` | `wss://stream-testnet.bybit.com/v5/private` |
 | OKX | Demo Trading | `https://openapi.okx.com` | `wss://wspap.okx.com:8443/ws/v5/public` | `wss://wspap.okx.com:8443/ws/v5/private` |
 
@@ -131,6 +138,18 @@ The runtime rate-limit service is now connected to testnet order execution befor
 - Current counters are in-memory for GitHub and mock integration testing.
 - Redis-backed distributed counters are still required before multi-process staging or production use.
 
+## Testnet User Stream Connection Plans
+
+The user stream service can prepare private WebSocket connection material without opening a socket.
+
+- Binance prepares the REST listenKey request and a placeholder WebSocket URL containing `{listenKey}`.
+- Bybit prepares the private WebSocket URL and auth message.
+- OKX prepares the private WebSocket URL and login message.
+- API secrets are used only to compute signatures and are not stored in the returned plan.
+- Tests verify the prepared signatures and ensure the API secret does not appear in the plan string.
+- The service does not connect to WebSocket endpoints yet.
+- The service does not consume order, balance, or position events yet.
+
 ## Testnet Order Execution Service
 
 The testnet order execution service sends a prepared request only after the order preflight gate and runtime rate-limit checks approve the request.
@@ -164,6 +183,7 @@ Current adapter skeletons behave as follows:
 - Authenticated read-only methods require injected credentials.
 - Authenticated read-only methods are only tested through fake clients unless a signed client is explicitly injected.
 - Runtime rate-limit enforcement is active for the testnet order API path.
+- User stream support is limited to connection-plan generation.
 - MockExchange remains the only adapter that can execute SIMULATION orders in the current codebase.
 
 ## Required API Key Rules
@@ -202,8 +222,9 @@ Runtime enforcement currently applies conservative testnet order throttling and 
 10. Add internal secret decryption into `ExchangeCredentials`. Done.
 11. Add real testnet transport wiring behind the existing preflight gate. Done.
 12. Add runtime rate-limit enforcement. Done with in-memory testnet order enforcement.
-13. Add WebSocket user stream connections for order and position updates.
-14. Add reconciliation checks comparing exchange state, database state, and target state.
+13. Add WebSocket user stream connection plans. Done without opening real sockets.
+14. Add WebSocket socket lifecycle and event parser shell.
+15. Add reconciliation checks comparing exchange state, database state, and target state.
 
 ## Safety Rules Before Any Testnet Order
 
