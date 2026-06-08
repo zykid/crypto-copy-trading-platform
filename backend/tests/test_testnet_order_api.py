@@ -3,10 +3,12 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.orm import Session
 
+from app.core.encryption import encrypt_secret
 from app.db.models.exchange_account import AccountMode, ApiKeySecret, ExchangeAccount, ExchangeName
 from app.db.models.trading import OrderSide, OrderType, RiskSetting
 from app.db.models.user import User
 from app.schemas.trading import TestnetOrderSubmitRequest
+from app.services.exchange_accounts import get_exchange_credentials
 from app.services.testnet_order_api import (
     TestnetOrderApiBlockedError,
     build_testnet_order_api_context,
@@ -66,12 +68,38 @@ def add_api_key_metadata(db_session: Session, *, owner: User, account: ExchangeA
         ApiKeySecret(
             user_id=owner.id,
             exchange_account_id=account.id,
-            encrypted_api_key="encrypted-key",
-            encrypted_api_secret="encrypted-secret",
-            encrypted_passphrase=None,
+            encrypted_api_key=encrypt_secret("testnet-api-key"),
+            encrypted_api_secret=encrypt_secret("testnet-api-secret"),
+            encrypted_passphrase=encrypt_secret("testnet-passphrase"),
         )
     )
     db_session.commit()
+
+
+def test_exchange_credentials_are_loaded_only_for_the_owning_user(db_session: Session) -> None:
+    owner = user("owner@example.com", "owner")
+    other = user("other@example.com", "other")
+    db_session.add_all([owner, other])
+    db_session.commit()
+    account = add_account(db_session, owner=owner)
+    add_api_key_metadata(db_session, owner=owner, account=account)
+
+    credentials = get_exchange_credentials(
+        db_session,
+        user_id=owner.id,
+        exchange_account_id=account.id,
+    )
+    other_credentials = get_exchange_credentials(
+        db_session,
+        user_id=other.id,
+        exchange_account_id=account.id,
+    )
+
+    assert credentials is not None
+    assert credentials.api_key == "testnet-api-key"
+    assert credentials.api_secret == "testnet-api-secret"
+    assert credentials.passphrase == "testnet-passphrase"
+    assert other_credentials is None
 
 
 def test_testnet_order_api_context_requires_owned_account(db_session: Session) -> None:
@@ -141,4 +169,7 @@ def test_testnet_order_api_context_builds_order_after_all_gate_conditions_pass(
     assert context.gate_result.approved is True
     assert context.order.exchange_name == ExchangeName.BINANCE
     assert context.order.client_order_id == "testnet-client-1"
+    assert context.credentials.api_key == "testnet-api-key"
+    assert context.credentials.api_secret == "testnet-api-secret"
     assert not hasattr(context.order, "api_secret")
+}
