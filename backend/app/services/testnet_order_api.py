@@ -3,8 +3,13 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.db.models.exchange_account import ExchangeAccount
+from app.exchanges.http_client import ExchangeCredentials
 from app.schemas.trading import TestnetOrderSubmitRequest
-from app.services.exchange_accounts import get_api_key_secret_metadata, get_owned_account
+from app.services.exchange_accounts import (
+    get_api_key_secret_metadata,
+    get_exchange_credentials,
+    get_owned_account,
+)
 from app.services.risk_engine import get_or_create_risk_settings
 from app.services.testnet_order_gate import TestnetOrderGateResult, check_testnet_order_gate
 from app.services.testnet_order_request import TestnetOrderRequestInput
@@ -21,6 +26,7 @@ class TestnetOrderApiContext:
     account: ExchangeAccount
     order: TestnetOrderRequestInput
     gate_result: TestnetOrderGateResult
+    credentials: ExchangeCredentials
 
 
 def build_testnet_order_api_context(
@@ -60,6 +66,14 @@ def build_testnet_order_api_context(
     if not gate_result.approved:
         raise TestnetOrderApiBlockedError(gate_result.reasons)
 
+    credentials = get_exchange_credentials(
+        db,
+        user_id=user_id,
+        exchange_account_id=account.id,
+    )
+    if credentials is None:
+        raise TestnetOrderApiBlockedError(("testnet API key metadata must be configured",))
+
     order = TestnetOrderRequestInput(
         exchange_name=account.exchange_name,
         symbol=payload.symbol,
@@ -69,4 +83,9 @@ def build_testnet_order_api_context(
         price=payload.price,
         client_order_id=payload.client_order_id,
     )
-    return TestnetOrderApiContext(account=account, order=order, gate_result=gate_result)
+    return TestnetOrderApiContext(
+        account=account,
+        order=order,
+        gate_result=gate_result,
+        credentials=credentials,
+    )
