@@ -32,6 +32,7 @@ class PreparedExchangeRequest:
     path: str
     params: dict[str, str]
     headers: dict[str, str]
+    body: dict[str, Any] | None = None
 
 
 class ExchangeHttpTransport(Protocol):
@@ -58,7 +59,8 @@ class UrllibExchangeHttpTransport:
     def request(self, prepared: PreparedExchangeRequest) -> dict[str, Any]:
         query = _canonical_query(prepared.params)
         url = f"{prepared.url}?{query}" if query else prepared.url
-        request = Request(url=url, headers=prepared.headers, method=prepared.method)
+        body = _json_body(prepared.body).encode("utf-8") if prepared.body is not None else None
+        request = Request(url=url, data=body, headers=prepared.headers, method=prepared.method)
         with urlopen(request, timeout=10) as response:  # noqa: S310
             payload = response.read().decode("utf-8")
         return json.loads(payload) if payload else {}
@@ -102,6 +104,24 @@ class SignedExchangeHttpClient:
         )
         return self.transport.request(prepared)
 
+    def post_private(
+        self,
+        path: str,
+        *,
+        credentials: ExchangeCredentials,
+        params: dict[str, str] | None = None,
+        body: dict[str, Any] | None = None,
+        security_type: ExchangeSecurityType = ExchangeSecurityType.SIGNED,
+    ) -> dict[str, Any]:
+        prepared = self.prepare_private_post_request(
+            path,
+            credentials=credentials,
+            params=params,
+            body=body,
+            security_type=security_type,
+        )
+        return self.transport.request(prepared)
+
     def prepare_public_request(
         self, path: str, params: dict[str, str] | None = None
     ) -> PreparedExchangeRequest:
@@ -121,16 +141,54 @@ class SignedExchangeHttpClient:
         params: dict[str, str] | None = None,
         security_type: ExchangeSecurityType = ExchangeSecurityType.SIGNED,
     ) -> PreparedExchangeRequest:
+        return self._prepare_private_request(
+            "GET",
+            path,
+            credentials=credentials,
+            params=params,
+            body=None,
+            security_type=security_type,
+        )
+
+    def prepare_private_post_request(
+        self,
+        path: str,
+        *,
+        credentials: ExchangeCredentials,
+        params: dict[str, str] | None = None,
+        body: dict[str, Any] | None = None,
+        security_type: ExchangeSecurityType = ExchangeSecurityType.SIGNED,
+    ) -> PreparedExchangeRequest:
+        return self._prepare_private_request(
+            "POST",
+            path,
+            credentials=credentials,
+            params=params,
+            body=body,
+            security_type=security_type,
+        )
+
+    def _prepare_private_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        credentials: ExchangeCredentials,
+        params: dict[str, str] | None,
+        body: dict[str, Any] | None,
+        security_type: ExchangeSecurityType,
+    ) -> PreparedExchangeRequest:
         if self.exchange_name == ExchangeName.BINANCE:
-            return self._prepare_binance_request(path, credentials, params)
+            return self._prepare_binance_request(method, path, credentials, params)
         if self.exchange_name == ExchangeName.BYBIT:
-            return self._prepare_bybit_request(path, credentials, params)
+            return self._prepare_bybit_request(method, path, credentials, params, body)
         if self.exchange_name == ExchangeName.OKX:
-            return self._prepare_okx_request(path, credentials, params, security_type)
+            return self._prepare_okx_request(method, path, credentials, params, body, security_type)
         raise ValueError(f"signed HTTP client is not supported for {self.exchange_name}")
 
     def _prepare_binance_request(
         self,
+        method: str,
         path: str,
         credentials: ExchangeCredentials,
         params: dict[str, str] | None,
@@ -141,7 +199,7 @@ class SignedExchangeHttpClient:
         query = _canonical_query(signed_params)
         signed_params["signature"] = _hmac_sha256_hex(credentials.api_secret, query)
         return PreparedExchangeRequest(
-            method="GET",
+            method=method,
             url=f"{self.rest_base_url}{path}",
             path=path,
             params=signed_params,
@@ -150,57 +208,71 @@ class SignedExchangeHttpClient:
 
     def _prepare_bybit_request(
         self,
+        method: str,
         path: str,
         credentials: ExchangeCredentials,
         params: dict[str, str] | None,
+        body: dict[str, Any] | None,
     ) -> PreparedExchangeRequest:
         request_params = dict(params or {})
+        request_body = dict(body or {}) if method == "POST" else None
         timestamp = str(self.timestamp_ms_factory())
-        query = _canonical_query(request_params)
-        payload = f"{timestamp}{credentials.api_key}{self.recv_window}{query}"
+        payload_data = _json_body(request_body) if request_body is not None else _canonical_query(request_params)
+        payload = f"{timestamp}{credentials.api_key}{self.recv_window}{payload_data}"
+        headers = {
+            "X-BAPI-API-KEY": credentials.api_key,
+            "X-BAPI-TIMESTAMP": timestamp,
+            "X-BAPI-RECV-WINDOW": self.recv_window,
+            "X-BAPI-SIGN": _hmac_sha256_hex(credentials.api_secret, payload),
+        }
+        if request_body is not None:
+            headers["Content-Type"] = "application/json"
         return PreparedExchangeRequest(
-            method="GET",
+            method=method,
             url=f"{self.rest_base_url}{path}",
             path=path,
             params=request_params,
-            headers={
-                "X-BAPI-API-KEY": credentials.api_key,
-                "X-BAPI-TIMESTAMP": timestamp,
-                "X-BAPI-RECV-WINDOW": self.recv_window,
-                "X-BAPI-SIGN": _hmac_sha256_hex(credentials.api_secret, payload),
-            },
+            headers=headers,
+            body=request_body,
         )
 
     def _prepare_okx_request(
         self,
+        method: str,
         path: str,
         credentials: ExchangeCredentials,
         params: dict[str, str] | None,
+        body: dict[str, Any] | None,
         security_type: ExchangeSecurityType,
     ) -> PreparedExchangeRequest:
         if credentials.passphrase is None:
             raise ValueError("OKX signed requests require an API passphrase")
         request_params = dict(params or {})
+        request_body = dict(body or {}) if method == "POST" else None
         timestamp = self.iso_timestamp_factory()
         path_with_query = path
         query = _canonical_query(request_params)
         if query:
             path_with_query = f"{path}?{query}"
-        signature_payload = f"{timestamp}GET{path_with_query}"
+        body_payload = _json_body(request_body) if request_body is not None else ""
+        signature_payload = f"{timestamp}{method}{path_with_query}{body_payload}"
         headers = {
             "OK-ACCESS-KEY": credentials.api_key,
             "OK-ACCESS-SIGN": _hmac_sha256_base64(credentials.api_secret, signature_payload),
             "OK-ACCESS-TIMESTAMP": timestamp,
             "OK-ACCESS-PASSPHRASE": credentials.passphrase,
         }
+        if request_body is not None:
+            headers["Content-Type"] = "application/json"
         if security_type == ExchangeSecurityType.OKX_DEMO_SIGNED:
             headers["x-simulated-trading"] = "1"
         return PreparedExchangeRequest(
-            method="GET",
+            method=method,
             url=f"{self.rest_base_url}{path}",
             path=path,
             params=request_params,
             headers=headers,
+            body=request_body,
         )
 
 
@@ -221,6 +293,10 @@ class NoopExchangeHttpClient:
 
 def _canonical_query(params: dict[str, str]) -> str:
     return urlencode(sorted(params.items()))
+
+
+def _json_body(body: dict[str, Any] | None) -> str:
+    return json.dumps(body or {}, separators=(",", ":"), sort_keys=True)
 
 
 def _hmac_sha256_hex(secret: str, payload: str) -> str:
