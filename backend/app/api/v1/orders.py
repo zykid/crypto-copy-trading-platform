@@ -12,6 +12,7 @@ from app.schemas.trading import (
     TestnetOrderSubmitResponse,
 )
 from app.services.order_engine import execute_signal_for_account
+from app.services.rate_limit_service import RateLimitExceededError, runtime_rate_limit_service
 from app.services.testnet_http_client import create_testnet_signed_http_client
 from app.services.testnet_order_api import (
     TestnetOrderApiBlockedError,
@@ -61,6 +62,8 @@ def submit_testnet_order(
             gate_result=context.gate_result,
             http_client=http_client,
             credentials=context.credentials,
+            rate_limiter=runtime_rate_limit_service,
+            exchange_account_id=context.account.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -68,6 +71,12 @@ def submit_testnet_order(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"reasons": list(exc.reasons)},
+        ) from exc
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="testnet order rate limit exceeded",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
         ) from exc
     except RuntimeError as exc:
         raise HTTPException(
