@@ -61,8 +61,11 @@ class UrllibExchangeHttpTransport:
         url = f"{prepared.url}?{query}" if query else prepared.url
         body = _json_body(prepared.body).encode("utf-8") if prepared.body is not None else None
         request = Request(url=url, data=body, headers=prepared.headers, method=prepared.method)
-        with urlopen(request, timeout=10) as response:  # noqa: S310
-            payload = response.read().decode("utf-8")
+        try:
+            with urlopen(request, timeout=10) as response:  # noqa: S310
+                payload = response.read().decode("utf-8")
+        except Exception as exc:
+            raise RuntimeError("exchange HTTP request failed") from exc
         return json.loads(payload) if payload else {}
 
 
