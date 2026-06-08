@@ -9,19 +9,25 @@ This phase must preserve the safety rule that the platform default account mode 
 - Binance Spot Testnet documentation: `https://developers.binance.com/docs/binance-spot-api-docs/testnet`
 - Binance Spot API limits documentation: `https://developers.binance.com/docs/binance-spot-api-docs/rest-api/limits`
 - Binance signed endpoint security documentation: `https://developers.binance.com/docs/binance-spot-api-docs/rest-api/request-security`
+- Binance order endpoint documentation: `https://developers.binance.com/docs/binance-spot-api-docs/rest-api/trading-endpoints`
 - Bybit V5 integration guidance: `https://bybit-exchange.github.io/docs/v5/guide`
 - Bybit V5 rate limit documentation: `https://bybit-exchange.github.io/docs/v5/rate-limit`
+- Bybit V5 create order documentation: `https://bybit-exchange.github.io/docs/v5/order/create-order`
 - OKX API documentation and demo trading documentation: `https://www.okx.com/docs-v5/` and `https://www.okx.com/en-us/help/api-faq`
+- OKX place order documentation: `https://www.okx.com/docs-v5/en/#order-book-trading-trade-post-place-order`
 
 Notes from official documentation:
 
 - Binance Spot Testnet is not always synchronized with live exchange and may be periodically reset.
 - Binance signed requests use HMAC-SHA256 over the query string and send `X-MBX-APIKEY`.
+- Binance order requests use a signed private trading endpoint and support client order IDs.
 - Binance rate limits must use response headers and `/api/v3/exchangeInfo` rate-limit data as runtime sources of truth.
 - Bybit Testnet REST base endpoint is `https://api-testnet.bybit.com`.
 - Bybit V5 authenticated requests send `X-BAPI-API-KEY`, `X-BAPI-TIMESTAMP`, `X-BAPI-RECV-WINDOW`, and `X-BAPI-SIGN`.
+- Bybit V5 order creation uses signed JSON request bodies and supports `orderLinkId` for client-side idempotency.
 - Bybit default HTTP IP limit is 600 requests per 5-second window.
 - OKX REST authentication sends `OK-ACCESS-KEY`, `OK-ACCESS-SIGN`, `OK-ACCESS-TIMESTAMP`, and `OK-ACCESS-PASSPHRASE`.
+- OKX order creation uses signed JSON request bodies and supports `clOrdId` for client-side idempotency.
 - OKX Demo Trading uses demo trading API keys and demo WebSocket endpoints. OKX documentation notes region-specific production domains; demo setup must be verified against the account region before use.
 - OKX public REST limits are IP-scoped, private REST limits are User ID scoped, and trading limits can be shared across REST and WebSocket order channels.
 
@@ -88,11 +94,21 @@ Implemented in step 7:
 - OKX signed GET request preparation with demo trading header
 - Tests proving signing payloads, headers, timestamps, and transport injection
 
+Implemented in step 8:
+
+- Signed POST request preparation for Binance, Bybit, and OKX
+- Gate-protected testnet order request preparation service
+- Exchange-specific testnet order payload mapping for Binance, Bybit, and OKX
+- Client order ID mapping to `newClientOrderId`, `orderLinkId`, and `clOrdId`
+- Tests proving blocked preflight gates cannot prepare order requests
+- Tests proving LIMIT orders require an explicit price
+- Tests proving prepared order requests use signed query or JSON bodies as expected
+
 Not implemented yet:
 
 - Decrypting stored API secrets into adapter credentials
 - Runtime rate-limit enforcement service
-- Testnet order placement
+- Runtime testnet order submission through adapters or API endpoints
 - WebSocket connections
 - Balance or position synchronization
 
@@ -133,12 +149,23 @@ The current gate is a pure preflight check. It does not submit orders and does n
 
 ## Signed HTTP Client
 
-The signed HTTP client can prepare and execute authenticated read-only GET requests when explicitly injected.
+The signed HTTP client can prepare and execute authenticated GET and POST requests when explicitly injected.
 
 - Default adapters still use `NoopExchangeHttpClient` and fail closed.
 - The client does not retrieve or decrypt API secrets by itself.
 - Tests use an injected transport and do not perform network requests.
 - Secret values must never be logged or returned to the frontend.
+
+## Testnet Order Request Preparation
+
+The testnet order request service prepares exchange-specific signed POST requests only after the order preflight gate is approved.
+
+- Binance maps client order IDs to `newClientOrderId`.
+- Bybit maps client order IDs to `orderLinkId`.
+- OKX maps client order IDs to `clOrdId`.
+- LIMIT orders require an explicit price.
+- The service returns a prepared request and does not send it.
+- Real runtime submission remains intentionally unimplemented.
 
 ## Adapter Safety Behavior
 
@@ -183,13 +210,14 @@ Runtime enforcement is intentionally not active yet.
 4. Add adapter-specific rate-limit metadata. Done.
 5. Add testnet order preflight gate behind explicit manual confirmation. Done.
 6. Add signed HTTP client implementation for testnet read-only requests. Done.
-7. Add testnet-only order placement behind the existing preflight gate.
-8. Add WebSocket user stream connections for order and position updates.
-9. Add reconciliation checks comparing exchange state, database state, and target state.
+7. Add gate-protected testnet order request preparation. Done.
+8. Add runtime adapter/API wiring for testnet-only order placement behind the existing preflight gate.
+9. Add WebSocket user stream connections for order and position updates.
+10. Add reconciliation checks comparing exchange state, database state, and target state.
 
 ## Safety Rules Before Any Testnet Order
 
-Before testnet order placement is implemented, the platform must enforce:
+Before runtime testnet order submission is implemented, the platform must enforce:
 
 - Account mode must be `TESTNET`.
 - `TESTNET_ADAPTERS_ENABLED` must be true.
