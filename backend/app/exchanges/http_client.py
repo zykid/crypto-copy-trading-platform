@@ -2,9 +2,10 @@ import base64
 import hashlib
 import hmac
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
