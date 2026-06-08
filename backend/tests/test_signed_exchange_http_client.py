@@ -100,7 +100,10 @@ def test_okx_demo_signed_get_adds_demo_header_and_base64_signature() -> None:
         security_type=ExchangeSecurityType.OKX_DEMO_SIGNED,
     )
 
-    expected_payload = "2026-06-08T00:00:00.000ZGET/api/v5/account/positions?instId=BTC-USDT"
+    expected_payload = (
+        "2026-06-08T00:00:00.000ZGET"
+        "/api/v5/account/positions?instId=BTC-USDT"
+    )
     assert prepared.method == "GET"
     assert prepared.url == "https://openapi.okx.com/api/v5/account/positions"
     assert prepared.headers["OK-ACCESS-KEY"] == "test-api-key"
@@ -120,10 +123,18 @@ def test_binance_signed_post_keeps_signed_order_params_in_query() -> None:
     prepared = client.prepare_private_post_request(
         "/api/v3/order",
         credentials=credentials(),
-        params={"symbol": "BTCUSDT", "side": "BUY", "type": "MARKET", "quantity": "0.01"},
+        params={
+            "symbol": "BTCUSDT",
+            "side": "BUY",
+            "type": "MARKET",
+            "quantity": "0.01",
+        },
     )
 
-    expected_payload = "quantity=0.01&recvWindow=5000&side=BUY&symbol=BTCUSDT&type=MARKET&timestamp=1700000000003"
+    expected_payload = (
+        "quantity=0.01&recvWindow=5000&side=BUY&symbol=BTCUSDT"
+        "&type=MARKET&timestamp=1700000000003"
+    )
     assert prepared.method == "POST"
     assert prepared.body is None
     assert prepared.params["signature"] == hmac_hex(expected_payload)
@@ -135,7 +146,12 @@ def test_bybit_signed_post_uses_json_body_payload() -> None:
         rest_base_url="https://api-testnet.bybit.com",
         timestamp_ms_factory=lambda: 1_700_000_000_004,
     )
-    body = {"symbol": "BTCUSDT", "category": "spot", "side": "Buy", "orderType": "Market"}
+    body = {
+        "symbol": "BTCUSDT",
+        "category": "spot",
+        "side": "Buy",
+        "orderType": "Market",
+    }
 
     prepared = client.prepare_private_post_request(
         "/v5/order/create",
@@ -143,7 +159,10 @@ def test_bybit_signed_post_uses_json_body_payload() -> None:
         body=body,
     )
 
-    expected_body = '{"category":"spot","orderType":"Market","side":"Buy","symbol":"BTCUSDT"}'
+    expected_body = (
+        '{"category":"spot","orderType":"Market","side":"Buy",'
+        '"symbol":"BTCUSDT"}'
+    )
     expected_payload = f"1700000000004test-api-key5000{expected_body}"
     assert prepared.method == "POST"
     assert prepared.body == body
@@ -157,7 +176,12 @@ def test_okx_demo_signed_post_uses_json_body_payload() -> None:
         rest_base_url="https://openapi.okx.com",
         iso_timestamp_factory=lambda: "2026-06-08T00:00:00.000Z",
     )
-    body = {"instId": "BTC-USDT", "tdMode": "cash", "side": "buy", "ordType": "market"}
+    body = {
+        "instId": "BTC-USDT",
+        "tdMode": "cash",
+        "side": "buy",
+        "ordType": "market",
+    }
 
     prepared = client.prepare_private_post_request(
         "/api/v5/trade/order",
@@ -166,7 +190,10 @@ def test_okx_demo_signed_post_uses_json_body_payload() -> None:
         security_type=ExchangeSecurityType.OKX_DEMO_SIGNED,
     )
 
-    expected_body = '{"instId":"BTC-USDT","ordType":"market","side":"buy","tdMode":"cash"}'
+    expected_body = (
+        '{"instId":"BTC-USDT","ordType":"market","side":"buy",'
+        '"tdMode":"cash"}'
+    )
     expected_payload = f"2026-06-08T00:00:00.000ZPOST/api/v5/trade/order{expected_body}"
     assert prepared.method == "POST"
     assert prepared.body == body
