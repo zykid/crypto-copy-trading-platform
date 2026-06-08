@@ -104,11 +104,21 @@ Implemented in step 8:
 - Tests proving LIMIT orders require an explicit price
 - Tests proving prepared order requests use signed query or JSON bodies as expected
 
+Implemented in step 9:
+
+- Gate-protected testnet order execution service
+- Explicit execution path through prepared signed requests
+- Injectable transport execution hook for tests and future runtime wiring
+- Tests proving approved gates can send through fake transport
+- Tests proving blocked gates do not send any request
+- Tests proving execution results do not expose request headers, params, or body
+
 Not implemented yet:
 
 - Decrypting stored API secrets into adapter credentials
 - Runtime rate-limit enforcement service
-- Runtime testnet order submission through adapters or API endpoints
+- API endpoint wiring for testnet order submission
+- Enabling real exchange HTTP transport for testnet orders
 - WebSocket connections
 - Balance or position synchronization
 
@@ -145,7 +155,7 @@ The order preflight gate returns `APPROVED` only when all are true:
 - Testnet API key metadata is configured.
 - Manual testnet order enable confirmation has been recorded.
 
-The current gate is a pure preflight check. It does not submit orders and does not talk to an exchange.
+The gate is a pure preflight check. It does not submit orders and does not talk to an exchange by itself.
 
 ## Signed HTTP Client
 
@@ -165,7 +175,16 @@ The testnet order request service prepares exchange-specific signed POST request
 - OKX maps client order IDs to `clOrdId`.
 - LIMIT orders require an explicit price.
 - The service returns a prepared request and does not send it.
-- Real runtime submission remains intentionally unimplemented.
+
+## Testnet Order Execution Service
+
+The testnet order execution service sends a prepared request only after the order preflight gate has already approved the request.
+
+- Blocked gates raise before any transport call.
+- The service returns exchange response data plus method and path metadata only.
+- Request headers, params, body, API keys, and signatures are not exposed in the execution result.
+- Current tests use fake transport only.
+- API endpoint wiring and real testnet HTTP transport enablement remain intentionally unimplemented.
 
 ## Adapter Safety Behavior
 
@@ -211,13 +230,14 @@ Runtime enforcement is intentionally not active yet.
 5. Add testnet order preflight gate behind explicit manual confirmation. Done.
 6. Add signed HTTP client implementation for testnet read-only requests. Done.
 7. Add gate-protected testnet order request preparation. Done.
-8. Add runtime adapter/API wiring for testnet-only order placement behind the existing preflight gate.
-9. Add WebSocket user stream connections for order and position updates.
-10. Add reconciliation checks comparing exchange state, database state, and target state.
+8. Add gate-protected testnet order execution service. Done with fake-transport tests.
+9. Add API endpoint wiring for testnet-only order placement behind the existing preflight gate.
+10. Add WebSocket user stream connections for order and position updates.
+11. Add reconciliation checks comparing exchange state, database state, and target state.
 
 ## Safety Rules Before Any Testnet Order
 
-Before runtime testnet order submission is implemented, the platform must enforce:
+Before API-triggered testnet order submission is implemented, the platform must enforce:
 
 - Account mode must be `TESTNET`.
 - `TESTNET_ADAPTERS_ENABLED` must be true.
