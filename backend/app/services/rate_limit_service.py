@@ -112,10 +112,7 @@ def _rate_limit_key(
     exchange_account_id: str,
     request_path: str,
 ) -> tuple[str, str, str]:
-    if rule.scope == RateLimitScope.IP:
-        scope_key = "global"
-    else:
-        scope_key = exchange_account_id
+    scope_key = "global" if rule.scope == RateLimitScope.IP else exchange_account_id
     return (exchange_name.value, rule.name, f"{scope_key}:{request_path}")
 
 
