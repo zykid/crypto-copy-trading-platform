@@ -124,11 +124,19 @@ Implemented in step 10:
 - Tests proving approved preflight can build an internal order context without exposing secrets
 - Intentional `501 NOT_IMPLEMENTED` response after preflight until secret decryption and real testnet transport are enabled
 
+Implemented in step 11:
+
+- Internal encrypted API key loading into `ExchangeCredentials`
+- Decryption scoped by `user_id` and `exchange_account_id`
+- Testnet API context now carries internal credentials after preflight approval
+- Tests proving another user cannot load the owner's credentials
+- Tests proving credentials are not attached to the public order request object
+
 Not implemented yet:
 
-- Decrypting stored API secrets into adapter credentials
 - Runtime rate-limit enforcement service
 - Real exchange HTTP transport enablement for testnet order submission
+- Removing the intentional API `501 NOT_IMPLEMENTED` response
 - WebSocket connections
 - Balance or position synchronization
 
@@ -176,6 +184,16 @@ The signed HTTP client can prepare and execute authenticated GET and POST reques
 - Tests use an injected transport and do not perform network requests.
 - Secret values must never be logged or returned to the frontend.
 
+## Internal Credential Loading
+
+The credential loader decrypts stored API key fields only inside backend services.
+
+- Lookup is scoped by `user_id` and `exchange_account_id`.
+- Missing credentials return `None`.
+- Another user cannot load the owner's credentials.
+- Decrypted values are only returned as internal `ExchangeCredentials` objects.
+- Decrypted API secret values are not included in Pydantic response schemas.
+
 ## Testnet Order Request Preparation
 
 The testnet order request service prepares exchange-specific signed POST requests only after the order preflight gate is approved.
@@ -202,10 +220,10 @@ The testnet order API endpoint is wired at `/api/v1/orders/testnet/submit`.
 
 - The endpoint requires normal JWT authentication through `get_current_user`.
 - Account lookup is scoped by `user_id` and `exchange_account_id`.
-- API key checks use metadata only and do not decrypt or return secrets.
+- API key checks use metadata before internal credential loading.
 - Blocked preflight gates return HTTP 400 with reasons.
 - A fully approved preflight currently returns HTTP 501 by design.
-- The 501 response prevents real testnet submission until secret decryption and real transport wiring are implemented.
+- The 501 response prevents real testnet submission until real transport wiring is implemented.
 
 ## Adapter Safety Behavior
 
@@ -253,9 +271,11 @@ Runtime enforcement is intentionally not active yet.
 7. Add gate-protected testnet order request preparation. Done.
 8. Add gate-protected testnet order execution service. Done with fake-transport tests.
 9. Add API endpoint preflight wiring for testnet-only order placement. Done with intentional 501 after preflight.
-10. Add secret decryption and real testnet transport wiring behind the existing preflight gate.
-11. Add WebSocket user stream connections for order and position updates.
-12. Add reconciliation checks comparing exchange state, database state, and target state.
+10. Add internal secret decryption into `ExchangeCredentials`. Done.
+11. Add real testnet transport wiring behind the existing preflight gate.
+12. Add runtime rate-limit enforcement.
+13. Add WebSocket user stream connections for order and position updates.
+14. Add reconciliation checks comparing exchange state, database state, and target state.
 
 ## Safety Rules Before Any Testnet Order
 
