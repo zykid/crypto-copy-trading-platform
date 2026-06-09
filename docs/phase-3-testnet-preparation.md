@@ -54,13 +54,15 @@ Implemented so far:
 - Runtime rate-limit enforcement before testnet order HTTP submission.
 - Testnet private user stream connection plan generation.
 - Testnet user stream lifecycle and event parser shell with injected fake socket tests.
+- Position reconciliation snapshot comparison service.
 
 Not implemented yet:
 
 - Redis-backed distributed rate-limit counters.
 - Real WebSocket transport implementation.
 - Continuous WebSocket event consumption loop.
-- Balance or position synchronization.
+- Balance or position synchronization writes.
+- Automatic reconciliation repair.
 
 ## Endpoint Preparation
 
@@ -161,6 +163,19 @@ The runtime shell defines lifecycle and parsing behavior without real exchange c
 - Event parsing currently classifies raw payloads into `ORDER`, `BALANCE`, `POSITION`, or `UNKNOWN`.
 - Parsed events keep raw payloads only and do not write balances, positions, or orders to the database.
 
+## Position Reconciliation Preparation
+
+The reconciliation service compares exchange, database, and target position snapshots.
+
+- Inputs are explicit snapshots supplied by the caller.
+- Symbols are normalized to uppercase and duplicate snapshots are combined per source.
+- The service compares exchange vs database, exchange vs target, and database vs target quantities.
+- Reports include `MATCHED` or `DRIFT_DETECTED` status.
+- Difference severity is `WARNING` or `CRITICAL` depending on configured thresholds.
+- Quantity tolerance can suppress tiny rounding differences.
+- Reports always set `auto_fix_allowed=False` in this phase.
+- The service does not call exchanges, write database rows, place orders, or auto-repair drift.
+
 ## Testnet Order Execution Service
 
 The testnet order execution service sends a prepared request only after the order preflight gate and runtime rate-limit checks approve the request.
@@ -195,6 +210,7 @@ Current adapter skeletons behave as follows:
 - Authenticated read-only methods are only tested through fake clients unless a signed client is explicitly injected.
 - Runtime rate-limit enforcement is active for the testnet order API path.
 - User stream support is limited to connection-plan generation and injected lifecycle shell tests.
+- Position reconciliation support is limited to snapshot comparison reports.
 - MockExchange remains the only adapter that can execute SIMULATION orders in the current codebase.
 
 ## Required API Key Rules
@@ -235,7 +251,8 @@ Runtime enforcement currently applies conservative testnet order throttling and 
 12. Add runtime rate-limit enforcement. Done with in-memory testnet order enforcement.
 13. Add WebSocket user stream connection plans. Done without opening real sockets.
 14. Add WebSocket socket lifecycle and event parser shell. Done with injected fake-client tests.
-15. Add reconciliation checks comparing exchange state, database state, and target state.
+15. Add reconciliation checks comparing exchange state, database state, and target state. Done with snapshot tests.
+16. Add reconciliation audit/event recording and notification hooks.
 
 ## Safety Rules Before Any Testnet Order
 
