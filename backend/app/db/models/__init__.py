@@ -1,4 +1,10 @@
 from app.db.models.exchange_account import AccountMode, ApiKeySecret, ExchangeAccount, ExchangeName
+from app.db.models.observability import (
+    AuditLog,
+    InternalNotification,
+    NotificationChannel,
+    SystemEvent,
+)
 from app.db.models.trading import (
     OrderExecution,
     OrderExecutionStatus,
@@ -15,8 +21,11 @@ from app.db.models.user import User, UserPermission, UserRole
 __all__ = [
     "AccountMode",
     "ApiKeySecret",
+    "AuditLog",
     "ExchangeAccount",
     "ExchangeName",
+    "InternalNotification",
+    "NotificationChannel",
     "OrderExecution",
     "OrderExecutionStatus",
     "OrderSide",
@@ -25,6 +34,7 @@ __all__ = [
     "RiskDecision",
     "RiskSetting",
     "SignalSource",
+    "SystemEvent",
     "TradingSignal",
     "User",
     "UserPermission",
