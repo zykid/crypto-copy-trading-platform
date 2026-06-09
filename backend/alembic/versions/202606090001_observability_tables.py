@@ -30,6 +30,20 @@ def downgrade() -> None:
     _drop_users()
 
 
+def _create_index(
+    name: str,
+    table_name: str,
+    columns: list[str],
+    *,
+    unique: bool = False,
+) -> None:
+    op.create_index(name, table_name, columns, unique=unique)
+
+
+def _drop_index(name: str, table_name: str) -> None:
+    op.drop_index(name, table_name=table_name)
+
+
 def _create_users() -> None:
     op.create_table(
         "users",
@@ -43,8 +57,8 @@ def _create_users() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_users_email", "users", ["email"], unique=True)
-    op.create_index("ix_users_username", "users", ["username"], unique=True)
+    _create_index("ix_users_email", "users", ["email"], unique=True)
+    _create_index("ix_users_username", "users", ["username"], unique=True)
 
     op.create_table(
         "user_permissions",
@@ -63,16 +77,24 @@ def _create_users() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("owner_user_id", "grantee_user_id"),
     )
-    op.create_index("ix_user_permissions_grantee_user_id", "user_permissions", ["grantee_user_id"])
-    op.create_index("ix_user_permissions_owner_user_id", "user_permissions", ["owner_user_id"])
+    _create_index(
+        "ix_user_permissions_grantee_user_id",
+        "user_permissions",
+        ["grantee_user_id"],
+    )
+    _create_index(
+        "ix_user_permissions_owner_user_id",
+        "user_permissions",
+        ["owner_user_id"],
+    )
 
 
 def _drop_users() -> None:
-    op.drop_index("ix_user_permissions_owner_user_id", table_name="user_permissions")
-    op.drop_index("ix_user_permissions_grantee_user_id", table_name="user_permissions")
+    _drop_index("ix_user_permissions_owner_user_id", "user_permissions")
+    _drop_index("ix_user_permissions_grantee_user_id", "user_permissions")
     op.drop_table("user_permissions")
-    op.drop_index("ix_users_username", table_name="users")
-    op.drop_index("ix_users_email", table_name="users")
+    _drop_index("ix_users_username", "users")
+    _drop_index("ix_users_email", "users")
     op.drop_table("users")
 
 
@@ -91,7 +113,7 @@ def _create_exchange_accounts() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_exchange_accounts_user_id", "exchange_accounts", ["user_id"])
+    _create_index("ix_exchange_accounts_user_id", "exchange_accounts", ["user_id"])
 
     op.create_table(
         "api_key_secrets",
@@ -108,15 +130,19 @@ def _create_exchange_accounts() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("exchange_account_id"),
     )
-    op.create_index("ix_api_key_secrets_exchange_account_id", "api_key_secrets", ["exchange_account_id"])
-    op.create_index("ix_api_key_secrets_user_id", "api_key_secrets", ["user_id"])
+    _create_index(
+        "ix_api_key_secrets_exchange_account_id",
+        "api_key_secrets",
+        ["exchange_account_id"],
+    )
+    _create_index("ix_api_key_secrets_user_id", "api_key_secrets", ["user_id"])
 
 
 def _drop_exchange_accounts() -> None:
-    op.drop_index("ix_api_key_secrets_user_id", table_name="api_key_secrets")
-    op.drop_index("ix_api_key_secrets_exchange_account_id", table_name="api_key_secrets")
+    _drop_index("ix_api_key_secrets_user_id", "api_key_secrets")
+    _drop_index("ix_api_key_secrets_exchange_account_id", "api_key_secrets")
     op.drop_table("api_key_secrets")
-    op.drop_index("ix_exchange_accounts_user_id", table_name="exchange_accounts")
+    _drop_index("ix_exchange_accounts_user_id", "exchange_accounts")
     op.drop_table("exchange_accounts")
 
 
@@ -137,7 +163,7 @@ def _create_trading_tables() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_trading_signals_user_id", "trading_signals", ["user_id"])
+    _create_index("ix_trading_signals_user_id", "trading_signals", ["user_id"])
 
     op.create_table(
         "risk_settings",
@@ -158,8 +184,12 @@ def _create_trading_tables() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("exchange_account_id"),
     )
-    op.create_index("ix_risk_settings_exchange_account_id", "risk_settings", ["exchange_account_id"])
-    op.create_index("ix_risk_settings_user_id", "risk_settings", ["user_id"])
+    _create_index(
+        "ix_risk_settings_exchange_account_id",
+        "risk_settings",
+        ["exchange_account_id"],
+    )
+    _create_index("ix_risk_settings_user_id", "risk_settings", ["user_id"])
 
     op.create_table(
         "positions",
@@ -174,8 +204,8 @@ def _create_trading_tables() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("exchange_account_id", "symbol"),
     )
-    op.create_index("ix_positions_exchange_account_id", "positions", ["exchange_account_id"])
-    op.create_index("ix_positions_user_id", "positions", ["user_id"])
+    _create_index("ix_positions_exchange_account_id", "positions", ["exchange_account_id"])
+    _create_index("ix_positions_user_id", "positions", ["user_id"])
 
     op.create_table(
         "order_executions",
@@ -206,23 +236,27 @@ def _create_trading_tables() -> None:
         sa.UniqueConstraint("execution_id"),
         sa.UniqueConstraint("signal_id", "exchange_account_id"),
     )
-    op.create_index("ix_order_executions_exchange_account_id", "order_executions", ["exchange_account_id"])
-    op.create_index("ix_order_executions_signal_id", "order_executions", ["signal_id"])
-    op.create_index("ix_order_executions_user_id", "order_executions", ["user_id"])
+    _create_index(
+        "ix_order_executions_exchange_account_id",
+        "order_executions",
+        ["exchange_account_id"],
+    )
+    _create_index("ix_order_executions_signal_id", "order_executions", ["signal_id"])
+    _create_index("ix_order_executions_user_id", "order_executions", ["user_id"])
 
 
 def _drop_trading_tables() -> None:
-    op.drop_index("ix_order_executions_user_id", table_name="order_executions")
-    op.drop_index("ix_order_executions_signal_id", table_name="order_executions")
-    op.drop_index("ix_order_executions_exchange_account_id", table_name="order_executions")
+    _drop_index("ix_order_executions_user_id", "order_executions")
+    _drop_index("ix_order_executions_signal_id", "order_executions")
+    _drop_index("ix_order_executions_exchange_account_id", "order_executions")
     op.drop_table("order_executions")
-    op.drop_index("ix_positions_user_id", table_name="positions")
-    op.drop_index("ix_positions_exchange_account_id", table_name="positions")
+    _drop_index("ix_positions_user_id", "positions")
+    _drop_index("ix_positions_exchange_account_id", "positions")
     op.drop_table("positions")
-    op.drop_index("ix_risk_settings_user_id", table_name="risk_settings")
-    op.drop_index("ix_risk_settings_exchange_account_id", table_name="risk_settings")
+    _drop_index("ix_risk_settings_user_id", "risk_settings")
+    _drop_index("ix_risk_settings_exchange_account_id", "risk_settings")
     op.drop_table("risk_settings")
-    op.drop_index("ix_trading_signals_user_id", table_name="trading_signals")
+    _drop_index("ix_trading_signals_user_id", "trading_signals")
     op.drop_table("trading_signals")
 
 
@@ -240,10 +274,10 @@ def _create_observability_tables() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_audit_logs_action", "audit_logs", ["action"])
-    op.create_index("ix_audit_logs_exchange_account_id", "audit_logs", ["exchange_account_id"])
-    op.create_index("ix_audit_logs_severity", "audit_logs", ["severity"])
-    op.create_index("ix_audit_logs_user_id", "audit_logs", ["user_id"])
+    _create_index("ix_audit_logs_action", "audit_logs", ["action"])
+    _create_index("ix_audit_logs_exchange_account_id", "audit_logs", ["exchange_account_id"])
+    _create_index("ix_audit_logs_severity", "audit_logs", ["severity"])
+    _create_index("ix_audit_logs_user_id", "audit_logs", ["user_id"])
 
     op.create_table(
         "system_events",
@@ -258,10 +292,14 @@ def _create_observability_tables() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_system_events_event_type", "system_events", ["event_type"])
-    op.create_index("ix_system_events_exchange_account_id", "system_events", ["exchange_account_id"])
-    op.create_index("ix_system_events_severity", "system_events", ["severity"])
-    op.create_index("ix_system_events_user_id", "system_events", ["user_id"])
+    _create_index("ix_system_events_event_type", "system_events", ["event_type"])
+    _create_index(
+        "ix_system_events_exchange_account_id",
+        "system_events",
+        ["exchange_account_id"],
+    )
+    _create_index("ix_system_events_severity", "system_events", ["severity"])
+    _create_index("ix_system_events_user_id", "system_events", ["user_id"])
 
     op.create_table(
         "internal_notifications",
@@ -280,34 +318,35 @@ def _create_observability_tables() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_internal_notifications_channel", "internal_notifications", ["channel"])
-    op.create_index(
+    _create_index("ix_internal_notifications_channel", "internal_notifications", ["channel"])
+    _create_index(
         "ix_internal_notifications_exchange_account_id",
         "internal_notifications",
         ["exchange_account_id"],
     )
-    op.create_index("ix_internal_notifications_severity", "internal_notifications", ["severity"])
-    op.create_index("ix_internal_notifications_user_id", "internal_notifications", ["user_id"])
+    _create_index(
+        "ix_internal_notifications_severity",
+        "internal_notifications",
+        ["severity"],
+    )
+    _create_index("ix_internal_notifications_user_id", "internal_notifications", ["user_id"])
 
 
 def _drop_observability_tables() -> None:
-    op.drop_index("ix_internal_notifications_user_id", table_name="internal_notifications")
-    op.drop_index("ix_internal_notifications_severity", table_name="internal_notifications")
-    op.drop_index(
-        "ix_internal_notifications_exchange_account_id",
-        table_name="internal_notifications",
-    )
-    op.drop_index("ix_internal_notifications_channel", table_name="internal_notifications")
+    _drop_index("ix_internal_notifications_user_id", "internal_notifications")
+    _drop_index("ix_internal_notifications_severity", "internal_notifications")
+    _drop_index("ix_internal_notifications_exchange_account_id", "internal_notifications")
+    _drop_index("ix_internal_notifications_channel", "internal_notifications")
     op.drop_table("internal_notifications")
 
-    op.drop_index("ix_system_events_user_id", table_name="system_events")
-    op.drop_index("ix_system_events_severity", table_name="system_events")
-    op.drop_index("ix_system_events_exchange_account_id", table_name="system_events")
-    op.drop_index("ix_system_events_event_type", table_name="system_events")
+    _drop_index("ix_system_events_user_id", "system_events")
+    _drop_index("ix_system_events_severity", "system_events")
+    _drop_index("ix_system_events_exchange_account_id", "system_events")
+    _drop_index("ix_system_events_event_type", "system_events")
     op.drop_table("system_events")
 
-    op.drop_index("ix_audit_logs_user_id", table_name="audit_logs")
-    op.drop_index("ix_audit_logs_severity", table_name="audit_logs")
-    op.drop_index("ix_audit_logs_exchange_account_id", table_name="audit_logs")
-    op.drop_index("ix_audit_logs_action", table_name="audit_logs")
+    _drop_index("ix_audit_logs_user_id", "audit_logs")
+    _drop_index("ix_audit_logs_severity", "audit_logs")
+    _drop_index("ix_audit_logs_exchange_account_id", "audit_logs")
+    _drop_index("ix_audit_logs_action", "audit_logs")
     op.drop_table("audit_logs")
