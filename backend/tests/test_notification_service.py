@@ -13,8 +13,8 @@ from app.db.models import (
 from app.services.notification_service import (
     ExternalNotificationChannelDisabledError,
     InternalNotificationInput,
-    SensitiveNotificationPayloadError,
     NotificationService,
+    SensitiveNotificationPayloadError,
 )
 
 
