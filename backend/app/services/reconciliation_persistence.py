@@ -2,11 +2,9 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.db.models.observability import AuditLog, InternalNotification, SystemEvent
-from app.services.reconciliation_hooks import (
-    ReconciliationHookPlan,
-    ReconciliationNotificationChannel,
-)
+from app.db.models.observability import AuditLog, InternalNotification, NotificationChannel, SystemEvent
+from app.services.notification_service import InternalNotificationInput, notification_service
+from app.services.reconciliation_hooks import ReconciliationHookPlan
 
 
 @dataclass(frozen=True)
@@ -40,20 +38,21 @@ def persist_reconciliation_hook_plan(
         )
         db.add(system_event)
 
-    internal_notifications = tuple(
-        InternalNotification(
-            user_id=plan.audit_entry.user_id,
-            exchange_account_id=plan.audit_entry.exchange_account_id,
-            channel=notification.channel.value,
-            severity=notification.severity.value,
-            title=notification.title,
-            message=notification.message,
-            payload=notification.payload,
-        )
-        for notification in plan.notifications
-        if notification.channel == ReconciliationNotificationChannel.INTERNAL
+    internal_notifications = notification_service.create_internal_notifications(
+        db,
+        (
+            InternalNotificationInput(
+                user_id=plan.audit_entry.user_id,
+                exchange_account_id=plan.audit_entry.exchange_account_id,
+                channel=NotificationChannel(notification.channel.value),
+                severity=notification.severity.value,
+                title=notification.title,
+                message=notification.message,
+                payload=notification.payload,
+            )
+            for notification in plan.notifications
+        ),
     )
-    db.add_all(internal_notifications)
     db.flush()
 
     return PersistedReconciliationHookPlan(
