@@ -56,6 +56,7 @@ Implemented so far:
 - Testnet user stream lifecycle and event parser shell with injected fake socket tests.
 - Position reconciliation snapshot comparison service.
 - Reconciliation audit, system-event, and notification hook plan generation.
+- Persistent reconciliation audit, system event, and internal notification storage.
 
 Not implemented yet:
 
@@ -63,7 +64,6 @@ Not implemented yet:
 - Real WebSocket transport implementation.
 - Continuous WebSocket event consumption loop.
 - Balance or position synchronization writes.
-- Persistent reconciliation audit and system-event database writes.
 - External notification delivery.
 - Automatic reconciliation repair.
 
@@ -193,6 +193,19 @@ The reconciliation hook service converts reconciliation reports into side-effect
 - Payloads do not include API keys, API secrets, passphrases, signatures, or request headers.
 - Hook plans always set `auto_fix_allowed=False` in this phase.
 
+## Reconciliation Persistence
+
+The reconciliation persistence service stores hook plans in database-backed observability tables.
+
+- `audit_logs` records every reconciliation hook plan and is intended as append-only storage.
+- `system_events` records drift events only.
+- `internal_notifications` records internal notification plans only.
+- External notification channels remain reserved and are not sent or stored as internal messages.
+- The service adds records and flushes the active SQLAlchemy session without committing it.
+- Transaction ownership remains with the caller, so future workers can rollback related writes together.
+- The persistence service does not update or delete audit log rows.
+- Stored payloads retain the same secret-free structure produced by the hook-plan service.
+
 ## Testnet Order Execution Service
 
 The testnet order execution service sends a prepared request only after the order preflight gate and runtime rate-limit checks approve the request.
@@ -227,7 +240,7 @@ Current adapter skeletons behave as follows:
 - Authenticated read-only methods are only tested through fake clients unless a signed client is explicitly injected.
 - Runtime rate-limit enforcement is active for the testnet order API path.
 - User stream support is limited to connection-plan generation and injected lifecycle shell tests.
-- Position reconciliation support is limited to snapshot comparison reports and hook plans.
+- Position reconciliation support is limited to snapshot comparison reports, hook plans, and persistence.
 - MockExchange remains the only adapter that can execute SIMULATION orders in the current codebase.
 
 ## Required API Key Rules
@@ -270,7 +283,8 @@ Runtime enforcement currently applies conservative testnet order throttling and 
 14. Add WebSocket socket lifecycle and event parser shell. Done with injected fake-client tests.
 15. Add reconciliation checks comparing exchange state, database state, and target state. Done with snapshot tests.
 16. Add reconciliation audit/event recording and notification hooks. Done with hook-plan tests.
-17. Add persistent audit/system-event writes and internal notification storage.
+17. Add persistent audit/system-event writes and internal notification storage. Done with persistence tests.
+18. Add reconciliation worker orchestration around snapshot providers and persistence.
 
 ## Safety Rules Before Any Testnet Order
 
