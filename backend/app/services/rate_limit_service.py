@@ -1,6 +1,8 @@
-from collections.abc import Callable
+from collections.abc import Callable, Protocol
 from dataclasses import dataclass
 from time import monotonic
+
+from redis import Redis
 
 from app.db.models.exchange_account import ExchangeName
 from app.exchanges.rate_limit import RateLimitScope, get_exchange_rate_limit_config
@@ -20,6 +22,12 @@ class RuntimeRateLimitRule:
     interval_seconds: int
 
 
+@dataclass(frozen=True)
+class RateLimitWindow:
+    count: int
+    retry_after_seconds: int
+
+
 class RateLimitExceededError(RuntimeError):
     def __init__(self, *, rule_name: str, retry_after_seconds: int) -> None:
         super().__init__("runtime rate limit exceeded")
@@ -27,10 +35,97 @@ class RateLimitExceededError(RuntimeError):
         self.retry_after_seconds = retry_after_seconds
 
 
-class RuntimeRateLimitService:
-    def __init__(self, *, clock: Callable[[], float] = monotonic) -> None:
-        self._clock = clock
+class RateLimitWindowStore(Protocol):
+    def acquire(
+        self,
+        *,
+        key: tuple[str, str, str],
+        limit: int,
+        interval_seconds: int,
+        now: float,
+    ) -> RateLimitWindow: ...
+
+
+class InMemoryRateLimitWindowStore:
+    def __init__(self) -> None:
         self._windows: dict[tuple[str, str, str], _WindowState] = {}
+
+    def acquire(
+        self,
+        *,
+        key: tuple[str, str, str],
+        limit: int,
+        interval_seconds: int,
+        now: float,
+    ) -> RateLimitWindow:
+        window = self._active_window(key=key, now=now, interval_seconds=interval_seconds)
+        if window.count >= limit:
+            return RateLimitWindow(
+                count=window.count,
+                retry_after_seconds=_retry_after_seconds(
+                    now=now,
+                    started_at=window.started_at,
+                    interval_seconds=interval_seconds,
+                ),
+            )
+        window.count += 1
+        return RateLimitWindow(
+            count=window.count,
+            retry_after_seconds=_retry_after_seconds(
+                now=now,
+                started_at=window.started_at,
+                interval_seconds=interval_seconds,
+            ),
+        )
+
+    def _active_window(
+        self,
+        *,
+        key: tuple[str, str, str],
+        now: float,
+        interval_seconds: int,
+    ) -> _WindowState:
+        window = self._windows.get(key)
+        if window is None or now - window.started_at >= interval_seconds:
+            window = _WindowState(started_at=now, count=0)
+            self._windows[key] = window
+        return window
+
+
+class RedisRateLimitWindowStore:
+    def __init__(self, redis: Redis, *, key_prefix: str = "trading:rate_limit") -> None:
+        self._redis = redis
+        self._key_prefix = key_prefix
+
+    def acquire(
+        self,
+        *,
+        key: tuple[str, str, str],
+        limit: int,
+        interval_seconds: int,
+        now: float,
+    ) -> RateLimitWindow:
+        redis_key = self._redis_key(key)
+        count = int(self._redis.incr(redis_key))
+        if count == 1:
+            self._redis.expire(redis_key, interval_seconds)
+        ttl = self._redis.ttl(redis_key)
+        retry_after_seconds = max(1, int(ttl if ttl and ttl > 0 else interval_seconds))
+        return RateLimitWindow(count=count, retry_after_seconds=retry_after_seconds)
+
+    def _redis_key(self, key: tuple[str, str, str]) -> str:
+        return ":".join((self._key_prefix, *(_escape_key_part(part) for part in key)))
+
+
+class RuntimeRateLimitService:
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], float] = monotonic,
+        store: RateLimitWindowStore | None = None,
+    ) -> None:
+        self._clock = clock
+        self._store = store or InMemoryRateLimitWindowStore()
 
     def acquire_testnet_order(
         self,
@@ -52,33 +147,17 @@ class RuntimeRateLimitService:
         ]
 
         for rule, key in zip(rules, keys, strict=True):
-            window = self._active_window(key=key, now=now, interval_seconds=rule.interval_seconds)
-            if window.count >= rule.limit:
+            window = self._store.acquire(
+                key=key,
+                limit=rule.limit,
+                interval_seconds=rule.interval_seconds,
+                now=now,
+            )
+            if window.count > rule.limit:
                 raise RateLimitExceededError(
                     rule_name=rule.name,
-                    retry_after_seconds=_retry_after_seconds(
-                        now=now,
-                        started_at=window.started_at,
-                        interval_seconds=rule.interval_seconds,
-                    ),
+                    retry_after_seconds=window.retry_after_seconds,
                 )
-
-        for rule, key in zip(rules, keys, strict=True):
-            window = self._active_window(key=key, now=now, interval_seconds=rule.interval_seconds)
-            window.count += 1
-
-    def _active_window(
-        self,
-        *,
-        key: tuple[str, str, str],
-        now: float,
-        interval_seconds: int,
-    ) -> _WindowState:
-        window = self._windows.get(key)
-        if window is None or now - window.started_at >= interval_seconds:
-            window = _WindowState(started_at=now, count=0)
-            self._windows[key] = window
-        return window
 
 
 def _testnet_order_rules(exchange_name: ExchangeName) -> tuple[RuntimeRateLimitRule, ...]:
@@ -119,6 +198,10 @@ def _rate_limit_key(
 def _retry_after_seconds(*, now: float, started_at: float, interval_seconds: int) -> int:
     remaining = interval_seconds - int(now - started_at)
     return max(1, remaining)
+
+
+def _escape_key_part(value: str) -> str:
+    return value.replace(":", "_").replace("/", "_")
 
 
 runtime_rate_limit_service = RuntimeRateLimitService()
