@@ -1,6 +1,7 @@
-from collections.abc import Callable, Protocol
+from collections.abc import Callable
 from dataclasses import dataclass
 from time import monotonic
+from typing import Protocol
 
 from redis import Redis
 
