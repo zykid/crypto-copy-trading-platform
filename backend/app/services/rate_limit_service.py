@@ -60,15 +60,6 @@ class InMemoryRateLimitWindowStore:
         now: float,
     ) -> RateLimitWindow:
         window = self._active_window(key=key, now=now, interval_seconds=interval_seconds)
-        if window.count >= limit:
-            return RateLimitWindow(
-                count=window.count,
-                retry_after_seconds=_retry_after_seconds(
-                    now=now,
-                    started_at=window.started_at,
-                    interval_seconds=interval_seconds,
-                ),
-            )
         window.count += 1
         return RateLimitWindow(
             count=window.count,
