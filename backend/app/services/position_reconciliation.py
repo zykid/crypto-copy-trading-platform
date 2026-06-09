@@ -69,7 +69,9 @@ def reconcile_position_snapshots(
         )
         for symbol in symbols
     )
-    drifted = tuple(item for item in differences if item.severity != PositionReconciliationSeverity.OK)
+    drifted = tuple(
+        item for item in differences if item.severity != PositionReconciliationSeverity.OK
+    )
     severity = _report_severity(drifted)
     return PositionReconciliationReport(
         user_id=user_id,
