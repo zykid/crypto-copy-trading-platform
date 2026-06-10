@@ -1,6 +1,5 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -36,7 +35,7 @@ class InternalNotificationInput:
     severity: str
     title: str
     message: str
-    payload: Mapping[str, Any]
+    payload: Mapping[str, object]
     channel: NotificationChannel = NotificationChannel.INTERNAL
 
 
@@ -75,16 +74,16 @@ class NotificationService:
         )
 
 
-def _safe_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+def _safe_payload(payload: Mapping[str, object]) -> dict[str, object]:
     return _copy_safe_mapping(payload, key_path=())
 
 
 def _copy_safe_mapping(
-    payload: Mapping[str, Any],
+    payload: Mapping[str, object],
     *,
     key_path: tuple[str, ...],
-) -> dict[str, Any]:
-    safe_payload: dict[str, Any] = {}
+) -> dict[str, object]:
+    safe_payload: dict[str, object] = {}
     for key, value in payload.items():
         key_text = str(key)
         _raise_if_sensitive_key(key_text, key_path=key_path)
@@ -92,7 +91,7 @@ def _copy_safe_mapping(
     return safe_payload
 
 
-def _copy_safe_value(value: Any, *, key_path: tuple[str, ...]) -> Any:
+def _copy_safe_value(value: object, *, key_path: tuple[str, ...]) -> object:
     if isinstance(value, Mapping):
         return _copy_safe_mapping(value, key_path=key_path)
     if isinstance(value, tuple | list):
