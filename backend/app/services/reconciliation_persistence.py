@@ -2,7 +2,12 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.db.models.observability import AuditLog, InternalNotification, NotificationChannel, SystemEvent
+from app.db.models.observability import (
+    AuditLog,
+    InternalNotification,
+    NotificationChannel,
+    SystemEvent,
+)
 from app.services.notification_service import InternalNotificationInput, notification_service
 from app.services.reconciliation_hooks import ReconciliationHookPlan
 
