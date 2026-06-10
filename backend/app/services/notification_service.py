@@ -1,7 +1,6 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-
-from sqlalchemy.orm import Session
+from typing import Protocol
 
 from app.db.models.observability import InternalNotification, NotificationChannel
 
@@ -14,6 +13,12 @@ SENSITIVE_PAYLOAD_KEY_FRAGMENTS = (
     "signature",
     "token",
 )
+
+
+class NotificationSession(Protocol):
+    def add(self, instance: object) -> None: ...
+
+    def flush(self) -> None: ...
 
 
 class ExternalNotificationChannelDisabledError(RuntimeError):
@@ -42,7 +47,7 @@ class InternalNotificationInput:
 class NotificationService:
     def create_internal_notification(
         self,
-        db: Session,
+        db: NotificationSession,
         notification: InternalNotificationInput,
     ) -> InternalNotification:
         if notification.channel != NotificationChannel.INTERNAL:
@@ -64,7 +69,7 @@ class NotificationService:
 
     def create_internal_notifications(
         self,
-        db: Session,
+        db: NotificationSession,
         notifications: Iterable[InternalNotificationInput],
     ) -> tuple[InternalNotification, ...]:
         return tuple(
