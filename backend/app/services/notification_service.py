@@ -1,8 +1,9 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from app.db.models.observability import InternalNotification, NotificationChannel
 from sqlalchemy.orm import Session
+
+from app.db.models.observability import InternalNotification, NotificationChannel
 
 
 SENSITIVE_PAYLOAD_KEY_FRAGMENTS = (
