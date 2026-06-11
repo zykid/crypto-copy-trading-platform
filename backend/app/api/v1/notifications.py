@@ -4,8 +4,16 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.notification import InternalNotificationResponse
-from app.services.notification_service import notification_service
+from app.schemas.notification import (
+    InternalNotificationResponse,
+    NotificationPreferenceResponse,
+    NotificationPreferenceUpdateRequest,
+)
+from app.services.notification_service import (
+    ExternalNotificationPreferenceDisabledError,
+    NotificationPreferenceUpdate,
+    notification_service,
+)
 
 router = APIRouter()
 
@@ -23,6 +31,33 @@ def list_notifications(
         unread_only=unread_only,
         limit=limit,
     )
+
+
+@router.get("/preferences", response_model=NotificationPreferenceResponse)
+def get_notification_preferences(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return notification_service.get_or_create_preferences(db, user_id=current_user.id)
+
+
+@router.put("/preferences", response_model=NotificationPreferenceResponse)
+def update_notification_preferences(
+    request: NotificationPreferenceUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        return notification_service.update_preferences(
+            db,
+            user_id=current_user.id,
+            update=NotificationPreferenceUpdate(**request.model_dump()),
+        )
+    except ExternalNotificationPreferenceDisabledError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{exc.channel.value} delivery is not enabled in this phase",
+        ) from exc
 
 
 @router.post("/{notification_id}/read", response_model=InternalNotificationResponse)
