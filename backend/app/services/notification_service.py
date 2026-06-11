@@ -1,6 +1,7 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Protocol
 
 from sqlalchemy import select
@@ -21,6 +22,12 @@ SENSITIVE_PAYLOAD_KEY_FRAGMENTS = (
     "token",
 )
 MAX_NOTIFICATION_PAGE_SIZE = 100
+
+
+class NotificationEventType(StrEnum):
+    POSITION_DRIFT = "position_drift"
+    RISK_REJECTION = "risk_rejection"
+    ORDER_FAILURE = "order_failure"
 
 
 class NotificationSession(Protocol):
@@ -56,6 +63,7 @@ class InternalNotificationInput:
     message: str
     payload: Mapping[str, object]
     channel: NotificationChannel = NotificationChannel.INTERNAL
+    event_type: NotificationEventType | None = None
 
 
 @dataclass(frozen=True)
@@ -102,6 +110,33 @@ class NotificationService:
             for notification in notifications
             if notification.channel == NotificationChannel.INTERNAL
         )
+
+    def create_preference_aware_internal_notification(
+        self,
+        db: Session,
+        notification: InternalNotificationInput,
+    ) -> InternalNotification | None:
+        if notification.channel != NotificationChannel.INTERNAL:
+            raise ExternalNotificationChannelDisabledError(notification.channel)
+
+        preferences = self.get_or_create_preferences(db, user_id=notification.user_id)
+        if not _preferences_allow_internal_notification(preferences, notification.event_type):
+            return None
+        return self.create_internal_notification(db, notification)
+
+    def create_preference_aware_internal_notifications(
+        self,
+        db: Session,
+        notifications: Iterable[InternalNotificationInput],
+    ) -> tuple[InternalNotification, ...]:
+        records: list[InternalNotification] = []
+        for notification in notifications:
+            if notification.channel != NotificationChannel.INTERNAL:
+                continue
+            record = self.create_preference_aware_internal_notification(db, notification)
+            if record is not None:
+                records.append(record)
+        return tuple(records)
 
     def list_internal_notifications(
         self,
@@ -197,6 +232,22 @@ def _reject_external_delivery_enablement(update: NotificationPreferenceUpdate) -
     for field_name, channel in blocked_fields:
         if getattr(update, field_name) is True:
             raise ExternalNotificationPreferenceDisabledError(channel)
+
+
+def _preferences_allow_internal_notification(
+    preferences: NotificationPreference,
+    event_type: NotificationEventType | None,
+) -> bool:
+    if not preferences.internal_enabled:
+        return False
+    event_toggles = {
+        NotificationEventType.POSITION_DRIFT: preferences.position_drift_enabled,
+        NotificationEventType.RISK_REJECTION: preferences.risk_rejection_enabled,
+        NotificationEventType.ORDER_FAILURE: preferences.order_failure_enabled,
+    }
+    if event_type is None:
+        return True
+    return event_toggles[event_type]
 
 
 def _safe_payload(payload: Mapping[str, object]) -> dict[str, object]:
