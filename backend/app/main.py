@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.v1.admin_observability import router as admin_observability_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.exchange_accounts import router as exchange_accounts_router
 from app.api.v1.health import router as health_router
@@ -41,6 +42,11 @@ def create_app() -> FastAPI:
         notifications_router,
         prefix="/api/v1/notifications",
         tags=["notifications"],
+    )
+    app.include_router(
+        admin_observability_router,
+        prefix="/api/v1/admin/observability",
+        tags=["admin-observability"],
     )
     return app
 
