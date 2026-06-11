@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.api.v1.auth import router as auth_router
 from app.api.v1.exchange_accounts import router as exchange_accounts_router
 from app.api.v1.health import router as health_router
+from app.api.v1.notifications import router as notifications_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.permissions import router as permissions_router
 from app.api.v1.positions import router as positions_router
@@ -35,6 +36,11 @@ def create_app() -> FastAPI:
         risk_settings_router,
         prefix="/api/v1/risk-settings",
         tags=["risk-settings"],
+    )
+    app.include_router(
+        notifications_router,
+        prefix="/api/v1/notifications",
+        tags=["notifications"],
     )
     return app
 
