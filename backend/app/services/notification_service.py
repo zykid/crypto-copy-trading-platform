@@ -4,7 +4,6 @@ from typing import Protocol
 
 from app.db.models.observability import InternalNotification, NotificationChannel
 
-
 SENSITIVE_PAYLOAD_KEY_FRAGMENTS = (
     "api_key",
     "passphrase",
