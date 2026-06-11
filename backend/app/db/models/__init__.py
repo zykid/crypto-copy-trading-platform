@@ -3,6 +3,7 @@ from app.db.models.observability import (
     AuditLog,
     InternalNotification,
     NotificationChannel,
+    NotificationPreference,
     SystemEvent,
 )
 from app.db.models.trading import (
@@ -26,6 +27,7 @@ __all__ = [
     "ExchangeName",
     "InternalNotification",
     "NotificationChannel",
+    "NotificationPreference",
     "OrderExecution",
     "OrderExecutionStatus",
     "OrderSide",
