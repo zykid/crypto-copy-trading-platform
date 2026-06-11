@@ -2,9 +2,9 @@
 
 Multi-Tenant Crypto Trading & Copy Trading Platform V1.0.
 
-当前阶段：GitHub + Docker Compose Mock 集成测试。
+当前阶段：GitHub + Docker Compose Mock 集成测试 + 第三阶段测试网准备。
 
-本阶段只允许：
+本阶段默认只允许：
 
 - SIMULATION 账户
 - MockExchange
@@ -12,7 +12,7 @@ Multi-Tenant Crypto Trading & Copy Trading Platform V1.0.
 - 受控风控配置
 - Mock 下单和持仓更新
 
-禁止真实交易，禁止默认启用 TESTNET 或 REAL。
+测试网能力处于受保护准备态：必须手动切换 `TESTNET`、显式开启测试网开关、启用账户和风控，并通过预检门禁后才允许测试网请求路径继续。禁止默认启用 TESTNET 或 REAL，禁止真实交易。
 
 ## 技术栈
 
@@ -32,7 +32,7 @@ Multi-Tenant Crypto Trading & Copy Trading Platform V1.0.
 ```text
 backend/                         FastAPI 后端
 frontend/                        Next.js 前端
-docs/ubuntu-docker-integration.md Ubuntu Docker 集成测试说明
+docs/                            阶段设计与集成测试说明
 scripts/integration/             Mock API 集成测试脚本
 .github/workflows/               CI 与 Docker Integration
 docker-compose.yml
@@ -131,6 +131,15 @@ docker compose down --remove-orphans
 - Order State Machine
 - 幂等执行：同一个 `signal_id + exchange_account_id` 只能执行一次
 - 受控风控配置接口，仅允许 SIMULATION 账户修改
+- Binance / Bybit / OKX 测试网适配骨架，默认关闭
+- 测试网只读请求结构、签名请求准备、测试网订单预检门禁
+- 测试网订单请求准备与受限执行服务
+- 测试网用户流连接计划与注入式运行时 shell
+- Rate Limit Service，支持内存计数与 Redis 计数后端
+- Position Reconciliation Service，支持快照差异检测
+- Reconciliation Worker，支持注入式快照 provider 和持久化编排
+- Audit / System Event / Internal Notification 持久化边界
+- Notification Service，支持内部通知写入、读取和标记已读
 
 测试覆盖：
 
@@ -146,6 +155,9 @@ docker compose down --remove-orphans
 - 风控启用后 Mock FILLED
 - Position delta execution
 - 幂等机制不能绕过租户隔离
+- 测试网预检门禁、签名请求、运行时限频
+- 对账 drift 检测、审计/事件/内部通知持久化
+- 内部通知读取和已读状态的 `user_id` 隔离
 
 ## 安全原则
 
@@ -156,7 +168,8 @@ docker compose down --remove-orphans
 - 幂等检查不能绕过租户隔离。
 - 风控默认拒单，必须显式启用。
 - 当前 V1 只允许 SIMULATION 账户通过 API 修改风控设置。
-- Audit Log 后续必须 append-only。
+- 测试网订单路径必须通过账户模式、全局开关、账户交易开关、风控开关、手动确认和限频检查。
+- Audit Log 必须 append-only。
 
 ## 禁止命令
 
@@ -173,8 +186,9 @@ docker compose down -v
 
 ## 当前限制
 
-- 未接入真实交易所。
-- 未接入交易所测试网。
+- 未接入真实交易所生产环境。
+- 测试网适配仍是受保护准备态，默认不发送测试网订单。
 - 未启用生产级 HTTPS、监控、告警、备份、日志轮转。
-- Binance / Bybit / OKX adapter 仍在后续阶段。
-- Audit Service、Rate Limit Service、Position Reconciliation Service、Notification Service 仍需后续实现。
+- 真实 WebSocket transport、连续事件消费、余额/持仓同步写入尚未实现。
+- Telegram / Email / Webhook 外部通知发送尚未实现。
+- 自动对账修复尚未实现。
