@@ -28,7 +28,7 @@ jobs:
 
       - name: Ruff check
         working-directory: backend
-        run: ruff check . || ruff check --fix --diff .
+        run: ruff check .
 
       - name: Pytest
         working-directory: backend
