@@ -8,11 +8,14 @@ from app.db.models import (
     ExchangeName,
     InternalNotification,
     NotificationChannel,
+    NotificationPreference,
     User,
 )
 from app.services.notification_service import (
     ExternalNotificationChannelDisabledError,
+    ExternalNotificationPreferenceDisabledError,
     InternalNotificationInput,
+    NotificationPreferenceUpdate,
     NotificationService,
     SensitiveNotificationPayloadError,
 )
@@ -277,3 +280,73 @@ def test_mark_internal_notification_read_sets_read_timestamp(db_session: Session
     assert result == notification
     assert notification.is_read is True
     assert notification.read_at is not None
+
+
+def test_get_or_create_preferences_defaults_to_internal_only(db_session: Session) -> None:
+    user, _account = create_user_and_account(db_session)
+    service = NotificationService()
+
+    preferences = service.get_or_create_preferences(db_session, user_id=user.id)
+
+    assert preferences.user_id == user.id
+    assert preferences.internal_enabled is True
+    assert preferences.telegram_enabled is False
+    assert preferences.email_enabled is False
+    assert preferences.webhook_enabled is False
+    assert preferences.position_drift_enabled is True
+    assert preferences.risk_rejection_enabled is True
+    assert preferences.order_failure_enabled is True
+
+
+def test_get_or_create_preferences_is_scoped_by_user_id(db_session: Session) -> None:
+    user, _account = create_user_and_account(db_session)
+    other_user, _other_account = create_second_user_and_account(db_session)
+    service = NotificationService()
+
+    own_preferences = service.get_or_create_preferences(db_session, user_id=user.id)
+    other_preferences = service.get_or_create_preferences(db_session, user_id=other_user.id)
+
+    stored = db_session.scalars(select(NotificationPreference)).all()
+    assert own_preferences.user_id == user.id
+    assert other_preferences.user_id == other_user.id
+    assert {preference.user_id for preference in stored} == {user.id, other_user.id}
+
+
+def test_update_preferences_updates_internal_and_event_toggles(db_session: Session) -> None:
+    user, _account = create_user_and_account(db_session)
+    service = NotificationService()
+
+    preferences = service.update_preferences(
+        db_session,
+        user_id=user.id,
+        update=NotificationPreferenceUpdate(
+            internal_enabled=False,
+            position_drift_enabled=False,
+            risk_rejection_enabled=False,
+        ),
+    )
+
+    assert preferences.internal_enabled is False
+    assert preferences.position_drift_enabled is False
+    assert preferences.risk_rejection_enabled is False
+    assert preferences.order_failure_enabled is True
+    assert preferences.telegram_enabled is False
+    assert preferences.email_enabled is False
+    assert preferences.webhook_enabled is False
+
+
+def test_update_preferences_rejects_external_delivery_enablement(
+    db_session: Session,
+) -> None:
+    user, _account = create_user_and_account(db_session)
+    service = NotificationService()
+
+    with pytest.raises(ExternalNotificationPreferenceDisabledError) as exc_info:
+        service.update_preferences(
+            db_session,
+            user_id=user.id,
+            update=NotificationPreferenceUpdate(email_enabled=True),
+        )
+
+    assert exc_info.value.channel == NotificationChannel.EMAIL
+    assert db_session.scalars(select(NotificationPreference)).all() == []
