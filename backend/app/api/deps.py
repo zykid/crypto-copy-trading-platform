@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
-from app.db.models.user import User
+from app.db.models.user import User, UserRole
 from app.db.session import get_db
 from app.services.users import get_user_by_id
 
@@ -27,3 +27,12 @@ def get_current_user(
             detail="inactive or missing user",
         )
     return user
+
+
+def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="admin privileges required",
+        )
+    return current_user
