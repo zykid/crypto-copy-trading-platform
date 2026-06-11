@@ -37,20 +37,56 @@ def create_user_and_account(db_session: Session) -> tuple[User, ExchangeAccount]
     return user, account
 
 
-def test_create_internal_notification_persists_unread_record(db_session: Session) -> None:
-    user, account = create_user_and_account(db_session)
-    service = NotificationService()
+def create_second_user_and_account(db_session: Session) -> tuple[User, ExchangeAccount]:
+    user = User(
+        email="notify-other@example.com",
+        username="notify-other-user",
+        password_hash="hashed-password",
+    )
+    db_session.add(user)
+    db_session.flush()
+    account = ExchangeAccount(
+        user_id=user.id,
+        exchange_name=ExchangeName.MOCK,
+        account_mode=AccountMode.TESTNET,
+        account_label="other testnet mock",
+    )
+    db_session.add(account)
+    db_session.flush()
+    return user, account
 
-    record = service.create_internal_notification(
+
+def create_notification(
+    db_session: Session,
+    service: NotificationService,
+    *,
+    user: User,
+    account: ExchangeAccount,
+    title: str,
+) -> InternalNotification:
+    return service.create_internal_notification(
         db_session,
         InternalNotificationInput(
             user_id=user.id,
             exchange_account_id=account.id,
             severity="WARNING",
-            title="Position drift detected",
+            title=title,
             message="Position reconciliation detected one drifted symbol.",
             payload={"symbol": "BTCUSDT", "difference_count": 1},
         ),
+    )
+
+
+def test_create_internal_notification_persists_unread_record(db_session: Session) -> None:
+    user, account = create_user_and_account(db_session)
+    service = NotificationService()
+
+    record = create_notification(
+        db_session,
+        service,
+        user=user,
+        account=account,
+        title="Position drift detected",
     )
 
     stored = db_session.scalars(select(InternalNotification)).one()
@@ -140,3 +176,104 @@ def test_create_internal_notification_rejects_sensitive_payload_keys(
 
     assert exc_info.value.key_path == "exchange.api_secret"
     assert db_session.scalars(select(InternalNotification)).all() == []
+
+
+def test_list_internal_notifications_is_scoped_by_user_id(db_session: Session) -> None:
+    user, account = create_user_and_account(db_session)
+    other_user, other_account = create_second_user_and_account(db_session)
+    service = NotificationService()
+    own_notification = create_notification(
+        db_session,
+        service,
+        user=user,
+        account=account,
+        title="Own drift",
+    )
+    create_notification(
+        db_session,
+        service,
+        user=other_user,
+        account=other_account,
+        title="Other drift",
+    )
+
+    notifications = service.list_internal_notifications(db_session, user_id=user.id)
+
+    assert notifications == (own_notification,)
+
+
+def test_list_internal_notifications_can_filter_unread(db_session: Session) -> None:
+    user, account = create_user_and_account(db_session)
+    service = NotificationService()
+    read_notification = create_notification(
+        db_session,
+        service,
+        user=user,
+        account=account,
+        title="Read drift",
+    )
+    unread_notification = create_notification(
+        db_session,
+        service,
+        user=user,
+        account=account,
+        title="Unread drift",
+    )
+    service.mark_internal_notification_read(
+        db_session,
+        user_id=user.id,
+        notification_id=read_notification.id,
+    )
+
+    notifications = service.list_internal_notifications(
+        db_session,
+        user_id=user.id,
+        unread_only=True,
+    )
+
+    assert notifications == (unread_notification,)
+
+
+def test_mark_internal_notification_read_is_scoped_by_user_id(db_session: Session) -> None:
+    user, _account = create_user_and_account(db_session)
+    other_user, other_account = create_second_user_and_account(db_session)
+    service = NotificationService()
+    other_notification = create_notification(
+        db_session,
+        service,
+        user=other_user,
+        account=other_account,
+        title="Other drift",
+    )
+
+    result = service.mark_internal_notification_read(
+        db_session,
+        user_id=user.id,
+        notification_id=other_notification.id,
+    )
+
+    assert result is None
+    assert other_notification.is_read is False
+    assert other_notification.read_at is None
+
+
+def test_mark_internal_notification_read_sets_read_timestamp(db_session: Session) -> None:
+    user, account = create_user_and_account(db_session)
+    service = NotificationService()
+    notification = create_notification(
+        db_session,
+        service,
+        user=user,
+        account=account,
+        title="Own drift",
+    )
+
+    result = service.mark_internal_notification_read(
+        db_session,
+        user_id=user.id,
+        notification_id=notification.id,
+    )
+
+    assert result == notification
+    assert notification.is_read is True
+    assert notification.read_at is not None
