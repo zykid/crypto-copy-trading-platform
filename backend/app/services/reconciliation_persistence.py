@@ -8,7 +8,11 @@ from app.db.models.observability import (
     NotificationChannel,
     SystemEvent,
 )
-from app.services.notification_service import InternalNotificationInput, notification_service
+from app.services.notification_service import (
+    InternalNotificationInput,
+    NotificationEventType,
+    notification_service,
+)
 from app.services.reconciliation_hooks import ReconciliationHookPlan
 
 
@@ -43,7 +47,7 @@ def persist_reconciliation_hook_plan(
         )
         db.add(system_event)
 
-    internal_notifications = notification_service.create_internal_notifications(
+    internal_notifications = notification_service.create_preference_aware_internal_notifications(
         db,
         (
             InternalNotificationInput(
@@ -54,6 +58,7 @@ def persist_reconciliation_hook_plan(
                 title=notification.title,
                 message=notification.message,
                 payload=notification.payload,
+                event_type=NotificationEventType.POSITION_DRIFT,
             )
             for notification in plan.notifications
         ),
