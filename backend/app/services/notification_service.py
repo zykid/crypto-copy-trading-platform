@@ -94,9 +94,10 @@ class NotificationService:
         query = select(InternalNotification).where(InternalNotification.user_id == user_id)
         if unread_only:
             query = query.where(InternalNotification.is_read.is_(False))
-        query = query.order_by(InternalNotification.created_at.desc(), InternalNotification.id.desc()).limit(
-            bounded_limit
-        )
+        query = query.order_by(
+            InternalNotification.created_at.desc(),
+            InternalNotification.id.desc(),
+        ).limit(bounded_limit)
         return tuple(db.scalars(query).all())
 
     def get_owned_internal_notification(
