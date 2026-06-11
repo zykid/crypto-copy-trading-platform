@@ -12,6 +12,8 @@ Implemented:
 - Explicit rejection when a single-notification call attempts to use disabled external channels.
 - Sensitive payload key detection before notifications are persisted.
 - Reconciliation persistence now routes internal alerts through the notification service.
+- Tenant-scoped internal notification listing through `/api/v1/notifications`.
+- Tenant-scoped unread filtering and read-state updates.
 
 Not implemented yet:
 
@@ -36,15 +38,19 @@ Notification payloads are rejected if any nested key contains sensitive fragment
 
 This prevents API secrets, signatures, tokens, and credentials from being accidentally written into notification storage.
 
+Notification reads and read-state updates are always scoped by the authenticated user's `user_id`. The API does not accept a frontend-supplied `user_id`, and an attempt to read or mark another user's notification returns the same not-found behavior as a missing notification.
+
 ## Current Use
 
 Position reconciliation drift alerts can now create internal notifications through the shared service. Matched reconciliation reports still write audit records only and do not create notifications.
+
+Users can list their internal notifications and mark their own notifications as read. This is intentionally internal-only and does not deliver Telegram, Email, or Webhook messages.
 
 ## Next Boundaries
 
 Future steps can add:
 
-- Read/unread notification API with `user_id` tenant isolation.
+- User notification preference APIs.
 - Admin-only system notification views.
 - External delivery adapters with explicit opt-in configuration.
 - Delivery audit records and retry state.
