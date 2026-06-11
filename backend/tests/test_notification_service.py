@@ -15,6 +15,7 @@ from app.services.notification_service import (
     ExternalNotificationChannelDisabledError,
     ExternalNotificationPreferenceDisabledError,
     InternalNotificationInput,
+    NotificationEventType,
     NotificationPreferenceUpdate,
     NotificationService,
     SensitiveNotificationPayloadError,
@@ -77,6 +78,18 @@ def create_notification(
             message="Position reconciliation detected one drifted symbol.",
             payload={"symbol": "BTCUSDT", "difference_count": 1},
         ),
+    )
+
+
+def drift_notification_input(user: User, account: ExchangeAccount) -> InternalNotificationInput:
+    return InternalNotificationInput(
+        user_id=user.id,
+        exchange_account_id=account.id,
+        severity="WARNING",
+        title="Position drift detected",
+        message="Position reconciliation detected one drifted symbol.",
+        payload={"symbol": "BTCUSDT", "difference_count": 1},
+        event_type=NotificationEventType.POSITION_DRIFT,
     )
 
 
@@ -350,3 +363,55 @@ def test_update_preferences_rejects_external_delivery_enablement(
 
     assert exc_info.value.channel == NotificationChannel.EMAIL
     assert db_session.scalars(select(NotificationPreference)).all() == []
+
+
+def test_preference_aware_creation_writes_when_enabled(db_session: Session) -> None:
+    user, account = create_user_and_account(db_session)
+    service = NotificationService()
+
+    record = service.create_preference_aware_internal_notification(
+        db_session,
+        drift_notification_input(user, account),
+    )
+
+    stored = db_session.scalars(select(InternalNotification)).one()
+    assert record == stored
+    assert stored.user_id == user.id
+
+
+def test_preference_aware_creation_respects_global_internal_toggle(
+    db_session: Session,
+) -> None:
+    user, account = create_user_and_account(db_session)
+    service = NotificationService()
+    service.update_preferences(
+        db_session,
+        user_id=user.id,
+        update=NotificationPreferenceUpdate(internal_enabled=False),
+    )
+
+    record = service.create_preference_aware_internal_notification(
+        db_session,
+        drift_notification_input(user, account),
+    )
+
+    assert record is None
+    assert db_session.scalars(select(InternalNotification)).all() == []
+
+
+def test_preference_aware_creation_respects_event_toggle(db_session: Session) -> None:
+    user, account = create_user_and_account(db_session)
+    service = NotificationService()
+    service.update_preferences(
+        db_session,
+        user_id=user.id,
+        update=NotificationPreferenceUpdate(position_drift_enabled=False),
+    )
+
+    record = service.create_preference_aware_internal_notification(
+        db_session,
+        drift_notification_input(user, account),
+    )
+
+    assert record is None
+    assert db_session.scalars(select(InternalNotification)).all() == []
