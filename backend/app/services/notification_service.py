@@ -1,6 +1,10 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Protocol
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.db.models.observability import InternalNotification, NotificationChannel
 
@@ -12,6 +16,7 @@ SENSITIVE_PAYLOAD_KEY_FRAGMENTS = (
     "signature",
     "token",
 )
+MAX_NOTIFICATION_PAGE_SIZE = 100
 
 
 class NotificationSession(Protocol):
@@ -76,6 +81,57 @@ class NotificationService:
             for notification in notifications
             if notification.channel == NotificationChannel.INTERNAL
         )
+
+    def list_internal_notifications(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        unread_only: bool = False,
+        limit: int = 50,
+    ) -> tuple[InternalNotification, ...]:
+        bounded_limit = min(max(limit, 1), MAX_NOTIFICATION_PAGE_SIZE)
+        query = select(InternalNotification).where(InternalNotification.user_id == user_id)
+        if unread_only:
+            query = query.where(InternalNotification.is_read.is_(False))
+        query = query.order_by(InternalNotification.created_at.desc(), InternalNotification.id.desc()).limit(
+            bounded_limit
+        )
+        return tuple(db.scalars(query).all())
+
+    def get_owned_internal_notification(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        notification_id: str,
+    ) -> InternalNotification | None:
+        return db.scalar(
+            select(InternalNotification).where(
+                InternalNotification.id == notification_id,
+                InternalNotification.user_id == user_id,
+            )
+        )
+
+    def mark_internal_notification_read(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        notification_id: str,
+    ) -> InternalNotification | None:
+        notification = self.get_owned_internal_notification(
+            db,
+            user_id=user_id,
+            notification_id=notification_id,
+        )
+        if notification is None:
+            return None
+        if not notification.is_read:
+            notification.is_read = True
+            notification.read_at = datetime.now(UTC)
+            db.flush()
+        return notification
 
 
 def _safe_payload(payload: Mapping[str, object]) -> dict[str, object]:
