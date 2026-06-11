@@ -17,6 +17,7 @@ Implemented:
 - Tenant-scoped notification preference storage through `NotificationPreference`.
 - Current-user notification preference read/update APIs.
 - Explicit rejection when a user attempts to enable Telegram, Email, or Webhook delivery.
+- Preference-aware internal notification creation for position reconciliation drift alerts.
 
 Not implemented yet:
 
@@ -45,11 +46,15 @@ Notification reads and read-state updates are always scoped by the authenticated
 
 Notification preferences are also scoped by the authenticated user's `user_id`. The API can disable internal notification or event-category toggles for the current user, but external delivery toggles cannot be enabled until the dedicated delivery adapters, destination validation, and delivery audit records exist.
 
+Preferences only affect notification creation. Audit logs and system events remain append-only operational records and are not suppressed by user notification preferences.
+
 ## Current Use
 
 Position reconciliation drift alerts can now create internal notifications through the shared service. Matched reconciliation reports still write audit records only and do not create notifications.
 
-Users can list their internal notifications, mark their own notifications as read, and manage current-user notification preferences. This is intentionally internal-only and does not deliver Telegram, Email, or Webhook messages.
+Users can list their internal notifications, mark their own notifications as read, and manage current-user notification preferences. Disabling internal notifications or the position-drift category suppresses new internal drift notifications while preserving audit logs and system events.
+
+This is intentionally internal-only and does not deliver Telegram, Email, or Webhook messages.
 
 ## Next Boundaries
 
@@ -58,6 +63,6 @@ Future steps can add:
 - Admin-only system notification views.
 - External delivery adapters with explicit opt-in configuration.
 - Delivery audit records and retry state.
-- Notification preference integration into notification creation decisions.
+- Additional event-category integrations for risk rejection and order failure notifications.
 
 External delivery must remain disabled by default.
