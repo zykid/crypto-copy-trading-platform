@@ -6,7 +6,11 @@ from typing import Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models.observability import InternalNotification, NotificationChannel
+from app.db.models.observability import (
+    InternalNotification,
+    NotificationChannel,
+    NotificationPreference,
+)
 
 SENSITIVE_PAYLOAD_KEY_FRAGMENTS = (
     "api_key",
@@ -37,6 +41,12 @@ class SensitiveNotificationPayloadError(RuntimeError):
         self.key_path = key_path
 
 
+class ExternalNotificationPreferenceDisabledError(RuntimeError):
+    def __init__(self, channel: NotificationChannel) -> None:
+        super().__init__(f"notification preference for {channel.value} cannot be enabled yet")
+        self.channel = channel
+
+
 @dataclass(frozen=True)
 class InternalNotificationInput:
     user_id: str
@@ -46,6 +56,17 @@ class InternalNotificationInput:
     message: str
     payload: Mapping[str, object]
     channel: NotificationChannel = NotificationChannel.INTERNAL
+
+
+@dataclass(frozen=True)
+class NotificationPreferenceUpdate:
+    internal_enabled: bool | None = None
+    telegram_enabled: bool | None = None
+    email_enabled: bool | None = None
+    webhook_enabled: bool | None = None
+    position_drift_enabled: bool | None = None
+    risk_rejection_enabled: bool | None = None
+    order_failure_enabled: bool | None = None
 
 
 class NotificationService:
@@ -133,6 +154,49 @@ class NotificationService:
             notification.read_at = datetime.now(UTC)
             db.flush()
         return notification
+
+    def get_or_create_preferences(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+    ) -> NotificationPreference:
+        preferences = db.scalar(
+            select(NotificationPreference).where(NotificationPreference.user_id == user_id)
+        )
+        if preferences is not None:
+            return preferences
+
+        preferences = NotificationPreference(user_id=user_id)
+        db.add(preferences)
+        db.flush()
+        return preferences
+
+    def update_preferences(
+        self,
+        db: Session,
+        *,
+        user_id: str,
+        update: NotificationPreferenceUpdate,
+    ) -> NotificationPreference:
+        _reject_external_delivery_enablement(update)
+        preferences = self.get_or_create_preferences(db, user_id=user_id)
+        for field_name, value in update.__dict__.items():
+            if value is not None:
+                setattr(preferences, field_name, value)
+        db.flush()
+        return preferences
+
+
+def _reject_external_delivery_enablement(update: NotificationPreferenceUpdate) -> None:
+    blocked_fields = (
+        ("telegram_enabled", NotificationChannel.TELEGRAM),
+        ("email_enabled", NotificationChannel.EMAIL),
+        ("webhook_enabled", NotificationChannel.WEBHOOK),
+    )
+    for field_name, channel in blocked_fields:
+        if getattr(update, field_name) is True:
+            raise ExternalNotificationPreferenceDisabledError(channel)
 
 
 def _safe_payload(payload: Mapping[str, object]) -> dict[str, object]:
