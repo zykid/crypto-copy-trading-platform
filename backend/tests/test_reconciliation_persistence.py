@@ -9,6 +9,7 @@ from app.db.models import (
     ExchangeAccount,
     ExchangeName,
     InternalNotification,
+    NotificationPreference,
     SystemEvent,
     User,
 )
@@ -47,6 +48,17 @@ def create_user_and_account(db_session: Session) -> tuple[User, ExchangeAccount]
     return user, account
 
 
+def build_drift_plan(user: User, account: ExchangeAccount):
+    report = reconcile_position_snapshots(
+        user_id=user.id,
+        exchange_account_id=account.id,
+        exchange_positions=(snapshot("BTCUSDT", "1"),),
+        database_positions=(snapshot("BTCUSDT", "0.7"),),
+        target_positions=(snapshot("BTCUSDT", "1"),),
+    )
+    return build_reconciliation_hook_plan(report)
+
+
 def test_persist_reconciliation_hook_plan_writes_matched_audit_only(
     db_session: Session,
 ) -> None:
@@ -79,14 +91,7 @@ def test_persist_reconciliation_hook_plan_writes_drift_records(
     db_session: Session,
 ) -> None:
     user, account = create_user_and_account(db_session)
-    report = reconcile_position_snapshots(
-        user_id=user.id,
-        exchange_account_id=account.id,
-        exchange_positions=(snapshot("BTCUSDT", "1"),),
-        database_positions=(snapshot("BTCUSDT", "0.7"),),
-        target_positions=(snapshot("BTCUSDT", "1"),),
-    )
-    plan = build_reconciliation_hook_plan(report)
+    plan = build_drift_plan(user, account)
 
     persisted = persist_reconciliation_hook_plan(db_session, plan)
 
@@ -130,3 +135,27 @@ def test_persist_reconciliation_hook_plan_does_not_store_external_notification_c
     assert len(notifications) == 1
     assert notifications[0].channel == ReconciliationNotificationChannel.INTERNAL.value
     assert persisted.internal_notifications == (notifications[0],)
+
+
+def test_persist_reconciliation_hook_plan_respects_position_drift_preference(
+    db_session: Session,
+) -> None:
+    user, account = create_user_and_account(db_session)
+    db_session.add(
+        NotificationPreference(
+            user_id=user.id,
+            position_drift_enabled=False,
+        )
+    )
+    db_session.flush()
+    plan = build_drift_plan(user, account)
+
+    persisted = persist_reconciliation_hook_plan(db_session, plan)
+
+    audit_log = db_session.scalars(select(AuditLog)).one()
+    system_event = db_session.scalars(select(SystemEvent)).one()
+    notifications = db_session.scalars(select(InternalNotification)).all()
+    assert audit_log.action == "position_reconciliation.drift_detected"
+    assert system_event.event_type == "position_reconciliation.drift_detected"
+    assert persisted.internal_notifications == ()
+    assert notifications == []
