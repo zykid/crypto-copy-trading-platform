@@ -1,6 +1,6 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, external alert placeholders, PostgreSQL backup job wiring, frontend production image wiring, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, external alert placeholders, PostgreSQL backup job wiring, frontend production image wiring, systemd backup timer templates, and log rotation, but it does not enable real trading.
 
 ## Files
 
@@ -10,10 +10,13 @@ This file documents the first production runtime skeleton for the platform. It i
 - `frontend/next.config.mjs`
 - `deploy/caddy/Caddyfile`
 - `deploy/prometheus/prometheus.yml`
+- `deploy/systemd/trading-postgres-backup.service`
+- `deploy/systemd/trading-postgres-backup.timer`
 - `docs/frontend-production-image.md`
 - `docs/monitoring-placeholders.md`
 - `docs/external-alert-placeholders.md`
 - `docs/production-backups.md`
+- `docs/systemd-backup-timer.md`
 
 ## Runtime Properties
 
@@ -28,6 +31,7 @@ The production Compose file sets:
 - Next.js standalone frontend runtime served by `node server.js`
 - optional Prometheus and Grafana services behind the `monitoring` profile
 - explicit PostgreSQL backup job behind the `backup` profile
+- host systemd timer templates for daily PostgreSQL backups
 - disabled-by-default Telegram, email, and webhook alert placeholders
 - `TESTNET_ADAPTERS_ENABLED=false` by default
 
@@ -101,7 +105,7 @@ docker compose down -v
 
 This is not yet a complete production release. Remaining production work includes:
 
-- host cron or systemd timer installation for scheduled backups
+- server-specific enablement of the backup timer on the target host
 - reviewed backend metrics endpoint
 - real Telegram, email, and webhook alert senders
 - restore drills and operational runbooks
