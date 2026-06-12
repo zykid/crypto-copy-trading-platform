@@ -17,6 +17,8 @@ dist/
 
 postgres_data/
 redis_data/
+backups/
+backup_*.sql
 
 .DS_Store
 Thumbs.db
