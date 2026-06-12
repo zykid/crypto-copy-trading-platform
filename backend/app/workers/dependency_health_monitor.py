@@ -1,50 +1,53 @@
 import time
-from collections.abc import Callable
-
-from fastapi import HTTPException
-
-from app.api.v1.health import dependency_health_check
-from app.core.config import Settings, settings
-from app.services.dependency_health_monitor import (
-    DependencyHealthMonitorConfig,
-    run_dependency_health_monitor_tick,
-)
-from app.services.external_alerts import ExternalAlertConfig
 
 
-MonitorSleep = Callable[[int], None]
+def _resolved_settings(app_settings: object | None) -> object:
+    if app_settings is not None:
+        return app_settings
+
+    from app.core.config import settings
+
+    return settings
 
 
-def dependency_monitor_config_from_settings(
-    app_settings: Settings = settings,
-) -> DependencyHealthMonitorConfig:
+def dependency_monitor_config_from_settings(app_settings: object | None = None) -> object:
+    from app.services.dependency_health_monitor import DependencyHealthMonitorConfig
+
+    resolved_settings = _resolved_settings(app_settings)
     return DependencyHealthMonitorConfig(
-        enabled=app_settings.dependency_health_monitor_enabled,
-        interval_seconds=app_settings.dependency_health_monitor_interval_seconds,
-        throttle_seconds=app_settings.dependency_health_alert_throttle_seconds,
+        enabled=resolved_settings.dependency_health_monitor_enabled,
+        interval_seconds=resolved_settings.dependency_health_monitor_interval_seconds,
+        throttle_seconds=resolved_settings.dependency_health_alert_throttle_seconds,
     )
 
 
-def external_alert_config_from_settings(app_settings: Settings = settings) -> ExternalAlertConfig:
+def external_alert_config_from_settings(app_settings: object | None = None) -> object:
+    from app.services.external_alerts import ExternalAlertConfig
+
+    resolved_settings = _resolved_settings(app_settings)
     return ExternalAlertConfig(
-        telegram_enabled=app_settings.telegram_alerts_enabled,
-        telegram_bot_token=app_settings.telegram_bot_token,
-        telegram_chat_id=app_settings.telegram_chat_id,
-        email_enabled=app_settings.email_alerts_enabled,
-        smtp_host=app_settings.smtp_host,
-        smtp_port=app_settings.smtp_port,
-        smtp_username=app_settings.smtp_username,
-        smtp_password=app_settings.smtp_password,
-        alert_email_from=app_settings.alert_email_from,
-        alert_email_to=app_settings.alert_email_to,
-        webhook_enabled=app_settings.webhook_alerts_enabled,
-        webhook_url=app_settings.alert_webhook_url,
-        webhook_secret=app_settings.alert_webhook_secret,
-        timeout_seconds=app_settings.alert_timeout_seconds,
+        telegram_enabled=resolved_settings.telegram_alerts_enabled,
+        telegram_bot_token=resolved_settings.telegram_bot_token,
+        telegram_chat_id=resolved_settings.telegram_chat_id,
+        email_enabled=resolved_settings.email_alerts_enabled,
+        smtp_host=resolved_settings.smtp_host,
+        smtp_port=resolved_settings.smtp_port,
+        smtp_username=resolved_settings.smtp_username,
+        smtp_password=resolved_settings.smtp_password,
+        alert_email_from=resolved_settings.alert_email_from,
+        alert_email_to=resolved_settings.alert_email_to,
+        webhook_enabled=resolved_settings.webhook_alerts_enabled,
+        webhook_url=resolved_settings.alert_webhook_url,
+        webhook_secret=resolved_settings.alert_webhook_secret,
+        timeout_seconds=resolved_settings.alert_timeout_seconds,
     )
 
 
 def collect_dependency_health() -> dict[str, str]:
+    from fastapi import HTTPException
+
+    from app.api.v1.health import dependency_health_check
+
     try:
         return dependency_health_check()
     except HTTPException as exc:
@@ -64,6 +67,8 @@ def run_dependency_health_monitor_once(
     dispatch_state: dict[str, int] | None = None,
     transports: object | None = None,
 ) -> tuple[object, ...]:
+    from app.services.dependency_health_monitor import run_dependency_health_monitor_tick
+
     resolved_now = int(time.time()) if now_seconds is None else now_seconds
     return run_dependency_health_monitor_tick(
         collect_dependency_health,
@@ -75,7 +80,7 @@ def run_dependency_health_monitor_once(
     )
 
 
-def run_dependency_health_monitor_forever(sleep: MonitorSleep = time.sleep) -> None:
+def run_dependency_health_monitor_forever(sleep=time.sleep) -> None:
     state: dict[str, int] = {}
     while True:
         monitor_config = dependency_monitor_config_from_settings()
