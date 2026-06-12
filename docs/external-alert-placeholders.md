@@ -18,6 +18,12 @@ EMAIL_ALERTS_ENABLED=false
 WEBHOOK_ALERTS_ENABLED=false
 ```
 
+Shared timeout:
+
+```bash
+ALERT_TIMEOUT_SECONDS=5
+```
+
 Telegram:
 
 ```bash
@@ -54,6 +60,7 @@ Do not send or log:
 - user email, username, or `user_id`
 - copy trading relationships that identify users
 - raw signal IDs, execution IDs, client order IDs, or exchange account IDs
+- database passwords, database URLs, or backup file contents
 
 External alerts should use coarse operational messages such as:
 
@@ -75,6 +82,8 @@ External alerts should use coarse operational messages such as:
 - webhook JSON POST delivery with optional `X-Alert-Signature`
 - newline trimming and message length limits on alert event text
 - timeout control through `timeout_seconds`
+
+The first wired integration point is PostgreSQL backup failure reporting. The backup script sends only a coarse `PostgreSQL backup failed` event with component and error type metadata. Alert delivery errors do not change the backup job's failure code.
 
 The sender is intentionally not wired into trading flows yet. Future integration points must pass only coarse operational events and keep failures non-blocking for trading, reconciliation, and audit flows.
 
