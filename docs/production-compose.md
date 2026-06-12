@@ -1,6 +1,6 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, PostgreSQL backup job wiring, frontend production image wiring, systemd backup timer templates, restore drill guidance, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, PostgreSQL backup job wiring, backup failure alert wiring, frontend production image wiring, systemd backup timer templates, restore drill guidance, and log rotation, but it does not enable real trading.
 
 ## Files
 
@@ -35,6 +35,7 @@ The production Compose file sets:
 - safe backend `/metrics` scrape from inside the Compose network
 - explicit PostgreSQL backup job behind the `backup` profile
 - host systemd timer templates for daily PostgreSQL backups
+- backup failure alerts through disabled-by-default external alert channels
 - backup file verification helper and restore drill runbook
 - disabled-by-default Telegram, email, and webhook alert senders
 - `TESTNET_ADAPTERS_ENABLED=false` by default
@@ -110,5 +111,5 @@ docker compose down -v
 This is not yet a complete production release. Remaining production work includes:
 
 - server-specific enablement of the backup timer on the target host
-- wiring guarded alert senders into selected operational events
+- wiring guarded alert senders into additional operational events
 - production incident response runbook for live restore decisions
