@@ -97,6 +97,35 @@ services:
       backend:
         condition: service_healthy
 
+  postgres-backup:
+    image: postgres:16-alpine
+    container_name: trading-prod-postgres-backup
+    profiles:
+      - backup
+    logging: *production-logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - ${POSTGRES_BACKUP_DIR:?POSTGRES_BACKUP_DIR is required}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - >
+        PGPASSWORD="$${POSTGRES_PASSWORD}" pg_dump
+        --host postgres
+        --port 5432
+        --username "$${POSTGRES_USER}"
+        --dbname "$${POSTGRES_DB}"
+        --file "/backups/backup_$$(date +%Y%m%d).sql"
+        --format plain
+        --no-owner
+        --no-privileges
+
   prometheus:
     image: prom/prometheus:v2.55.1
     container_name: trading-prod-prometheus
