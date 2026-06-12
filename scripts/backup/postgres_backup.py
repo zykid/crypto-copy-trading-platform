@@ -13,12 +13,13 @@ sys.path.insert(0, str(BACKEND_ROOT))
 from app.services.external_alerts import (  # noqa: E402
     ExternalAlertConfig,
     ExternalAlertDeliveryError,
-    ExternalAlertEvent,
     send_external_alert,
 )
 from app.services.postgres_backup import (  # noqa: E402
     PostgresBackupConfig,
     PostgresBackupError,
+    build_postgres_backup_failure_alert,
+    postgres_backup_alerts_enabled,
     run_pg_dump_backup,
 )
 
@@ -54,18 +55,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _send_backup_failure_alert(exc: Exception) -> None:
     config = _external_alert_config_from_env()
-    if not _external_alerts_enabled(config):
+    if not postgres_backup_alerts_enabled(config):
         return
 
-    event = ExternalAlertEvent(
-        severity="critical",
-        title="PostgreSQL backup failed",
-        message="The scheduled PostgreSQL backup job failed.",
-        metadata={
-            "component": "postgres_backup",
-            "error_type": exc.__class__.__name__,
-        },
-    )
+    event = build_postgres_backup_failure_alert(exc)
 
     try:
         results = send_external_alert(config, event)
@@ -98,10 +91,6 @@ def _external_alert_config_from_env() -> ExternalAlertConfig:
         webhook_secret=os.getenv("ALERT_WEBHOOK_SECRET", ""),
         timeout_seconds=_env_float("ALERT_TIMEOUT_SECONDS", 5.0),
     )
-
-
-def _external_alerts_enabled(config: ExternalAlertConfig) -> bool:
-    return config.telegram_enabled or config.email_enabled or config.webhook_enabled
 
 
 def _env_bool(name: str) -> bool:
