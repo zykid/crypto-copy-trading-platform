@@ -5,6 +5,8 @@ import os
 import pathlib
 import subprocess
 
+from app.services.external_alerts import ExternalAlertConfig, ExternalAlertEvent
+
 DEFAULT_BACKUP_PREFIX = "backup"
 
 
@@ -86,6 +88,22 @@ def run_pg_dump_backup(
         stderr = _redact_secret(result.stderr or "pg_dump failed", config.password)
         raise PostgresBackupError(stderr)
     return plan.output_path
+
+
+def build_postgres_backup_failure_alert(exc: Exception) -> ExternalAlertEvent:
+    return ExternalAlertEvent(
+        severity="critical",
+        title="PostgreSQL backup failed",
+        message="The scheduled PostgreSQL backup job failed.",
+        metadata={
+            "component": "postgres_backup",
+            "error_type": exc.__class__.__name__,
+        },
+    )
+
+
+def postgres_backup_alerts_enabled(config: ExternalAlertConfig) -> bool:
+    return config.telegram_enabled or config.email_enabled or config.webhook_enabled
 
 
 def _validate_config(config: PostgresBackupConfig) -> None:
