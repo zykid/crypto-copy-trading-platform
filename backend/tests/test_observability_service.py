@@ -3,7 +3,15 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_user
-from app.db.models import AccountMode, AuditLog, ExchangeAccount, ExchangeName, SystemEvent, User, UserRole
+from app.db.models import (
+    AccountMode,
+    AuditLog,
+    ExchangeAccount,
+    ExchangeName,
+    SystemEvent,
+    User,
+    UserRole,
+)
 from app.services.observability_service import (
     AuditLogFilter,
     ObservabilityService,
