@@ -1,6 +1,6 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, PostgreSQL backup job wiring, frontend production image wiring, systemd backup timer templates, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, PostgreSQL backup job wiring, frontend production image wiring, systemd backup timer templates, restore drill guidance, and log rotation, but it does not enable real trading.
 
 ## Files
 
@@ -12,10 +12,12 @@ This file documents the first production runtime skeleton for the platform. It i
 - `deploy/prometheus/prometheus.yml`
 - `deploy/systemd/trading-postgres-backup.service`
 - `deploy/systemd/trading-postgres-backup.timer`
+- `scripts/backup/verify_backup_file.py`
 - `docs/frontend-production-image.md`
 - `docs/monitoring-placeholders.md`
 - `docs/external-alert-placeholders.md`
 - `docs/production-backups.md`
+- `docs/restore-drill-runbook.md`
 - `docs/systemd-backup-timer.md`
 
 ## Runtime Properties
@@ -33,6 +35,7 @@ The production Compose file sets:
 - safe backend `/metrics` scrape from inside the Compose network
 - explicit PostgreSQL backup job behind the `backup` profile
 - host systemd timer templates for daily PostgreSQL backups
+- backup file verification helper and restore drill runbook
 - disabled-by-default Telegram, email, and webhook alert senders
 - `TESTNET_ADAPTERS_ENABLED=false` by default
 
@@ -108,4 +111,4 @@ This is not yet a complete production release. Remaining production work include
 
 - server-specific enablement of the backup timer on the target host
 - wiring guarded alert senders into selected operational events
-- restore drills and operational runbooks
+- production incident response runbook for live restore decisions
