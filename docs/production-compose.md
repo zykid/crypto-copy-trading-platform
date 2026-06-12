@@ -39,6 +39,7 @@ The production Compose file sets:
 - backup failure alerts through disabled-by-default external alert channels
 - safe dependency health alert construction, throttled dispatch, and disabled monitor tick helper
 - dependency health monitor environment variables that remain disabled by default
+- runnable dependency health monitor worker entrypoint for future service wiring
 - backup file verification helper and restore drill runbook
 - production incident response runbook for restore and trading-freeze decisions
 - disabled-by-default Telegram, email, and webhook alert senders
@@ -115,5 +116,5 @@ docker compose down -v
 This is not yet a complete production release. Remaining production work includes:
 
 - server-specific enablement of the backup timer on the target host
-- attaching dependency health monitor ticks to a long-running loop or separate monitor process
+- adding dependency health monitor worker service management in Compose or systemd
 - wiring guarded alert senders into additional operational events
