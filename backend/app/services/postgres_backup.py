@@ -1,7 +1,7 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-import os
+from os import environ
 from pathlib import Path
 from subprocess import CompletedProcess, run
 
@@ -74,7 +74,7 @@ def run_pg_dump_backup(
 ) -> Path:
     plan = plan_pg_dump_backup(config, backup_date=backup_date)
     plan.output_path.parent.mkdir(parents=True, exist_ok=True)
-    env = os.environ.copy()
+    env = environ.copy()
     env.update(plan.env)
     result = runner(
         plan.command,
