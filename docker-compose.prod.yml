@@ -97,6 +97,42 @@ services:
       backend:
         condition: service_healthy
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: trading-prod-prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    logging: *production-logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: trading-prod-grafana
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    logging: *production-logging
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required when monitoring is enabled}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      prometheus:
+        condition: service_started
+
 volumes:
   postgres_data:
     name: trading-prod-postgres-data
@@ -106,3 +142,7 @@ volumes:
     name: trading-prod-caddy-data
   caddy_config:
     name: trading-prod-caddy-config
+  prometheus_data:
+    name: trading-prod-prometheus-data
+  grafana_data:
+    name: trading-prod-grafana-data
