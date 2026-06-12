@@ -1,7 +1,14 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "${DOCKER_LOG_MAX_SIZE:-10m}"
+    max-file: "${DOCKER_LOG_MAX_FILE:-5}"
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: trading-dev-postgres
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-trading_dev}
       POSTGRES_USER: ${POSTGRES_USER:-trading}
@@ -19,6 +26,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: trading-dev-redis
+    logging: *default-logging
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -33,6 +41,7 @@ services:
     build:
       context: ./backend
     container_name: trading-dev-backend
+    logging: *default-logging
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-use-a-long-random-value}
@@ -58,6 +67,7 @@ services:
     build:
       context: ./frontend
     container_name: trading-dev-frontend
+    logging: *default-logging
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
     ports:
@@ -69,6 +79,7 @@ services:
   integration-test:
     image: curlimages/curl:8.16.0
     container_name: trading-dev-integration-test
+    logging: *default-logging
     depends_on:
       backend:
         condition: service_healthy
