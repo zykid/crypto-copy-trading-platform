@@ -23,6 +23,20 @@ class Settings(BaseSettings):
     bybit_testnet_rest_base_url: str = Field(default="https://api-testnet.bybit.com")
     okx_demo_rest_base_url: str = Field(default="https://openapi.okx.com")
 
+    telegram_alerts_enabled: bool = Field(default=False)
+    telegram_bot_token: str = Field(default="")
+    telegram_chat_id: str = Field(default="")
+    email_alerts_enabled: bool = Field(default=False)
+    smtp_host: str = Field(default="")
+    smtp_port: int = Field(default=587)
+    smtp_username: str = Field(default="")
+    smtp_password: str = Field(default="")
+    alert_email_from: str = Field(default="")
+    alert_email_to: str = Field(default="")
+    webhook_alerts_enabled: bool = Field(default=False)
+    alert_webhook_url: str = Field(default="")
+    alert_webhook_secret: str = Field(default="")
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
