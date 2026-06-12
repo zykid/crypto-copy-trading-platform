@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily crypto trading platform PostgreSQL backup
+Documentation=https://github.com/zykid/crypto-copy-trading-platform/blob/main/docs/production-backups.md
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=5m
+Unit=trading-postgres-backup.service
+
+[Install]
+WantedBy=timers.target
