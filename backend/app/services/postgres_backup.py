@@ -1,10 +1,9 @@
 import os
-import subprocess
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
-from subprocess import CompletedProcess
+from subprocess import CompletedProcess, run
 
 
 DEFAULT_BACKUP_PREFIX = "backup"
@@ -71,7 +70,7 @@ def run_pg_dump_backup(
     config: PostgresBackupConfig,
     *,
     backup_date: date | None = None,
-    runner: Runner = subprocess.run,
+    runner: Runner = run,
 ) -> Path:
     plan = plan_pg_dump_backup(config, backup_date=backup_date)
     plan.output_path.parent.mkdir(parents=True, exist_ok=True)
