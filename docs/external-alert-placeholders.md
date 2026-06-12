@@ -83,11 +83,14 @@ External alerts should use coarse operational messages such as:
 - newline trimming and message length limits on alert event text
 - timeout control through `timeout_seconds`
 
-`app.services.operational_alerts` includes safe event builders for coarse operational events. The first helper converts dependency health check results into a `Service dependency health degraded` event that includes only component name, coarse status, and safe dependency names.
+`app.services.operational_alerts` includes safe helpers for coarse operational events:
+
+- `build_dependency_health_alert` converts dependency health check results into a `Service dependency health degraded` event that includes only component name, coarse status, and safe dependency names.
+- `maybe_send_dependency_health_alert` sends that event through the guarded external alert sender and suppresses repeated dependency health alerts inside the throttle window.
 
 The first wired delivery integration point is PostgreSQL backup failure reporting. The backup script sends only a coarse `PostgreSQL backup failed` event with component and error type metadata. Alert delivery errors do not change the backup job's failure code.
 
-Dependency health alert events are available as a safe builder but are not automatically sent yet. Future automatic dispatch should be rate-limited, disabled by default, and kept separate from trading execution flows.
+Dependency health dispatch is available as a service helper, but it is not yet bound to a production scheduler or background monitor. Future wiring should keep the helper disabled by default, preserve rate limiting, and stay separate from trading execution flows.
 
 The sender is intentionally not wired into trading flows yet. Future integration points must pass only coarse operational events and keep failures non-blocking for trading, reconciliation, and audit flows.
 
