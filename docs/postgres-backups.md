@@ -1,8 +1,8 @@
 # PostgreSQL Backups
 
-This project keeps PostgreSQL backup support explicit and conservative. The backup script creates a plain SQL dump named `backup_YYYYMMDD.sql` and never places the database password in the `pg_dump` command arguments.
+This project keeps PostgreSQL backup support explicit and conservative. Backup outputs are plain SQL dumps named `backup_YYYYMMDD.sql`, and the database password is not placed in `pg_dump` command arguments.
 
-## Local or Server Usage
+## Local or Server Script Usage
 
 Set the PostgreSQL variables in `.env` or the process environment:
 
@@ -33,9 +33,20 @@ You can override the output directory:
 python scripts/backup/postgres_backup.py --output-dir /srv/trading/backups
 ```
 
+## Production Compose Job
+
+Production also has an explicit one-shot Compose backup profile:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml --profile backup run --rm postgres-backup
+```
+
+See `docs/production-backups.md` for server directory permissions, cron scheduling, and restore guidance.
+
 ## Safety Notes
 
-- The script uses `PGPASSWORD` in the child process environment so the password is not included in the command line.
+- The Python script uses `PGPASSWORD` in the child process environment so the password is not included in the command line.
+- The production Compose job also maps `POSTGRES_PASSWORD` into `PGPASSWORD` inside the backup container.
 - The generated dump uses `--format plain`, `--no-owner`, and `--no-privileges` for portability across staging and production restore targets.
 - Keep backup files outside the application source tree in staging and production.
 - Protect backup directories with filesystem permissions and server backups.
@@ -53,7 +64,3 @@ docker compose down -v
 ```
 
 These commands can remove data, Docker volumes, networks, or evidence needed for audit and reconciliation.
-
-## Future Production Hook
-
-A later production step should wire this script into a scheduled container or host cron job with retention, monitoring, and restore drills. This step only adds the safe backup primitive and tests.
