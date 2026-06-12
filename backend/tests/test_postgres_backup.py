@@ -3,10 +3,13 @@ from subprocess import CompletedProcess
 
 import pytest
 
+from app.services.external_alerts import ExternalAlertConfig
 from app.services.postgres_backup import (
     PostgresBackupConfig,
     PostgresBackupError,
+    build_postgres_backup_failure_alert,
     plan_pg_dump_backup,
+    postgres_backup_alerts_enabled,
     run_pg_dump_backup,
 )
 
@@ -107,3 +110,26 @@ def test_plan_pg_dump_backup_rejects_missing_values(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="host"):
         plan_pg_dump_backup(config)
+
+
+def test_build_postgres_backup_failure_alert_is_coarse_and_secret_free() -> None:
+    exc = PostgresBackupError("pg_dump failed with super-secret-password")
+
+    event = build_postgres_backup_failure_alert(exc)
+
+    assert event.severity == "critical"
+    assert event.title == "PostgreSQL backup failed"
+    assert event.message == "The scheduled PostgreSQL backup job failed."
+    assert event.metadata == {
+        "component": "postgres_backup",
+        "error_type": "PostgresBackupError",
+    }
+    assert "super-secret-password" not in event.message
+    assert "super-secret-password" not in str(event.metadata)
+
+
+def test_postgres_backup_alerts_enabled_requires_at_least_one_channel() -> None:
+    assert not postgres_backup_alerts_enabled(ExternalAlertConfig())
+    assert postgres_backup_alerts_enabled(ExternalAlertConfig(webhook_enabled=True))
+    assert postgres_backup_alerts_enabled(ExternalAlertConfig(email_enabled=True))
+    assert postgres_backup_alerts_enabled(ExternalAlertConfig(telegram_enabled=True))
