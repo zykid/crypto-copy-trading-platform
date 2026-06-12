@@ -33,7 +33,14 @@ The generated file is:
 
 ## Daily Scheduling
 
-Use host cron or a systemd timer to run the one-shot job. Example cron entry for 03:15 server time:
+Preferred scheduling is host systemd using the checked-in templates:
+
+- `deploy/systemd/trading-postgres-backup.service`
+- `deploy/systemd/trading-postgres-backup.timer`
+
+See `docs/systemd-backup-timer.md` for installation and verification steps.
+
+Example cron entry for environments that do not use systemd, scheduled for 03:15 server time:
 
 ```cron
 15 3 * * * cd /srv/trading/crypto-copy-trading-platform && docker compose --env-file .env.prod -f docker-compose.prod.yml --profile backup run --rm postgres-backup >> /srv/trading/backups/backup.log 2>&1
