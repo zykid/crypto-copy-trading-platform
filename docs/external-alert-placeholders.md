@@ -83,7 +83,11 @@ External alerts should use coarse operational messages such as:
 - newline trimming and message length limits on alert event text
 - timeout control through `timeout_seconds`
 
-The first wired integration point is PostgreSQL backup failure reporting. The backup script sends only a coarse `PostgreSQL backup failed` event with component and error type metadata. Alert delivery errors do not change the backup job's failure code.
+`app.services.operational_alerts` includes safe event builders for coarse operational events. The first helper converts dependency health check results into a `Service dependency health degraded` event that includes only component name, coarse status, and safe dependency names.
+
+The first wired delivery integration point is PostgreSQL backup failure reporting. The backup script sends only a coarse `PostgreSQL backup failed` event with component and error type metadata. Alert delivery errors do not change the backup job's failure code.
+
+Dependency health alert events are available as a safe builder but are not automatically sent yet. Future automatic dispatch should be rate-limited, disabled by default, and kept separate from trading execution flows.
 
 The sender is intentionally not wired into trading flows yet. Future integration points must pass only coarse operational events and keep failures non-blocking for trading, reconciliation, and audit flows.
 
