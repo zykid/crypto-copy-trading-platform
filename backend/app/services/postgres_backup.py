@@ -1,6 +1,6 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date, datetime, UTC
 from os import environ
 from pathlib import Path
 from subprocess import CompletedProcess, run
