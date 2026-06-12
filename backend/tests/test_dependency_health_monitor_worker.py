@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 
+from app.api.v1 import health as health_module
 from app.core.config import Settings
 from app.services.dependency_health_monitor import DependencyHealthMonitorConfig
 from app.services.external_alerts import ExternalAlertConfig, ExternalAlertTransports
@@ -71,7 +72,7 @@ def test_collect_dependency_health_returns_sanitized_http_exception_detail(monke
             },
         )
 
-    monkeypatch.setattr(worker, "dependency_health_check", raise_health_error)
+    monkeypatch.setattr(health_module, "dependency_health_check", raise_health_error)
 
     assert worker.collect_dependency_health() == {
         "status": "degraded",
@@ -84,10 +85,17 @@ def test_run_dependency_health_monitor_once_dispatches_when_enabled(monkeypatch)
     http = CapturingHttpTransport()
     state: dict[str, int] = {}
 
+    def monitor_config() -> DependencyHealthMonitorConfig:
+        return DependencyHealthMonitorConfig(
+            enabled=True,
+            interval_seconds=60,
+            throttle_seconds=300,
+        )
+
     monkeypatch.setattr(
         worker,
         "dependency_monitor_config_from_settings",
-        lambda: DependencyHealthMonitorConfig(enabled=True, interval_seconds=60, throttle_seconds=300),
+        monitor_config,
     )
     monkeypatch.setattr(
         worker,
