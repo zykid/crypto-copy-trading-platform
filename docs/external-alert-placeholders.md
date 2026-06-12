@@ -1,12 +1,12 @@
-# External Alert Placeholders
+# External Alert Senders
 
-This step adds configuration boundaries for future Telegram, email, and webhook alert delivery. The default state is disabled and no real alert is sent by this step.
+This module provides guarded Telegram, email, and webhook alert delivery. All channels remain disabled by default and only send when the matching `.env.prod` flag is explicitly enabled.
 
-## Supported Placeholder Channels
+## Supported Channels
 
-- Telegram
-- Email through SMTP
-- Webhook
+- Telegram Bot API
+- Email through SMTP with STARTTLS
+- Webhook POST with optional HMAC SHA-256 signature
 
 ## Environment Variables
 
@@ -18,14 +18,14 @@ EMAIL_ALERTS_ENABLED=false
 WEBHOOK_ALERTS_ENABLED=false
 ```
 
-Telegram placeholders:
+Telegram:
 
 ```bash
 TELEGRAM_BOT_TOKEN=replace-with-telegram-bot-token
 TELEGRAM_CHAT_ID=replace-with-telegram-chat-id
 ```
 
-Email placeholders:
+Email:
 
 ```bash
 SMTP_HOST=smtp.example.com
@@ -36,7 +36,7 @@ ALERT_EMAIL_FROM=alerts@example.com
 ALERT_EMAIL_TO=ops@example.com
 ```
 
-Webhook placeholders:
+Webhook:
 
 ```bash
 ALERT_WEBHOOK_URL=https://alerts.example.com/webhook
@@ -65,7 +65,18 @@ External alerts should use coarse operational messages such as:
 
 ## Current Implementation
 
-`app.services.external_alerts` only builds a validated alert channel plan and returns a redacted summary. It does not perform network requests. Real sending should be implemented in a later step with strict tests for redaction, retry behavior, and failure isolation.
+`app.services.external_alerts` now includes:
+
+- configuration validation through `build_external_alert_plan`
+- redacted configuration summaries for diagnostics
+- `send_external_alert` with per-channel failure isolation
+- Telegram JSON POST delivery
+- SMTP email delivery with STARTTLS
+- webhook JSON POST delivery with optional `X-Alert-Signature`
+- newline trimming and message length limits on alert event text
+- timeout control through `timeout_seconds`
+
+The sender is intentionally not wired into trading flows yet. Future integration points must pass only coarse operational events and keep failures non-blocking for trading, reconciliation, and audit flows.
 
 ## Operational Guidance
 
@@ -73,3 +84,4 @@ External alerts should use coarse operational messages such as:
 - Rotate webhook and bot tokens if they are exposed.
 - Prefer private channels or restricted recipients.
 - Treat alert destinations as sensitive because alert content can reveal operational state.
+- Test each destination with a synthetic operational alert before relying on it.
