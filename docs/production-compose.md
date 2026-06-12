@@ -1,6 +1,6 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, PostgreSQL backup job wiring, backup failure alert wiring, frontend production image wiring, systemd backup timer templates, restore drill guidance, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, PostgreSQL backup job wiring, backup failure alert wiring, frontend production image wiring, systemd backup timer templates, restore drill guidance, production incident response guidance, and log rotation, but it does not enable real trading.
 
 ## Files
 
@@ -17,6 +17,7 @@ This file documents the first production runtime skeleton for the platform. It i
 - `docs/monitoring-placeholders.md`
 - `docs/external-alert-placeholders.md`
 - `docs/production-backups.md`
+- `docs/production-incident-response.md`
 - `docs/restore-drill-runbook.md`
 - `docs/systemd-backup-timer.md`
 
@@ -37,6 +38,7 @@ The production Compose file sets:
 - host systemd timer templates for daily PostgreSQL backups
 - backup failure alerts through disabled-by-default external alert channels
 - backup file verification helper and restore drill runbook
+- production incident response runbook for restore and trading-freeze decisions
 - disabled-by-default Telegram, email, and webhook alert senders
 - `TESTNET_ADAPTERS_ENABLED=false` by default
 
@@ -112,4 +114,3 @@ This is not yet a complete production release. Remaining production work include
 
 - server-specific enablement of the backup timer on the target host
 - wiring guarded alert senders into additional operational events
-- production incident response runbook for live restore decisions
