@@ -1,9 +1,9 @@
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass
-from datetime import date, datetime, UTC
-from os import environ
-from pathlib import Path
-from subprocess import CompletedProcess, run
+import collections.abc as cabc
+import dataclasses
+import datetime as dt
+import os
+import pathlib
+import subprocess
 
 
 DEFAULT_BACKUP_PREFIX = "backup"
@@ -13,34 +13,34 @@ class PostgresBackupError(RuntimeError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class PostgresBackupConfig:
     host: str
     port: int
     database: str
     username: str
     password: str
-    output_dir: Path
+    output_dir: pathlib.Path
     filename_prefix: str = DEFAULT_BACKUP_PREFIX
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class PostgresBackupPlan:
     command: tuple[str, ...]
-    env: Mapping[str, str]
-    output_path: Path
+    env: cabc.Mapping[str, str]
+    output_path: pathlib.Path
 
 
-Runner = Callable[..., CompletedProcess[str]]
+Runner = cabc.Callable[..., subprocess.CompletedProcess[str]]
 
 
 def plan_pg_dump_backup(
     config: PostgresBackupConfig,
     *,
-    backup_date: date | None = None,
+    backup_date: dt.date | None = None,
 ) -> PostgresBackupPlan:
     _validate_config(config)
-    selected_date = backup_date or datetime.now(UTC).date()
+    selected_date = backup_date or dt.datetime.now(dt.UTC).date()
     output_path = config.output_dir / f"{config.filename_prefix}_{selected_date:%Y%m%d}.sql"
     command = (
         "pg_dump",
@@ -69,12 +69,12 @@ def plan_pg_dump_backup(
 def run_pg_dump_backup(
     config: PostgresBackupConfig,
     *,
-    backup_date: date | None = None,
-    runner: Runner = run,
-) -> Path:
+    backup_date: dt.date | None = None,
+    runner: Runner = subprocess.run,
+) -> pathlib.Path:
     plan = plan_pg_dump_backup(config, backup_date=backup_date)
     plan.output_path.parent.mkdir(parents=True, exist_ok=True)
-    env = environ.copy()
+    env = os.environ.copy()
     env.update(plan.env)
     result = runner(
         plan.command,
