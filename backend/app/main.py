@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.metrics import router as metrics_router
 from app.api.v1.admin_observability import router as admin_observability_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.exchange_accounts import router as exchange_accounts_router
@@ -21,6 +22,7 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
     )
+    app.include_router(metrics_router, tags=["metrics"])
     app.include_router(health_router, prefix="/api/v1", tags=["system"])
     app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(users_router, prefix="/api/v1/users", tags=["users"])
