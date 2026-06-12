@@ -6,12 +6,7 @@ from types import ModuleType
 
 import pytest
 
-from app.services.external_alerts import (
-    ExternalAlertChannel,
-    ExternalAlertDeliveryError,
-    ExternalAlertDeliveryResult,
-    ExternalAlertEvent,
-)
+from app.services import external_alerts
 from app.services.postgres_backup import PostgresBackupError
 
 
@@ -46,7 +41,7 @@ def test_backup_failure_does_not_send_alert_when_channels_disabled(
     def fail_backup(config: object) -> None:
         raise PostgresBackupError(f"pg_dump failed with {SECRET_VALUE}")
 
-    def send_alert(config: object, event: ExternalAlertEvent) -> tuple[()]:
+    def send_alert(config: object, event: external_alerts.ExternalAlertEvent) -> tuple[()]:
         send_calls.append((config, event))
         return ()
 
@@ -67,16 +62,19 @@ def test_backup_failure_sends_coarse_alert_when_webhook_enabled(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    sent_events: list[ExternalAlertEvent] = []
+    sent_events: list[external_alerts.ExternalAlertEvent] = []
 
     def fail_backup(config: object) -> None:
         raise PostgresBackupError(f"pg_dump failed with {SECRET_VALUE}")
 
-    def send_alert(config: object, event: ExternalAlertEvent) -> tuple[ExternalAlertDeliveryResult]:
+    def send_alert(
+        config: object,
+        event: external_alerts.ExternalAlertEvent,
+    ) -> tuple[external_alerts.ExternalAlertDeliveryResult]:
         sent_events.append(event)
         return (
-            ExternalAlertDeliveryResult(
-                channel=ExternalAlertChannel.WEBHOOK,
+            external_alerts.ExternalAlertDeliveryResult(
+                channel=external_alerts.ExternalAlertChannel.WEBHOOK,
                 delivered=True,
             ),
         )
@@ -112,8 +110,10 @@ def test_backup_failure_alert_config_error_does_not_mask_backup_failure(
     def fail_backup(config: object) -> None:
         raise PostgresBackupError(f"pg_dump failed with {SECRET_VALUE}")
 
-    def send_alert(config: object, event: ExternalAlertEvent) -> tuple[()]:
-        raise ExternalAlertDeliveryError("external alert config invalid: webhook_url is required")
+    def send_alert(config: object, event: external_alerts.ExternalAlertEvent) -> tuple[()]:
+        raise external_alerts.ExternalAlertDeliveryError(
+            "external alert config invalid: webhook_url is required"
+        )
 
     monkeypatch.setenv("WEBHOOK_ALERTS_ENABLED", "true")
     monkeypatch.setattr(backup_script, "run_pg_dump_backup", fail_backup)
