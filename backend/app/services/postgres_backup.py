@@ -1,10 +1,10 @@
+import os
+import subprocess
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from subprocess import CompletedProcess
-import os
-import subprocess
 
 
 DEFAULT_BACKUP_PREFIX = "backup"
