@@ -87,3 +87,7 @@ def run_dependency_health_monitor_forever(sleep: MonitorSleep = time.sleep) -> N
         except Exception:
             state["last_monitor_error_at"] = int(time.time())
         sleep(max(monitor_config.interval_seconds, 1))
+
+
+if __name__ == "__main__":
+    run_dependency_health_monitor_forever()
