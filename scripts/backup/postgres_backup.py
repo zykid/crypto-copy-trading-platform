@@ -44,7 +44,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         output_path = run_pg_dump_backup(config)
     except (PostgresBackupError, ValueError) as exc:
-        print(f"PostgreSQL backup failed: {exc}", file=sys.stderr)
+        print(f"PostgreSQL backup failed: {exc.__class__.__name__}", file=sys.stderr)
         _send_backup_failure_alert(exc)
         return 1
 
