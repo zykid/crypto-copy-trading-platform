@@ -1,6 +1,6 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, PostgreSQL backup job wiring, backup failure alert wiring, throttled dependency health alert dispatch helpers, frontend production image wiring, systemd backup timer templates, restore drill guidance, production incident response guidance, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, PostgreSQL backup job wiring, backup failure alert wiring, disabled-by-default dependency health monitor helpers, frontend production image wiring, systemd backup timer templates, restore drill guidance, production incident response guidance, and log rotation, but it does not enable real trading.
 
 ## Files
 
@@ -37,7 +37,8 @@ The production Compose file sets:
 - explicit PostgreSQL backup job behind the `backup` profile
 - host systemd timer templates for daily PostgreSQL backups
 - backup failure alerts through disabled-by-default external alert channels
-- safe dependency health alert construction and throttled dispatch helper
+- safe dependency health alert construction, throttled dispatch, and disabled monitor tick helper
+- dependency health monitor environment variables that remain disabled by default
 - backup file verification helper and restore drill runbook
 - production incident response runbook for restore and trading-freeze decisions
 - disabled-by-default Telegram, email, and webhook alert senders
@@ -114,5 +115,5 @@ docker compose down -v
 This is not yet a complete production release. Remaining production work includes:
 
 - server-specific enablement of the backup timer on the target host
-- binding dependency health alert dispatch into a disabled-by-default monitor or scheduler
+- attaching dependency health monitor ticks to a long-running loop or separate monitor process
 - wiring guarded alert senders into additional operational events
