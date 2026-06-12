@@ -1,0 +1,16 @@
+[Unit]
+Description=Run crypto trading platform PostgreSQL backup
+Documentation=https://github.com/zykid/crypto-copy-trading-platform/blob/main/docs/production-backups.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/trading/crypto-copy-trading-platform
+ExecStart=/usr/bin/docker compose --env-file .env.prod -f docker-compose.prod.yml --profile backup run --rm postgres-backup
+
+# Keep secrets in .env.prod. Do not add API keys, database passwords, or exchange secrets here.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
