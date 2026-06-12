@@ -1,6 +1,6 @@
-import collections.abc as cabc
+import collections.abc
 import dataclasses
-import datetime as dt
+import datetime
 import os
 import pathlib
 import subprocess
@@ -27,20 +27,20 @@ class PostgresBackupConfig:
 @dataclasses.dataclass(frozen=True)
 class PostgresBackupPlan:
     command: tuple[str, ...]
-    env: cabc.Mapping[str, str]
+    env: collections.abc.Mapping[str, str]
     output_path: pathlib.Path
 
 
-Runner = cabc.Callable[..., subprocess.CompletedProcess[str]]
+Runner = collections.abc.Callable[..., subprocess.CompletedProcess[str]]
 
 
 def plan_pg_dump_backup(
     config: PostgresBackupConfig,
     *,
-    backup_date: dt.date | None = None,
+    backup_date: datetime.date | None = None,
 ) -> PostgresBackupPlan:
     _validate_config(config)
-    selected_date = backup_date or dt.datetime.now(dt.UTC).date()
+    selected_date = backup_date or datetime.datetime.now(datetime.UTC).date()
     output_path = config.output_dir / f"{config.filename_prefix}_{selected_date:%Y%m%d}.sql"
     command = (
         "pg_dump",
@@ -69,7 +69,7 @@ def plan_pg_dump_backup(
 def run_pg_dump_backup(
     config: PostgresBackupConfig,
     *,
-    backup_date: dt.date | None = None,
+    backup_date: datetime.date | None = None,
     runner: Runner = subprocess.run,
 ) -> pathlib.Path:
     plan = plan_pg_dump_backup(config, backup_date=backup_date)
