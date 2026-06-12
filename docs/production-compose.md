@@ -1,6 +1,6 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, external alert placeholders, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, external alert placeholders, PostgreSQL backup job wiring, and log rotation, but it does not enable real trading.
 
 ## Files
 
@@ -10,6 +10,7 @@ This file documents the first production runtime skeleton for the platform. It i
 - `deploy/prometheus/prometheus.yml`
 - `docs/monitoring-placeholders.md`
 - `docs/external-alert-placeholders.md`
+- `docs/production-backups.md`
 
 ## Runtime Properties
 
@@ -22,6 +23,7 @@ The production Compose file sets:
 - required environment variables for secrets and connection strings
 - Caddy reverse proxy on ports 80 and 443
 - optional Prometheus and Grafana services behind the `monitoring` profile
+- explicit PostgreSQL backup job behind the `backup` profile
 - disabled-by-default Telegram, email, and webhook alert placeholders
 - `TESTNET_ADAPTERS_ENABLED=false` by default
 
@@ -60,6 +62,12 @@ Start optional monitoring placeholders:
 docker compose --env-file .env.prod -f docker-compose.prod.yml --profile monitoring up -d prometheus grafana
 ```
 
+Run an explicit PostgreSQL backup:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml --profile backup run --rm postgres-backup
+```
+
 Stop containers without deleting data volumes:
 
 ```bash
@@ -90,7 +98,7 @@ docker compose down -v
 This is not yet a complete production release. Remaining production work includes:
 
 - hardened frontend production image
-- scheduled PostgreSQL backup container or host cron
+- host cron or systemd timer installation for scheduled backups
 - reviewed backend metrics endpoint
 - real Telegram, email, and webhook alert senders
 - restore drills and operational runbooks
