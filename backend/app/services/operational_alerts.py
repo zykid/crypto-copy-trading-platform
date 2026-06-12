@@ -1,5 +1,3 @@
-import collections.abc
-
 from app.services.external_alerts import ExternalAlertEvent
 
 
@@ -8,7 +6,7 @@ SAFE_DEPENDENCY_STATES = frozenset({"ok", "degraded", "unavailable", "unknown"})
 
 
 def build_dependency_health_alert(
-    checks: collections.abc.Mapping[str, str],
+    checks: dict[str, str],
 ) -> ExternalAlertEvent | None:
     status = _safe_state(checks.get("status", "unknown"))
     if status == "ok":
