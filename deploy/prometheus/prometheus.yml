@@ -8,11 +8,8 @@ scrape_configs:
       - targets:
           - localhost:9090
 
-  # Placeholder for future application metrics.
-  # Keep disabled until the backend exposes a reviewed /metrics endpoint
-  # that does not include API keys, secrets, account identifiers, or user PII.
-  # - job_name: backend
-  #   metrics_path: /metrics
-  #   static_configs:
-  #     - targets:
-  #         - backend:8000
+  - job_name: backend
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - backend:8000
