@@ -1,4 +1,4 @@
-from app.services.external_alerts import ExternalAlertEvent
+from .external_alerts import ExternalAlertEvent
 
 
 SAFE_DEPENDENCY_NAMES = frozenset({"database", "redis", "backend", "frontend", "caddy"})
