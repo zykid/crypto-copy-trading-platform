@@ -49,6 +49,14 @@ ALERT_WEBHOOK_URL=https://alerts.example.com/webhook
 ALERT_WEBHOOK_SECRET=replace-with-webhook-secret
 ```
 
+Dependency health monitoring is also disabled by default:
+
+```bash
+DEPENDENCY_HEALTH_MONITOR_ENABLED=false
+DEPENDENCY_HEALTH_MONITOR_INTERVAL_SECONDS=60
+DEPENDENCY_HEALTH_ALERT_THROTTLE_SECONDS=300
+```
+
 ## Safety Rules
 
 Do not send or log:
@@ -88,9 +96,11 @@ External alerts should use coarse operational messages such as:
 - `build_dependency_health_alert` converts dependency health check results into a `Service dependency health degraded` event that includes only component name, coarse status, and safe dependency names.
 - `maybe_send_dependency_health_alert` sends that event through the guarded external alert sender and suppresses repeated dependency health alerts inside the throttle window.
 
+`app.services.dependency_health_monitor` provides a disabled-by-default monitor tick helper. It validates interval and throttle settings, skips the health check provider while disabled, and reuses the guarded dependency health alert sender when explicitly enabled by runtime wiring.
+
 The first wired delivery integration point is PostgreSQL backup failure reporting. The backup script sends only a coarse `PostgreSQL backup failed` event with component and error type metadata. Alert delivery errors do not change the backup job's failure code.
 
-Dependency health dispatch is available as a service helper, but it is not yet bound to a production scheduler or background monitor. Future wiring should keep the helper disabled by default, preserve rate limiting, and stay separate from trading execution flows.
+Dependency health dispatch now has a service-level monitor tick helper, but it is not yet attached to a long-running production loop or separate monitor process. Future wiring should keep it disabled by default, preserve rate limiting, and stay separate from trading execution flows.
 
 The sender is intentionally not wired into trading flows yet. Future integration points must pass only coarse operational events and keep failures non-blocking for trading, reconciliation, and audit flows.
 
