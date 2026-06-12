@@ -1,13 +1,16 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, external alert placeholders, PostgreSQL backup job wiring, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, external alert placeholders, PostgreSQL backup job wiring, frontend production image wiring, and log rotation, but it does not enable real trading.
 
 ## Files
 
 - `docker-compose.prod.yml`
 - `.env.prod.example`
+- `frontend/Dockerfile`
+- `frontend/next.config.mjs`
 - `deploy/caddy/Caddyfile`
 - `deploy/prometheus/prometheus.yml`
+- `docs/frontend-production-image.md`
 - `docs/monitoring-placeholders.md`
 - `docs/external-alert-placeholders.md`
 - `docs/production-backups.md`
@@ -22,6 +25,7 @@ The production Compose file sets:
 - bounded Docker `json-file` log rotation
 - required environment variables for secrets and connection strings
 - Caddy reverse proxy on ports 80 and 443
+- Next.js standalone frontend runtime served by `node server.js`
 - optional Prometheus and Grafana services behind the `monitoring` profile
 - explicit PostgreSQL backup job behind the `backup` profile
 - disabled-by-default Telegram, email, and webhook alert placeholders
@@ -97,7 +101,6 @@ docker compose down -v
 
 This is not yet a complete production release. Remaining production work includes:
 
-- hardened frontend production image
 - host cron or systemd timer installation for scheduled backups
 - reviewed backend metrics endpoint
 - real Telegram, email, and webhook alert senders
