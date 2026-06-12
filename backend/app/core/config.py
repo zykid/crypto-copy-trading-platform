@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     webhook_alerts_enabled: bool = Field(default=False)
     alert_webhook_url: str = Field(default="")
     alert_webhook_secret: str = Field(default="")
+    dependency_health_monitor_enabled: bool = Field(default=False)
+    dependency_health_monitor_interval_seconds: int = Field(default=60)
+    dependency_health_alert_throttle_seconds: int = Field(default=300)
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
