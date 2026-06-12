@@ -1,11 +1,12 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, and log rotation, but it does not enable real trading.
 
 ## Files
 
 - `docker-compose.prod.yml`
 - `.env.prod.example`
+- `deploy/caddy/Caddyfile`
 
 ## Runtime Properties
 
@@ -13,10 +14,23 @@ The production Compose file sets:
 
 - `restart: unless-stopped` for long-running services
 - health checks for PostgreSQL, Redis, and the backend API
-- named production volumes: `trading-prod-postgres-data` and `trading-prod-redis-data`
+- named production volumes: `trading-prod-postgres-data`, `trading-prod-redis-data`, `trading-prod-caddy-data`, and `trading-prod-caddy-config`
 - bounded Docker `json-file` log rotation
 - required environment variables for secrets and connection strings
+- Caddy reverse proxy on ports 80 and 443
 - `TESTNET_ADAPTERS_ENABLED=false` by default
+
+## HTTPS Reverse Proxy
+
+Caddy terminates HTTPS and routes traffic inside the Compose network:
+
+- `/api/*` -> backend
+- `/docs*` -> backend
+- `/redoc*` -> backend
+- `/openapi.json` -> backend
+- all other requests -> frontend
+
+Before using the production proxy, point `PUBLIC_DOMAIN` DNS to the server and make sure inbound ports 80 and 443 are reachable. Caddy needs port 80 or DNS-compatible challenge support to issue certificates.
 
 ## Start Command
 
@@ -24,7 +38,7 @@ Create a real `.env.prod` from the example and replace every placeholder secret 
 
 ```bash
 cp .env.prod.example .env.prod
-docker compose --env-file .env.prod -f docker-compose.prod.yml up --build -d postgres redis backend frontend
+docker compose --env-file .env.prod -f docker-compose.prod.yml up --build -d postgres redis backend frontend caddy
 ```
 
 Check health and logs:
@@ -32,6 +46,7 @@ Check health and logs:
 ```bash
 docker compose --env-file .env.prod -f docker-compose.prod.yml ps
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail=200 backend
+docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail=200 caddy
 ```
 
 Stop containers without deleting data volumes:
@@ -62,7 +77,6 @@ docker compose down -v
 This is not yet a complete production release. Remaining production work includes:
 
 - hardened frontend production image
-- HTTPS reverse proxy with Caddy or Nginx
 - scheduled PostgreSQL backup container or host cron
 - Prometheus and Grafana placeholders
 - Telegram, email, and webhook alert senders
