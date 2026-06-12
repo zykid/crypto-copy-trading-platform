@@ -72,9 +72,28 @@ services:
     logging: *production-logging
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is required}
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
+      backend:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: trading-prod-caddy
+    restart: unless-stopped
+    logging: *production-logging
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?PUBLIC_DOMAIN is required}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:?CADDY_ACME_EMAIL is required}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_started
       backend:
         condition: service_healthy
 
@@ -83,3 +102,7 @@ volumes:
     name: trading-prod-postgres-data
   redis_data:
     name: trading-prod-redis-data
+  caddy_data:
+    name: trading-prod-caddy-data
+  caddy_config:
+    name: trading-prod-caddy-config
