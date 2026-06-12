@@ -31,6 +31,27 @@ The generated file is:
 /srv/trading/backups/backup_YYYYMMDD.sql
 ```
 
+## Failure Alerts
+
+The backup script sends a guarded external alert only when at least one alert channel is explicitly enabled in `.env.prod`. Alerts are disabled by default.
+
+Backup failure alerts are intentionally coarse. They include:
+
+- severity: `critical`
+- title: `PostgreSQL backup failed`
+- component: `postgres_backup`
+- error type
+
+They do not include database passwords, connection strings, backup contents, user data, order data, balances, positions, or raw exception text.
+
+Configure delivery timeout with:
+
+```bash
+ALERT_TIMEOUT_SECONDS=5
+```
+
+See `docs/external-alert-placeholders.md` for channel settings and safety rules.
+
 ## Daily Scheduling
 
 Preferred scheduling is host systemd using the checked-in templates:
