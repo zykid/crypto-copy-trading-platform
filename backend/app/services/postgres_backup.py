@@ -5,7 +5,6 @@ import os
 import pathlib
 import subprocess
 
-
 DEFAULT_BACKUP_PREFIX = "backup"
 
 
