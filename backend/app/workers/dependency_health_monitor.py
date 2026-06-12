@@ -85,5 +85,5 @@ def run_dependency_health_monitor_forever(sleep: MonitorSleep = time.sleep) -> N
                 dispatch_state=state,
             )
         except Exception:
-            pass
+            state["last_monitor_error_at"] = int(time.time())
         sleep(max(monitor_config.interval_seconds, 1))
