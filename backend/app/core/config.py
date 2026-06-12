@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     bybit_testnet_rest_base_url: str = Field(default="https://api-testnet.bybit.com")
     okx_demo_rest_base_url: str = Field(default="https://openapi.okx.com")
 
+    alert_timeout_seconds: float = Field(default=5.0)
     telegram_alerts_enabled: bool = Field(default=False)
     telegram_bot_token: str = Field(default="")
     telegram_chat_id: str = Field(default="")
