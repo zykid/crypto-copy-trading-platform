@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+import collections.abc
 
 from app.services.external_alerts import ExternalAlertEvent
 
@@ -7,7 +7,9 @@ SAFE_DEPENDENCY_NAMES = frozenset({"database", "redis", "backend", "frontend", "
 SAFE_DEPENDENCY_STATES = frozenset({"ok", "degraded", "unavailable", "unknown"})
 
 
-def build_dependency_health_alert(checks: Mapping[str, str]) -> ExternalAlertEvent | None:
+def build_dependency_health_alert(
+    checks: collections.abc.Mapping[str, str],
+) -> ExternalAlertEvent | None:
     status = _safe_state(checks.get("status", "unknown"))
     if status == "ok":
         return None
