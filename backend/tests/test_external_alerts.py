@@ -164,7 +164,11 @@ def test_send_external_alert_rejects_invalid_enabled_config_before_delivery() ->
     with pytest.raises(ExternalAlertDeliveryError):
         send_external_alert(
             ExternalAlertConfig(webhook_enabled=True),
-            ExternalAlertEvent(severity="critical", title="Service unhealthy", message="backend down"),
+            ExternalAlertEvent(
+                severity="critical",
+                title="Service unhealthy",
+                message="backend down",
+            ),
             ExternalAlertTransports(http=http),
         )
 
