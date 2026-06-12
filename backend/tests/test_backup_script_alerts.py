@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import importlib.util
 from pathlib import Path
 from types import ModuleType
@@ -41,7 +39,7 @@ def test_backup_failure_does_not_send_alert_when_channels_disabled(
     def fail_backup(config: object) -> None:
         raise PostgresBackupError(f"pg_dump failed with {SECRET_VALUE}")
 
-    def send_alert(config: object, event: external_alerts.ExternalAlertEvent) -> tuple[()]:
+    def send_alert(config: object, event: object):
         send_calls.append((config, event))
         return ()
 
@@ -67,10 +65,7 @@ def test_backup_failure_sends_coarse_alert_when_webhook_enabled(
     def fail_backup(config: object) -> None:
         raise PostgresBackupError(f"pg_dump failed with {SECRET_VALUE}")
 
-    def send_alert(
-        config: object,
-        event: external_alerts.ExternalAlertEvent,
-    ) -> tuple[external_alerts.ExternalAlertDeliveryResult]:
+    def send_alert(config: object, event: external_alerts.ExternalAlertEvent):
         sent_events.append(event)
         return (
             external_alerts.ExternalAlertDeliveryResult(
@@ -110,7 +105,7 @@ def test_backup_failure_alert_config_error_does_not_mask_backup_failure(
     def fail_backup(config: object) -> None:
         raise PostgresBackupError(f"pg_dump failed with {SECRET_VALUE}")
 
-    def send_alert(config: object, event: external_alerts.ExternalAlertEvent) -> tuple[()]:
+    def send_alert(config: object, event: object):
         raise external_alerts.ExternalAlertDeliveryError(
             "external alert config invalid: webhook_url is required"
         )
