@@ -48,6 +48,16 @@ Example cron entry for environments that do not use systemd, scheduled for 03:15
 
 Review the schedule, timezone, disk capacity, and restore process before relying on it.
 
+## Backup Verification
+
+Verify that a generated plain SQL backup file is readable before using it in a restore drill:
+
+```bash
+python scripts/backup/verify_backup_file.py /srv/trading/backups/backup_YYYYMMDD.sql
+```
+
+For an isolated restore drill, follow `docs/restore-drill-runbook.md`. Do not restore over the production database.
+
 ## Safety Notes
 
 - `POSTGRES_PASSWORD` is passed to `pg_dump` through `PGPASSWORD` in the container environment, not as a command argument.
