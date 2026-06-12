@@ -98,9 +98,17 @@ External alerts should use coarse operational messages such as:
 
 `app.services.dependency_health_monitor` provides a disabled-by-default monitor tick helper. It validates interval and throttle settings, skips the health check provider while disabled, and reuses the guarded dependency health alert sender when explicitly enabled by runtime wiring.
 
+`app.workers.dependency_health_monitor` provides a long-running worker entrypoint for future runtime wiring:
+
+```bash
+python -m app.workers.dependency_health_monitor
+```
+
+The worker reads the same disabled-by-default environment settings, converts dependency health endpoint details into safe status fields, suppresses repeated alerts through the throttle window, and does not touch trading execution flows.
+
 The first wired delivery integration point is PostgreSQL backup failure reporting. The backup script sends only a coarse `PostgreSQL backup failed` event with component and error type metadata. Alert delivery errors do not change the backup job's failure code.
 
-Dependency health dispatch now has a service-level monitor tick helper, but it is not yet attached to a long-running production loop or separate monitor process. Future wiring should keep it disabled by default, preserve rate limiting, and stay separate from trading execution flows.
+Dependency health dispatch now has a service-level monitor tick helper and a runnable worker entrypoint, but it is not yet attached to production Compose or systemd service management. Future wiring should keep it disabled by default, preserve rate limiting, and stay separate from trading execution flows.
 
 The sender is intentionally not wired into trading flows yet. Future integration points must pass only coarse operational events and keep failures non-blocking for trading, reconciliation, and audit flows.
 
