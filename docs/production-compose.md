@@ -1,6 +1,6 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, external alert placeholders, and log rotation, but it does not enable real trading.
 
 ## Files
 
@@ -9,6 +9,7 @@ This file documents the first production runtime skeleton for the platform. It i
 - `deploy/caddy/Caddyfile`
 - `deploy/prometheus/prometheus.yml`
 - `docs/monitoring-placeholders.md`
+- `docs/external-alert-placeholders.md`
 
 ## Runtime Properties
 
@@ -21,6 +22,7 @@ The production Compose file sets:
 - required environment variables for secrets and connection strings
 - Caddy reverse proxy on ports 80 and 443
 - optional Prometheus and Grafana services behind the `monitoring` profile
+- disabled-by-default Telegram, email, and webhook alert placeholders
 - `TESTNET_ADAPTERS_ENABLED=false` by default
 
 ## HTTPS Reverse Proxy
@@ -72,6 +74,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml down --remove-orp
 - Keep withdrawal permissions disabled on exchange API keys when later testing with exchange accounts.
 - Keep backup and restore drills separate from destructive Docker cleanup commands.
 - Do not expose Prometheus or Grafana publicly without authentication and network controls.
+- Do not send user, account, order, balance, or API secret data through external alerts.
 
 Do not use:
 
@@ -89,5 +92,5 @@ This is not yet a complete production release. Remaining production work include
 - hardened frontend production image
 - scheduled PostgreSQL backup container or host cron
 - reviewed backend metrics endpoint
-- Telegram, email, and webhook alert senders
+- real Telegram, email, and webhook alert senders
 - restore drills and operational runbooks
