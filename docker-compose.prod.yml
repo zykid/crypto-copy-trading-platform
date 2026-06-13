@@ -64,6 +64,46 @@ services:
       retries: 10
       start_period: 30s
 
+  dependency-health-monitor:
+    build:
+      context: ./backend
+    container_name: trading-prod-dependency-health-monitor
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    logging: *production-logging
+    command:
+      - python
+      - -m
+      - app.workers.dependency_health_monitor
+    environment:
+      ENVIRONMENT: production
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?SECRET_ENCRYPTION_KEY is required}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      TESTNET_ADAPTERS_ENABLED: ${TESTNET_ADAPTERS_ENABLED:-false}
+      ALERT_TIMEOUT_SECONDS: ${ALERT_TIMEOUT_SECONDS:-5}
+      TELEGRAM_ALERTS_ENABLED: ${TELEGRAM_ALERTS_ENABLED:-false}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      EMAIL_ALERTS_ENABLED: ${EMAIL_ALERTS_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      WEBHOOK_ALERTS_ENABLED: ${WEBHOOK_ALERTS_ENABLED:-false}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_WEBHOOK_SECRET: ${ALERT_WEBHOOK_SECRET:-}
+      DEPENDENCY_HEALTH_MONITOR_ENABLED: ${DEPENDENCY_HEALTH_MONITOR_ENABLED:-false}
+      DEPENDENCY_HEALTH_MONITOR_INTERVAL_SECONDS: ${DEPENDENCY_HEALTH_MONITOR_INTERVAL_SECONDS:-60}
+      DEPENDENCY_HEALTH_ALERT_THROTTLE_SECONDS: ${DEPENDENCY_HEALTH_ALERT_THROTTLE_SECONDS:-300}
+    depends_on:
+      backend:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend
