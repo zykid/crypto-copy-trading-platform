@@ -107,6 +107,8 @@ External alerts should use coarse operational messages such as:
 
 `app.api.v1.risk_settings` wires the emergency stop alert into the risk settings update path. When `trading_enabled` changes from `true` to `false`, the API emits only an account-scope `Emergency stop enabled` operational alert through the runtime bridge. The alert omits user IDs, account IDs, actor identity, symbols, balances, positions, orders, quantities, prices, and exchange responses. If alert delivery fails, the risk-setting update still succeeds so the trading stop is not blocked by an alert destination.
 
+`app.api.v1.orders` wires order terminal failure alerts into manual signal execution. When the order engine stores a terminal `FAILED` execution because the order is risk-rejected or zero-quantity, it emits only terminal status and coarse failure type through the runtime bridge. The alert omits user IDs, account IDs, signal IDs, execution IDs, client order IDs, exchange order IDs, symbols, side, order type, quantities, prices, risk reasons, error messages, request paths, and exchange responses.
+
 `app.services.rate_limit_service.RuntimeRateLimitService` can accept an optional operational alert runtime. When one is explicitly injected, repeated testnet order requests blocked by runtime rate-limit protection emit only safe rate-limit metadata: exchange name, coarse scope, request category, and bounded retry-after seconds. The alert payload omits exchange account IDs, request paths, user data, order IDs, quantities, prices, and exchange responses. The default global limiter still has no alert runtime attached.
 
 `app.services.dependency_health_monitor` provides a disabled-by-default monitor tick helper. It validates interval and throttle settings, skips the health check provider while disabled, and reuses the guarded dependency health alert sender when explicitly enabled by runtime wiring.
@@ -129,7 +131,7 @@ The command reads the guarded external alert settings and sends only a synthetic
 
 The first wired delivery integration point is PostgreSQL backup failure reporting. The backup script sends only a coarse `PostgreSQL backup failed` event with component and error type metadata. Alert delivery errors do not change the backup job's failure code.
 
-Order failure alert helpers are available for explicit service integration, but they do not automatically alter order execution behavior. When wired into trading flows, alert delivery must stay non-blocking and must not include user, account, order, quantity, price, signal, client order, request path, actor identity, or exchange response data.
+Reconciliation drift alert helpers are available for explicit service integration, but they do not automatically alter order execution behavior. When wired into trading flows, alert delivery must stay non-blocking and must not include user, account, order, quantity, price, signal, client order, request path, actor identity, or exchange response data.
 
 ## Operational Guidance
 
