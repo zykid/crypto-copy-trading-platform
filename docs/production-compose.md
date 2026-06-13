@@ -1,6 +1,6 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, PostgreSQL backup job wiring, backup failure alert wiring, disabled-by-default dependency health monitor helpers, frontend production image wiring, systemd backup timer templates, restore drill guidance, production incident response guidance, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, safe operational alert helpers, PostgreSQL backup job wiring, backup failure alert wiring, disabled-by-default dependency health monitor helpers, frontend production image wiring, systemd backup timer templates, restore drill guidance, production incident response guidance, and log rotation, but it does not enable real trading.
 
 ## Files
 
@@ -40,6 +40,7 @@ The production Compose file sets:
 - safe dependency health alert construction, throttled dispatch, and disabled monitor tick helper
 - dependency health monitor environment variables that remain disabled by default
 - runnable dependency health monitor worker service behind the `monitoring` profile
+- safe emergency stop, order failure, and rate-limit alert construction with throttled dispatch helpers
 - backup file verification helper and restore drill runbook
 - production incident response runbook for restore and trading-freeze decisions
 - disabled-by-default Telegram, email, and webhook alert senders
@@ -118,4 +119,4 @@ docker compose down -v
 This is not yet a complete production release. Remaining production work includes:
 
 - server-specific enablement of the backup timer on the target host
-- wiring guarded alert senders into additional operational events
+- explicit runtime wiring from trading services to the guarded operational alert helpers
