@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,6 +17,15 @@ from app.services.position_engine import apply_fill, calculate_delta, get_or_cre
 from app.services.risk_engine import RiskOrderInput, check_order_risk, get_or_create_risk_settings
 
 
+class OrderFailureAlertRuntime(Protocol):
+    def notify_order_failure(
+        self,
+        *,
+        status: str,
+        failure_type: str,
+    ) -> tuple[object, ...]: ...
+
+
 def execute_signal_for_account(
     db: Session,
     *,
@@ -23,6 +33,7 @@ def execute_signal_for_account(
     signal_id: str,
     exchange_account_id: str,
     exchange: MockExchange | None = None,
+    alert_runtime: OrderFailureAlertRuntime | None = None,
 ) -> OrderExecution:
     signal = _get_owned_signal(db, user_id=user_id, signal_id=signal_id)
     account = _get_owned_account(db, user_id=user_id, exchange_account_id=exchange_account_id)
@@ -76,6 +87,15 @@ def execute_signal_for_account(
         execution.error_message = "; ".join(risk_result.reasons) or "zero quantity order"
         db.commit()
         db.refresh(execution)
+        _notify_order_failure(
+            alert_runtime,
+            status=execution.status,
+            failure_type=(
+                "risk_rejected"
+                if risk_result.decision != RiskDecision.PASSED
+                else "unknown"
+            ),
+        )
         return execution
 
     execution.status = OrderExecutionStatus.RISK_PASSED
@@ -154,3 +174,17 @@ def _resolve_side_and_quantity(
         target_quantity=signal.target_position_quantity,
     )
     return delta.side or signal.side, delta.delta_quantity
+
+
+def _notify_order_failure(
+    alert_runtime: OrderFailureAlertRuntime | None,
+    *,
+    status: OrderExecutionStatus,
+    failure_type: str,
+) -> None:
+    if alert_runtime is None:
+        return
+    alert_runtime.notify_order_failure(
+        status=status.value,
+        failure_type=failure_type,
+    )
