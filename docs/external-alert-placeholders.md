@@ -77,6 +77,7 @@ External alerts should use coarse operational messages such as:
 - rate-limit protection triggered
 - emergency stop enabled
 - backup failed
+- order execution failed by safe terminal status and coarse failure type
 
 ## Current Implementation
 
@@ -95,10 +96,12 @@ External alerts should use coarse operational messages such as:
 
 - `build_dependency_health_alert` converts dependency health check results into a `Service dependency health degraded` event that includes only component name, coarse status, and safe dependency names.
 - `maybe_send_dependency_health_alert` sends that event through the guarded external alert sender and suppresses repeated dependency health alerts inside the throttle window.
+- `build_order_failure_alert` converts failed terminal order states into a coarse `Order execution failed` event with only component, terminal status, and safe failure type metadata.
+- `maybe_send_order_failure_alert` dispatches the safe order failure event through the same guarded sender and throttles repeated events by terminal status and failure type.
 
 `app.services.dependency_health_monitor` provides a disabled-by-default monitor tick helper. It validates interval and throttle settings, skips the health check provider while disabled, and reuses the guarded dependency health alert sender when explicitly enabled by runtime wiring.
 
-`app.workers.dependency_health_monitor` provides a long-running worker entrypoint for future runtime wiring:
+`app.workers.dependency_health_monitor` provides a long-running worker entrypoint:
 
 ```bash
 python -m app.workers.dependency_health_monitor
@@ -108,9 +111,7 @@ The worker reads the same disabled-by-default environment settings, converts dep
 
 The first wired delivery integration point is PostgreSQL backup failure reporting. The backup script sends only a coarse `PostgreSQL backup failed` event with component and error type metadata. Alert delivery errors do not change the backup job's failure code.
 
-Dependency health dispatch now has a service-level monitor tick helper and a runnable worker entrypoint, but it is not yet attached to production Compose or systemd service management. Future wiring should keep it disabled by default, preserve rate limiting, and stay separate from trading execution flows.
-
-The sender is intentionally not wired into trading flows yet. Future integration points must pass only coarse operational events and keep failures non-blocking for trading, reconciliation, and audit flows.
+Order failure alert helpers are available for explicit service integration, but they do not automatically alter order execution behavior. When wired into trading flows, alert delivery must stay non-blocking and must not include user, account, order, quantity, price, signal, client order, or exchange response data.
 
 ## Operational Guidance
 
