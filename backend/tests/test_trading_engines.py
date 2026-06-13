@@ -9,9 +9,23 @@ from app.exchanges.mock import MockExchange
 from app.services.exchange_accounts import create_account
 from app.services.order_engine import execute_signal_for_account
 from app.services.position_engine import apply_fill, calculate_delta, get_or_create_position
-from app.services.risk_engine import RiskOrderInput, check_order_risk, get_or_create_risk_settings
+from app.services.risk_engine import (
+    RiskOrderInput,
+    check_order_risk,
+    get_or_create_risk_settings,
+    update_risk_settings,
+)
 from app.services.signal_engine import create_manual_signal
 from app.services.users import create_user
+
+
+class CapturingEmergencyStopRuntime:
+    def __init__(self) -> None:
+        self.scopes: list[str] = []
+
+    def notify_emergency_stop_enabled(self, *, scope: str) -> tuple[object, ...]:
+        self.scopes.append(scope)
+        return ()
 
 
 def test_position_engine_calculates_delta_not_full_target() -> None:
@@ -65,6 +79,71 @@ def test_risk_engine_rejects_disabled_trading_and_blocked_symbol(db_session: Ses
     assert "exchange account trading is disabled" in result.reasons
     assert "risk settings trading is disabled" in result.reasons
     assert "symbol is blocked" in result.reasons
+
+
+def test_risk_settings_disable_sends_emergency_stop_alert(db_session: Session) -> None:
+    user, account = _create_enabled_user_and_account(db_session)
+    settings = get_or_create_risk_settings(
+        db_session,
+        user_id=user.id,
+        exchange_account_id=account.id,
+    )
+    alert_runtime = CapturingEmergencyStopRuntime()
+
+    update_risk_settings(
+        db_session,
+        settings,
+        {"trading_enabled": False},
+        alert_runtime=alert_runtime,
+    )
+
+    assert alert_runtime.scopes == ["account"]
+
+
+def test_risk_settings_repeated_disable_does_not_send_emergency_stop_alert(
+    db_session: Session,
+) -> None:
+    user, account = _create_enabled_user_and_account(db_session)
+    settings = get_or_create_risk_settings(
+        db_session,
+        user_id=user.id,
+        exchange_account_id=account.id,
+    )
+    alert_runtime = CapturingEmergencyStopRuntime()
+
+    update_risk_settings(
+        db_session,
+        settings,
+        {"trading_enabled": False},
+        alert_runtime=alert_runtime,
+    )
+    update_risk_settings(
+        db_session,
+        settings,
+        {"trading_enabled": False},
+        alert_runtime=alert_runtime,
+    )
+
+    assert alert_runtime.scopes == ["account"]
+
+
+def test_risk_settings_disable_without_alert_runtime_keeps_existing_behavior(
+    db_session: Session,
+) -> None:
+    user, account = _create_enabled_user_and_account(db_session)
+    settings = get_or_create_risk_settings(
+        db_session,
+        user_id=user.id,
+        exchange_account_id=account.id,
+    )
+
+    updated = update_risk_settings(
+        db_session,
+        settings,
+        {"trading_enabled": False},
+    )
+
+    assert updated.trading_enabled is False
 
 
 def test_order_engine_executes_mock_order_and_updates_position(db_session: Session) -> None:
