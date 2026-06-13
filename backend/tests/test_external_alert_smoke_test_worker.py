@@ -1,5 +1,9 @@
 from app.core.config import Settings
-from app.services.external_alerts import ExternalAlertTransports
+from app.services.external_alerts import (
+    ExternalAlertChannel,
+    ExternalAlertDeliveryResult,
+    ExternalAlertTransports,
+)
 from app.workers import external_alert_smoke_test as worker
 
 
@@ -104,7 +108,12 @@ def test_smoke_test_main_returns_failure_when_delivery_fails(monkeypatch) -> Non
     monkeypatch.setattr(
         worker,
         "run_external_alert_smoke_test",
-        lambda: (type("Result", (), {"delivered": False, "channel": "webhook"})(),),
+        lambda: (
+            ExternalAlertDeliveryResult(
+                channel=ExternalAlertChannel.WEBHOOK,
+                delivered=False,
+            ),
+        ),
     )
 
     assert worker.main() == 1
