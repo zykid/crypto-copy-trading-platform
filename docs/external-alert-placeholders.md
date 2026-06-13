@@ -103,6 +103,8 @@ External alerts should use coarse operational messages such as:
 - `build_rate_limit_alert` converts runtime rate-limit protection events into a `Rate limit protection triggered` event with only component, exchange, scope, request category, and bounded retry-after metadata.
 - `maybe_send_rate_limit_alert` dispatches the safe rate-limit event and throttles repeated events by exchange, scope, and request category.
 
+`app.services.operational_alert_runtime` provides a small runtime bridge for service integrations. It centralizes the external alert config, dispatch throttle state, timestamp source, and optional transports. Its notification methods keep alert delivery non-blocking and return an empty result when alert configuration or delivery fails, so trading safety decisions never depend on a third-party alert destination.
+
 `app.services.dependency_health_monitor` provides a disabled-by-default monitor tick helper. It validates interval and throttle settings, skips the health check provider while disabled, and reuses the guarded dependency health alert sender when explicitly enabled by runtime wiring.
 
 `app.workers.dependency_health_monitor` provides a long-running worker entrypoint:
