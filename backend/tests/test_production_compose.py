@@ -1,8 +1,8 @@
-from pathlib import Path
+import pathlib
 import re
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[2]
 PRODUCTION_COMPOSE = (REPOSITORY_ROOT / "docker-compose.prod.yml").read_text()
 
 
