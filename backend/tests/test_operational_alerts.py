@@ -2,8 +2,10 @@ from app.services.external_alerts import ExternalAlertConfig, ExternalAlertTrans
 from app.services.operational_alerts import (
     build_dependency_health_alert,
     build_order_failure_alert,
+    build_rate_limit_alert,
     maybe_send_dependency_health_alert,
     maybe_send_order_failure_alert,
+    maybe_send_rate_limit_alert,
 )
 
 
@@ -110,6 +112,30 @@ def test_order_failure_alert_uses_only_safe_operational_fields() -> None:
     assert "exchange response" not in event_text
 
 
+def test_rate_limit_alert_uses_only_safe_operational_fields() -> None:
+    event = build_rate_limit_alert(
+        exchange_name="binance?api_secret=super-secret",
+        scope="acct-123-user-456",
+        request_category="/api/v3/order?signature=secret",
+        retry_after_seconds=9_999,
+    )
+
+    assert event.severity == "warning"
+    assert event.title == "Rate limit protection triggered"
+    assert event.message == "Runtime rate-limit protection blocked an outbound exchange request."
+    assert event.metadata == {
+        "component": "rate_limit",
+        "exchange": "unknown",
+        "scope": "unknown",
+        "request_category": "unknown",
+        "retry_after_seconds": "3600",
+    }
+    event_text = f"{event.title} {event.message} {event.metadata}"
+    assert "super-secret" not in event_text
+    assert "acct-123" not in event_text
+    assert "signature" not in event_text
+
+
 def test_order_failure_dispatch_sends_safe_event() -> None:
     http = CapturingHttpTransport()
     state: dict[str, int] = {}
@@ -163,6 +189,68 @@ def test_order_failure_dispatch_is_throttled_within_window() -> None:
 
     assert results == ()
     assert state == {"order_failure:FAILED:exchange_failed": 100}
+    assert http.requests == []
+
+
+def test_rate_limit_dispatch_sends_safe_event() -> None:
+    http = CapturingHttpTransport()
+    state: dict[str, int] = {}
+    config = ExternalAlertConfig(
+        webhook_enabled=True,
+        webhook_url="https://alerts.example/hooks/token",
+    )
+
+    results = maybe_send_rate_limit_alert(
+        exchange_name="binance",
+        scope="account",
+        request_category="order",
+        retry_after_seconds=5,
+        config=config,
+        now_seconds=100,
+        dispatch_state=state,
+        transports=ExternalAlertTransports(http=http),
+    )
+
+    assert len(results) == 1
+    assert results[0].delivered is True
+    assert state == {"rate_limit:binance:account:order": 100}
+    assert len(http.requests) == 1
+    assert http.requests[0]["payload"] == {
+        "severity": "warning",
+        "title": "Rate limit protection triggered",
+        "message": "Runtime rate-limit protection blocked an outbound exchange request.",
+        "metadata": {
+            "component": "rate_limit",
+            "exchange": "binance",
+            "scope": "account",
+            "request_category": "order",
+            "retry_after_seconds": "5",
+        },
+    }
+
+
+def test_rate_limit_dispatch_is_throttled_within_window() -> None:
+    http = CapturingHttpTransport()
+    state = {"rate_limit:binance:account:order": 100}
+    config = ExternalAlertConfig(
+        webhook_enabled=True,
+        webhook_url="https://alerts.example/hooks/token",
+    )
+
+    results = maybe_send_rate_limit_alert(
+        exchange_name="binance",
+        scope="account",
+        request_category="order",
+        retry_after_seconds=5,
+        config=config,
+        now_seconds=200,
+        throttle_seconds=300,
+        dispatch_state=state,
+        transports=ExternalAlertTransports(http=http),
+    )
+
+    assert results == ()
+    assert state == {"rate_limit:binance:account:order": 100}
     assert http.requests == []
 
 
