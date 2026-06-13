@@ -12,13 +12,14 @@ This checklist tracks the remaining work before the platform can be considered a
 - Safe operational alert helpers for dependency health, backup failure, emergency stop, order failure, and rate-limit events.
 - Non-blocking operational alert runtime bridge for future service integrations.
 - External alert smoke-test command that sends only synthetic safe operational metadata.
+- Runtime rate-limit blocking can emit safe operational alerts when an alert runtime is explicitly injected.
 - Dependency health monitor worker behind the `monitoring` profile and disabled by default.
 - CI and Docker Integration workflows for mock full-chain validation.
 
 ## Remaining Tasks
 
 1. Enable the backup systemd timer on the target Ubuntu host and verify that `backup_YYYYMMDD.sql` files are created in the intended directory.
-2. Wire the operational alert runtime into real service events for emergency stop enablement, order terminal failure, runtime rate-limit blocking, and reconciliation drift.
+2. Wire the operational alert runtime into real service events for emergency stop enablement, order terminal failure, and reconciliation drift.
 3. Add production deployment verification steps for Caddy HTTPS certificate issuance and private access through Tailscale.
 4. Add Prometheus scrape verification and starter Grafana dashboard documentation for backend health and dependency state.
 5. Add backup retention guidance and a non-destructive cleanup script that never deletes active PostgreSQL volumes.
