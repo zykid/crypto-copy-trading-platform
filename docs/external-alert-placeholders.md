@@ -115,6 +115,14 @@ python -m app.workers.dependency_health_monitor
 
 The worker reads the same disabled-by-default environment settings, converts dependency health endpoint details into safe status fields, suppresses repeated alerts through the throttle window, and does not touch trading execution flows.
 
+`app.workers.external_alert_smoke_test` provides a synthetic delivery test command:
+
+```bash
+python -m app.workers.external_alert_smoke_test
+```
+
+The command reads the guarded external alert settings and sends only a synthetic `External alert smoke test` event when at least one channel is explicitly enabled. If all channels are disabled, it exits successfully without sending anything. The payload contains only `component=external_alerts` and `event_type=smoke_test` metadata.
+
 The first wired delivery integration point is PostgreSQL backup failure reporting. The backup script sends only a coarse `PostgreSQL backup failed` event with component and error type metadata. Alert delivery errors do not change the backup job's failure code.
 
 Emergency stop, order failure, and rate-limit alert helpers are available for explicit service integration, but they do not automatically alter order execution behavior. When wired into trading flows, alert delivery must stay non-blocking and must not include user, account, order, quantity, price, signal, client order, request path, actor identity, or exchange response data.
