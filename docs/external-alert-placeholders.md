@@ -96,6 +96,8 @@ External alerts should use coarse operational messages such as:
 
 - `build_dependency_health_alert` converts dependency health check results into a `Service dependency health degraded` event that includes only component name, coarse status, and safe dependency names.
 - `maybe_send_dependency_health_alert` sends that event through the guarded external alert sender and suppresses repeated dependency health alerts inside the throttle window.
+- `build_emergency_stop_alert` converts emergency stop enablement into an `Emergency stop enabled` event with only component, scope, and new-orders-blocked metadata.
+- `maybe_send_emergency_stop_alert` dispatches the safe emergency stop event and throttles repeated events by scope.
 - `build_order_failure_alert` converts failed terminal order states into a coarse `Order execution failed` event with only component, terminal status, and safe failure type metadata.
 - `maybe_send_order_failure_alert` dispatches the safe order failure event through the same guarded sender and throttles repeated events by terminal status and failure type.
 - `build_rate_limit_alert` converts runtime rate-limit protection events into a `Rate limit protection triggered` event with only component, exchange, scope, request category, and bounded retry-after metadata.
@@ -113,7 +115,7 @@ The worker reads the same disabled-by-default environment settings, converts dep
 
 The first wired delivery integration point is PostgreSQL backup failure reporting. The backup script sends only a coarse `PostgreSQL backup failed` event with component and error type metadata. Alert delivery errors do not change the backup job's failure code.
 
-Order failure and rate-limit alert helpers are available for explicit service integration, but they do not automatically alter order execution behavior. When wired into trading flows, alert delivery must stay non-blocking and must not include user, account, order, quantity, price, signal, client order, request path, or exchange response data.
+Emergency stop, order failure, and rate-limit alert helpers are available for explicit service integration, but they do not automatically alter order execution behavior. When wired into trading flows, alert delivery must stay non-blocking and must not include user, account, order, quantity, price, signal, client order, request path, actor identity, or exchange response data.
 
 ## Operational Guidance
 
