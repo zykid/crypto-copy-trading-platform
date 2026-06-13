@@ -41,6 +41,7 @@ The production Compose file sets:
 - dependency health monitor environment variables that remain disabled by default
 - runnable dependency health monitor worker service behind the `monitoring` profile
 - safe emergency stop, order failure, and rate-limit alert construction with throttled dispatch helpers
+- non-blocking operational alert runtime bridge for future trading-service integration points
 - backup file verification helper and restore drill runbook
 - production incident response runbook for restore and trading-freeze decisions
 - disabled-by-default Telegram, email, and webhook alert senders
