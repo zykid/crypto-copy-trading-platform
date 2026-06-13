@@ -1,5 +1,5 @@
-import re
 from pathlib import Path
+import re
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
