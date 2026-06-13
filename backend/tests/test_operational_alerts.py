@@ -1,7 +1,9 @@
 from app.services.external_alerts import ExternalAlertConfig, ExternalAlertTransports
 from app.services.operational_alerts import (
     build_dependency_health_alert,
+    build_order_failure_alert,
     maybe_send_dependency_health_alert,
+    maybe_send_order_failure_alert,
 )
 
 
@@ -80,6 +82,88 @@ def test_dependency_health_alert_filters_unsafe_fields() -> None:
     assert "super-secret" not in event_text
     assert "00000000-0000-0000-0000-000000000001" not in event_text
     assert "secret-token" not in event_text
+
+
+def test_order_failure_alert_ignores_non_failed_terminal_status() -> None:
+    event = build_order_failure_alert(status="FILLED", failure_type="exchange_failed")
+
+    assert event is None
+
+
+def test_order_failure_alert_uses_only_safe_operational_fields() -> None:
+    event = build_order_failure_alert(
+        status="FAILED",
+        failure_type="api_secret leaked in exchange response",
+    )
+
+    assert event is not None
+    assert event.severity == "critical"
+    assert event.title == "Order execution failed"
+    assert event.message == "An order execution reached a failed terminal state."
+    assert event.metadata == {
+        "component": "order_execution",
+        "status": "FAILED",
+        "failure_type": "unknown",
+    }
+    event_text = f"{event.title} {event.message} {event.metadata}"
+    assert "api_secret" not in event_text
+    assert "exchange response" not in event_text
+
+
+def test_order_failure_dispatch_sends_safe_event() -> None:
+    http = CapturingHttpTransport()
+    state: dict[str, int] = {}
+    config = ExternalAlertConfig(
+        webhook_enabled=True,
+        webhook_url="https://alerts.example/hooks/token",
+    )
+
+    results = maybe_send_order_failure_alert(
+        status="TIMEOUT",
+        failure_type="timeout",
+        config=config,
+        now_seconds=100,
+        dispatch_state=state,
+        transports=ExternalAlertTransports(http=http),
+    )
+
+    assert len(results) == 1
+    assert results[0].delivered is True
+    assert state == {"order_failure:TIMEOUT:timeout": 100}
+    assert len(http.requests) == 1
+    assert http.requests[0]["payload"] == {
+        "severity": "critical",
+        "title": "Order execution failed",
+        "message": "An order execution reached a failed terminal state.",
+        "metadata": {
+            "component": "order_execution",
+            "status": "TIMEOUT",
+            "failure_type": "timeout",
+        },
+    }
+
+
+def test_order_failure_dispatch_is_throttled_within_window() -> None:
+    http = CapturingHttpTransport()
+    state = {"order_failure:FAILED:exchange_failed": 100}
+    config = ExternalAlertConfig(
+        webhook_enabled=True,
+        webhook_url="https://alerts.example/hooks/token",
+    )
+
+    results = maybe_send_order_failure_alert(
+        status="FAILED",
+        failure_type="exchange_failed",
+        config=config,
+        now_seconds=200,
+        throttle_seconds=300,
+        dispatch_state=state,
+        transports=ExternalAlertTransports(http=http),
+    )
+
+    assert results == ()
+    assert state == {"order_failure:FAILED:exchange_failed": 100}
+    assert http.requests == []
 
 
 def test_dependency_health_dispatch_does_not_send_when_checks_are_ok() -> None:
