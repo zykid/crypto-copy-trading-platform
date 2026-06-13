@@ -1,24 +1,19 @@
-import pathlib
-import re
-
-
-REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[2]
-PRODUCTION_COMPOSE = (REPOSITORY_ROOT / "docker-compose.prod.yml").read_text()
+with open("../docker-compose.prod.yml", encoding="utf-8") as compose_file:
+    PRODUCTION_COMPOSE = compose_file.read()
 
 
 def service_block(service_name: str) -> str:
-    pattern = re.compile(rf"^  {re.escape(service_name)}:\n", re.MULTILINE)
-    match = pattern.search(PRODUCTION_COMPOSE)
-    assert match is not None
+    lines = PRODUCTION_COMPOSE.splitlines()
+    marker = f"  {service_name}:"
+    start = lines.index(marker)
+    end = len(lines)
 
-    next_match = re.search(
-        r"^  [A-Za-z0-9_-]+:\n",
-        PRODUCTION_COMPOSE[match.end() :],
-        re.MULTILINE,
-    )
-    if next_match is None:
-        return PRODUCTION_COMPOSE[match.start() :]
-    return PRODUCTION_COMPOSE[match.start() : match.end() + next_match.start()]
+    for index, line in enumerate(lines[start + 1 :], start=start + 1):
+        if line.startswith("  ") and not line.startswith("    ") and line.endswith(":"):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
 
 
 def test_dependency_health_monitor_service_is_guarded() -> None:
