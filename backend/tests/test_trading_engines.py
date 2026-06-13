@@ -28,6 +28,25 @@ class CapturingEmergencyStopRuntime:
         return ()
 
 
+class CapturingOrderFailureRuntime:
+    def __init__(self) -> None:
+        self.events: list[dict[str, str]] = []
+
+    def notify_order_failure(
+        self,
+        *,
+        status: str,
+        failure_type: str,
+    ) -> tuple[object, ...]:
+        self.events.append(
+            {
+                "status": status,
+                "failure_type": failure_type,
+            }
+        )
+        return ()
+
+
 def test_position_engine_calculates_delta_not_full_target() -> None:
     delta = calculate_delta(
         symbol="BTCUSDT",
@@ -177,6 +196,88 @@ def test_order_engine_executes_mock_order_and_updates_position(db_session: Sessi
     assert execution.exchange_order_id is not None
     assert execution.risk_result == {"decision": "PASSED", "reasons": []}
     assert position.quantity == Decimal("0.25")
+
+
+def test_order_engine_alerts_on_risk_rejected_terminal_failure(
+    db_session: Session,
+) -> None:
+    user, account = _create_enabled_user_and_account(db_session)
+    settings = get_or_create_risk_settings(
+        db_session,
+        user_id=user.id,
+        exchange_account_id=account.id,
+    )
+    settings.trading_enabled = False
+    db_session.commit()
+    signal = create_manual_signal(
+        db_session,
+        user_id=user.id,
+        symbol="BTCUSDT",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        price=Decimal("100"),
+        quantity=Decimal("1"),
+        target_position_quantity=None,
+    )
+    alert_runtime = CapturingOrderFailureRuntime()
+
+    execution = execute_signal_for_account(
+        db_session,
+        user_id=user.id,
+        signal_id=signal.id,
+        exchange_account_id=account.id,
+        exchange=MockExchange(),
+        alert_runtime=alert_runtime,
+    )
+
+    assert execution.status == OrderExecutionStatus.FAILED
+    assert alert_runtime.events == [
+        {
+            "status": "FAILED",
+            "failure_type": "risk_rejected",
+        }
+    ]
+
+
+def test_order_failure_alert_omits_sensitive_execution_fields(
+    db_session: Session,
+) -> None:
+    user, account = _create_enabled_user_and_account(db_session)
+    settings = get_or_create_risk_settings(
+        db_session,
+        user_id=user.id,
+        exchange_account_id=account.id,
+    )
+    settings.trading_enabled = False
+    db_session.commit()
+    signal = create_manual_signal(
+        db_session,
+        user_id=user.id,
+        symbol="BTCUSDT",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        price=Decimal("100"),
+        quantity=Decimal("1"),
+        target_position_quantity=None,
+    )
+    alert_runtime = CapturingOrderFailureRuntime()
+
+    execution = execute_signal_for_account(
+        db_session,
+        user_id=user.id,
+        signal_id=signal.id,
+        exchange_account_id=account.id,
+        exchange=MockExchange(),
+        alert_runtime=alert_runtime,
+    )
+
+    event_text = str(alert_runtime.events[0])
+    assert execution.exchange_account_id not in event_text
+    assert execution.signal_id not in event_text
+    assert execution.client_order_id not in event_text
+    assert "BTCUSDT" not in event_text
+    assert "100" not in event_text
+    assert "1" not in event_text
 
 
 def test_order_engine_target_position_uses_delta_quantity(db_session: Session) -> None:
