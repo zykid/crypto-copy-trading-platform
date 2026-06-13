@@ -36,6 +36,17 @@ class RateLimitExceededError(RuntimeError):
         self.retry_after_seconds = retry_after_seconds
 
 
+class RateLimitAlertRuntime(Protocol):
+    def notify_rate_limit(
+        self,
+        *,
+        exchange_name: str,
+        scope: str,
+        request_category: str,
+        retry_after_seconds: int,
+    ) -> tuple[object, ...]: ...
+
+
 class RateLimitWindowStore(Protocol):
     def acquire(
         self,
@@ -115,9 +126,11 @@ class RuntimeRateLimitService:
         *,
         clock: Callable[[], float] = monotonic,
         store: RateLimitWindowStore | None = None,
+        alert_runtime: RateLimitAlertRuntime | None = None,
     ) -> None:
         self._clock = clock
         self._store = store or InMemoryRateLimitWindowStore()
+        self._alert_runtime = alert_runtime
 
     def acquire_testnet_order(
         self,
@@ -146,10 +159,31 @@ class RuntimeRateLimitService:
                 now=now,
             )
             if window.count > rule.limit:
+                self._notify_rate_limit_blocked(
+                    exchange_name=exchange_name,
+                    rule=rule,
+                    retry_after_seconds=window.retry_after_seconds,
+                )
                 raise RateLimitExceededError(
                     rule_name=rule.name,
                     retry_after_seconds=window.retry_after_seconds,
                 )
+
+    def _notify_rate_limit_blocked(
+        self,
+        *,
+        exchange_name: ExchangeName,
+        rule: RuntimeRateLimitRule,
+        retry_after_seconds: int,
+    ) -> None:
+        if self._alert_runtime is None:
+            return
+        self._alert_runtime.notify_rate_limit(
+            exchange_name=exchange_name.value,
+            scope=_safe_alert_scope(rule.scope),
+            request_category="order",
+            retry_after_seconds=retry_after_seconds,
+        )
 
 
 def _testnet_order_rules(exchange_name: ExchangeName) -> tuple[RuntimeRateLimitRule, ...]:
@@ -190,6 +224,14 @@ def _rate_limit_key(
 def _retry_after_seconds(*, now: float, started_at: float, interval_seconds: int) -> int:
     remaining = interval_seconds - int(now - started_at)
     return max(1, remaining)
+
+
+def _safe_alert_scope(scope: RateLimitScope) -> str:
+    if scope == RateLimitScope.IP:
+        return "ip"
+    if scope == RateLimitScope.ACCOUNT:
+        return "account"
+    return "global"
 
 
 def _escape_key_part(value: str) -> str:
