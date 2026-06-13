@@ -39,7 +39,7 @@ The production Compose file sets:
 - backup failure alerts through disabled-by-default external alert channels
 - safe dependency health alert construction, throttled dispatch, and disabled monitor tick helper
 - dependency health monitor environment variables that remain disabled by default
-- runnable dependency health monitor worker entrypoint for future service wiring
+- runnable dependency health monitor worker service behind the `monitoring` profile
 - backup file verification helper and restore drill runbook
 - production incident response runbook for restore and trading-freeze decisions
 - disabled-by-default Telegram, email, and webhook alert senders
@@ -74,11 +74,13 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail=200 b
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs --tail=200 caddy
 ```
 
-Start optional monitoring placeholders:
+Start optional monitoring placeholders and the dependency health monitor service:
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml --profile monitoring up -d prometheus grafana
+docker compose --env-file .env.prod -f docker-compose.prod.yml --profile monitoring up -d prometheus grafana dependency-health-monitor
 ```
+
+The dependency health monitor starts safely with `DEPENDENCY_HEALTH_MONITOR_ENABLED=false`. Set it to `true` only after configuring at least one external alert channel and confirming that the alert destination does not expose user, order, balance, position, or API secret data.
 
 Run an explicit PostgreSQL backup:
 
@@ -116,5 +118,4 @@ docker compose down -v
 This is not yet a complete production release. Remaining production work includes:
 
 - server-specific enablement of the backup timer on the target host
-- adding dependency health monitor worker service management in Compose or systemd
 - wiring guarded alert senders into additional operational events
