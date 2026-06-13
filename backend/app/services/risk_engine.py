@@ -1,11 +1,16 @@
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.exchange_account import AccountMode, ExchangeAccount
 from app.db.models.trading import OrderSide, RiskDecision, RiskSetting
+
+
+class EmergencyStopAlertRuntime(Protocol):
+    def notify_emergency_stop_enabled(self, *, scope: str) -> tuple[object, ...]: ...
 
 
 @dataclass(frozen=True)
@@ -54,13 +59,21 @@ def update_risk_settings(
     db: Session,
     settings: RiskSetting,
     data: dict[str, object],
+    *,
+    alert_runtime: EmergencyStopAlertRuntime | None = None,
 ) -> RiskSetting:
+    was_trading_enabled = settings.trading_enabled
     for key, value in data.items():
         if key == "blocked_symbols" and value is not None:
             value = sorted({str(symbol).upper() for symbol in value})
         setattr(settings, key, value)
     db.commit()
     db.refresh(settings)
+    if _risk_trading_was_disabled(
+        was_trading_enabled=was_trading_enabled,
+        data=data,
+    ):
+        _notify_emergency_stop_enabled(alert_runtime)
     return settings
 
 
@@ -89,3 +102,19 @@ def check_order_risk(
             reasons.append("single order notional exceeds limit")
     decision = RiskDecision.REJECTED if reasons else RiskDecision.PASSED
     return RiskCheckResult(decision=decision, reasons=reasons)
+
+
+def _risk_trading_was_disabled(
+    *,
+    was_trading_enabled: bool,
+    data: dict[str, object],
+) -> bool:
+    return was_trading_enabled and data.get("trading_enabled") is False
+
+
+def _notify_emergency_stop_enabled(
+    alert_runtime: EmergencyStopAlertRuntime | None,
+) -> None:
+    if alert_runtime is None:
+        return
+    alert_runtime.notify_emergency_stop_enabled(scope="account")
