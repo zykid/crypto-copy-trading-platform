@@ -1,5 +1,6 @@
 SAFE_DEPENDENCY_NAMES = frozenset({"database", "redis", "backend", "frontend", "caddy"})
 SAFE_DEPENDENCY_STATES = frozenset({"ok", "degraded", "unavailable", "unknown"})
+SAFE_EMERGENCY_STOP_SCOPES = frozenset({"account", "global"})
 SAFE_EXCHANGE_NAMES = frozenset({"binance", "bybit", "mock", "okx"})
 SAFE_ORDER_FAILURE_STATUSES = frozenset({"FAILED", "REJECTED", "TIMEOUT"})
 SAFE_ORDER_FAILURE_TYPES = frozenset(
@@ -15,9 +16,11 @@ SAFE_ORDER_FAILURE_TYPES = frozenset(
 SAFE_RATE_LIMIT_SCOPES = frozenset({"account", "global", "ip"})
 SAFE_RATE_LIMIT_REQUEST_CATEGORIES = frozenset({"market_data", "order", "private", "unknown"})
 DEPENDENCY_HEALTH_ALERT_KEY = "dependency_health"
+EMERGENCY_STOP_ALERT_KEY_PREFIX = "emergency_stop"
 ORDER_FAILURE_ALERT_KEY_PREFIX = "order_failure"
 RATE_LIMIT_ALERT_KEY_PREFIX = "rate_limit"
 DEFAULT_DEPENDENCY_ALERT_THROTTLE_SECONDS = 300
+DEFAULT_EMERGENCY_STOP_ALERT_THROTTLE_SECONDS = 300
 DEFAULT_ORDER_FAILURE_ALERT_THROTTLE_SECONDS = 300
 DEFAULT_RATE_LIMIT_ALERT_THROTTLE_SECONDS = 300
 
@@ -46,6 +49,22 @@ def build_dependency_health_alert(
             "component": "health_check",
             "status": status,
             "affected_dependencies": affected_value,
+        },
+    )
+
+
+def build_emergency_stop_alert(*, scope: str) -> object:
+    from app.services.external_alerts import ExternalAlertEvent
+
+    safe_scope = _safe_emergency_stop_scope(scope)
+    return ExternalAlertEvent(
+        severity="critical",
+        title="Emergency stop enabled",
+        message="New trading, copy trading, and strategy execution are blocked.",
+        metadata={
+            "component": "kill_switch",
+            "scope": safe_scope,
+            "new_orders_blocked": "true",
         },
     )
 
@@ -123,6 +142,33 @@ def maybe_send_dependency_health_alert(
 
     results = send_external_alert(config, event, transports)
     state[DEPENDENCY_HEALTH_ALERT_KEY] = now_seconds
+    return results
+
+
+def maybe_send_emergency_stop_alert(
+    *,
+    scope: str,
+    config: object,
+    now_seconds: int,
+    throttle_seconds: int = DEFAULT_EMERGENCY_STOP_ALERT_THROTTLE_SECONDS,
+    dispatch_state: dict[str, int] | None = None,
+    transports: object | None = None,
+) -> tuple[object, ...]:
+    event = build_emergency_stop_alert(scope=scope)
+    key = f"{EMERGENCY_STOP_ALERT_KEY_PREFIX}:{event.metadata['scope']}"
+    state = dispatch_state if dispatch_state is not None else {}
+    if _is_throttled(
+        state=state,
+        key=key,
+        now_seconds=now_seconds,
+        throttle_seconds=throttle_seconds,
+    ):
+        return ()
+
+    from app.services.external_alerts import send_external_alert
+
+    results = send_external_alert(config, event, transports)
+    state[key] = now_seconds
     return results
 
 
@@ -218,6 +264,13 @@ def _is_throttled(
 def _safe_state(value: str) -> str:
     normalized = value.strip().lower()
     if normalized in SAFE_DEPENDENCY_STATES:
+        return normalized
+    return "unknown"
+
+
+def _safe_emergency_stop_scope(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in SAFE_EMERGENCY_STOP_SCOPES:
         return normalized
     return "unknown"
 
