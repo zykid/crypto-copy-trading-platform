@@ -19,6 +19,29 @@ class ControlledClock:
         self.now += seconds
 
 
+class CapturingAlertRuntime:
+    def __init__(self) -> None:
+        self.events: list[dict[str, object]] = []
+
+    def notify_rate_limit(
+        self,
+        *,
+        exchange_name: str,
+        scope: str,
+        request_category: str,
+        retry_after_seconds: int,
+    ) -> tuple[object, ...]:
+        self.events.append(
+            {
+                "exchange_name": exchange_name,
+                "scope": scope,
+                "request_category": request_category,
+                "retry_after_seconds": retry_after_seconds,
+            }
+        )
+        return ()
+
+
 class FakeRedis:
     def __init__(self) -> None:
         self.values: dict[str, int] = {}
@@ -90,6 +113,75 @@ def test_runtime_rate_limiter_is_scoped_per_exchange_account_for_safety_rule() -
         exchange_account_id="acct-2",
         request_path="/api/v3/order",
     )
+
+
+def test_runtime_rate_limiter_alerts_when_repeated_order_is_blocked() -> None:
+    clock = ControlledClock()
+    alert_runtime = CapturingAlertRuntime()
+    limiter = RuntimeRateLimitService(clock=clock, alert_runtime=alert_runtime)
+
+    limiter.acquire_testnet_order(
+        exchange_name=ExchangeName.BINANCE,
+        exchange_account_id="acct-1",
+        request_path="/api/v3/order",
+    )
+
+    with pytest.raises(RateLimitExceededError):
+        limiter.acquire_testnet_order(
+            exchange_name=ExchangeName.BINANCE,
+            exchange_account_id="acct-1",
+            request_path="/api/v3/order",
+        )
+
+    assert alert_runtime.events == [
+        {
+            "exchange_name": "binance",
+            "scope": "account",
+            "request_category": "order",
+            "retry_after_seconds": 1,
+        }
+    ]
+
+
+def test_runtime_rate_limiter_alert_omits_account_and_request_path() -> None:
+    clock = ControlledClock()
+    alert_runtime = CapturingAlertRuntime()
+    limiter = RuntimeRateLimitService(clock=clock, alert_runtime=alert_runtime)
+
+    limiter.acquire_testnet_order(
+        exchange_name=ExchangeName.BINANCE,
+        exchange_account_id="acct-sensitive",
+        request_path="/api/v3/order",
+    )
+
+    with pytest.raises(RateLimitExceededError):
+        limiter.acquire_testnet_order(
+            exchange_name=ExchangeName.BINANCE,
+            exchange_account_id="acct-sensitive",
+            request_path="/api/v3/order",
+        )
+
+    event_text = str(alert_runtime.events[0])
+    assert "acct-sensitive" not in event_text
+    assert "/api/v3/order" not in event_text
+
+
+def test_runtime_rate_limiter_without_alert_runtime_keeps_existing_behavior() -> None:
+    clock = ControlledClock()
+    limiter = RuntimeRateLimitService(clock=clock)
+
+    limiter.acquire_testnet_order(
+        exchange_name=ExchangeName.BINANCE,
+        exchange_account_id="acct-1",
+        request_path="/api/v3/order",
+    )
+
+    with pytest.raises(RateLimitExceededError):
+        limiter.acquire_testnet_order(
+            exchange_name=ExchangeName.BINANCE,
+            exchange_account_id="acct-1",
+            request_path="/api/v3/order",
+        )
 
 
 def test_redis_rate_limit_store_sets_ttl_for_new_window() -> None:
