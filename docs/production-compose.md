@@ -18,6 +18,7 @@ This file documents the first production runtime skeleton for the platform. It i
 - `docs/external-alert-placeholders.md`
 - `docs/production-backups.md`
 - `docs/production-incident-response.md`
+- `docs/production-readiness-checklist.md`
 - `docs/restore-drill-runbook.md`
 - `docs/systemd-backup-timer.md`
 
