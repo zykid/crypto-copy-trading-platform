@@ -11,6 +11,8 @@ from app.schemas.trading import (
     TestnetOrderSubmitRequest,
     TestnetOrderSubmitResponse,
 )
+from app.services.external_alerts import ExternalAlertConfig
+from app.services.operational_alert_runtime import OperationalAlertRuntime
 from app.services.order_engine import execute_signal_for_account
 from app.services.rate_limit_service import RateLimitExceededError, runtime_rate_limit_service
 from app.services.testnet_http_client import create_testnet_signed_http_client
@@ -21,6 +23,7 @@ from app.services.testnet_order_api import (
 from app.services.testnet_order_execution import execute_testnet_order
 
 router = APIRouter()
+_operational_alert_dispatch_state: dict[str, int] = {}
 
 
 @router.post("/execute-signal/{signal_id}", response_model=OrderExecutionResponse)
@@ -36,6 +39,7 @@ def execute_signal(
             user_id=current_user.id,
             signal_id=signal_id,
             exchange_account_id=payload.exchange_account_id,
+            alert_runtime=_operational_alert_runtime(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -91,4 +95,26 @@ def submit_testnet_order(
         request_method=result.request_method,
         request_path=result.request_path,
         exchange_response=result.exchange_response,
+    )
+
+
+def _operational_alert_runtime() -> OperationalAlertRuntime:
+    return OperationalAlertRuntime(
+        ExternalAlertConfig(
+            telegram_enabled=settings.telegram_alerts_enabled,
+            telegram_bot_token=settings.telegram_bot_token,
+            telegram_chat_id=settings.telegram_chat_id,
+            email_enabled=settings.email_alerts_enabled,
+            smtp_host=settings.smtp_host,
+            smtp_port=settings.smtp_port,
+            smtp_username=settings.smtp_username,
+            smtp_password=settings.smtp_password,
+            alert_email_from=settings.alert_email_from,
+            alert_email_to=settings.alert_email_to,
+            webhook_enabled=settings.webhook_alerts_enabled,
+            webhook_url=settings.alert_webhook_url,
+            webhook_secret=settings.alert_webhook_secret,
+            timeout_seconds=settings.alert_timeout_seconds,
+        ),
+        dispatch_state=_operational_alert_dispatch_state,
     )
