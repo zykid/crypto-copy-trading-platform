@@ -101,7 +101,7 @@ def test_smoke_test_redacts_delivery_errors() -> None:
 
     assert len(results) == 1
     assert results[0].delivered is False
-    assert results[0].error_message == "network down ***"
+    assert results[0].error_message == "***"
 
 
 def test_smoke_test_main_returns_failure_when_delivery_fails(monkeypatch) -> None:
