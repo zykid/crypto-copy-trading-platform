@@ -77,6 +77,14 @@ Verify that a generated plain SQL backup file is readable before using it in a r
 python scripts/backup/verify_backup_file.py /srv/trading/backups/backup_YYYYMMDD.sql
 ```
 
+After installing the host systemd timer and running one backup, verify the timer and newest backup file together:
+
+```bash
+python scripts/backup/verify_systemd_backup_timer.py --backup-dir /srv/trading/backups
+```
+
+This check is read-only. It confirms that the timer is active, the service last completed successfully, and the latest `backup_YYYYMMDD.sql` passes the plain SQL structure checks.
+
 For an isolated restore drill, follow `docs/restore-drill-runbook.md`. Do not restore over the production database.
 
 ## Safety Notes

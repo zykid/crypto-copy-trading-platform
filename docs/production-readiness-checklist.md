@@ -8,6 +8,7 @@ This checklist tracks the remaining work before the platform can be considered a
 - `restart: unless-stopped` and service health checks for production containers.
 - Docker log rotation through bounded `json-file` settings.
 - PostgreSQL backup job, backup verification helper, restore drill runbook, and systemd timer templates.
+- Host systemd backup timer installation and verification runbook with a read-only timer validation script.
 - Guarded Telegram, email, and webhook alert senders disabled by default.
 - Safe operational alert helpers for dependency health, backup failure, emergency stop, order failure, rate-limit events, and reconciliation drift.
 - Non-blocking operational alert runtime bridge for future service integrations.
@@ -21,12 +22,11 @@ This checklist tracks the remaining work before the platform can be considered a
 
 ## Remaining Tasks
 
-1. Enable the backup systemd timer on the target Ubuntu host and verify that `backup_YYYYMMDD.sql` files are created in the intended directory.
-2. Add production deployment verification steps for Caddy HTTPS certificate issuance and private access through Tailscale.
-3. Add Prometheus scrape verification and starter Grafana dashboard documentation for backend health and dependency state.
-4. Add backup retention guidance and a non-destructive cleanup script that never deletes active PostgreSQL volumes.
-5. Add operational runbook steps for disabling TESTNET adapters and confirming `REAL` remains unavailable by default.
-6. Add an explicit production preflight checklist covering secrets, API key withdrawal permissions, account mode, database backup, restore drill, monitoring, alerts, and rollback.
+1. Add production deployment verification steps for Caddy HTTPS certificate issuance and private access through Tailscale.
+2. Add Prometheus scrape verification and starter Grafana dashboard documentation for backend health and dependency state.
+3. Add backup retention guidance and a non-destructive cleanup script that never deletes active PostgreSQL volumes.
+4. Add operational runbook steps for disabling TESTNET adapters and confirming `REAL` remains unavailable by default.
+5. Add an explicit production preflight checklist covering secrets, API key withdrawal permissions, account mode, database backup, restore drill, monitoring, alerts, and rollback.
 
 ## Safety Notes
 
