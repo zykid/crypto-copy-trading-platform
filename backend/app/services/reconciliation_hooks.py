@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Protocol
 
 from app.services.position_reconciliation import (
     PositionReconciliationDifference,
@@ -14,6 +15,16 @@ class ReconciliationNotificationChannel(StrEnum):
     TELEGRAM = "TELEGRAM"
     EMAIL = "EMAIL"
     WEBHOOK = "WEBHOOK"
+
+
+class ReconciliationDriftAlertRuntime(Protocol):
+    def notify_reconciliation_drift(
+        self,
+        *,
+        status: str,
+        severity: str,
+        difference_count: int,
+    ) -> tuple[object, ...]: ...
 
 
 @dataclass(frozen=True)
@@ -55,6 +66,7 @@ def build_reconciliation_hook_plan(
     notification_channels: tuple[ReconciliationNotificationChannel, ...] = (
         ReconciliationNotificationChannel.INTERNAL,
     ),
+    alert_runtime: ReconciliationDriftAlertRuntime | None = None,
 ) -> ReconciliationHookPlan:
     payload = _report_payload(report)
     is_drift = report.status == PositionReconciliationStatus.DRIFT_DETECTED
@@ -76,11 +88,27 @@ def build_reconciliation_hook_plan(
         for channel in notification_channels
         if is_drift
     )
+    if is_drift:
+        _notify_reconciliation_drift(alert_runtime=alert_runtime, report=report)
     return ReconciliationHookPlan(
         audit_entry=audit_entry,
         system_event=system_event,
         notifications=tuple(notifications),
         auto_fix_allowed=False,
+    )
+
+
+def _notify_reconciliation_drift(
+    *,
+    alert_runtime: ReconciliationDriftAlertRuntime | None,
+    report: PositionReconciliationReport,
+) -> None:
+    if alert_runtime is None:
+        return
+    alert_runtime.notify_reconciliation_drift(
+        status=report.status.value,
+        severity=report.severity.value,
+        difference_count=len(report.differences),
     )
 
 

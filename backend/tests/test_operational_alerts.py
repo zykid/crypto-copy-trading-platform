@@ -4,10 +4,12 @@ from app.services.operational_alerts import (
     build_emergency_stop_alert,
     build_order_failure_alert,
     build_rate_limit_alert,
+    build_reconciliation_drift_alert,
     maybe_send_dependency_health_alert,
     maybe_send_emergency_stop_alert,
     maybe_send_order_failure_alert,
     maybe_send_rate_limit_alert,
+    maybe_send_reconciliation_drift_alert,
 )
 
 
@@ -152,6 +154,41 @@ def test_rate_limit_alert_uses_only_safe_operational_fields() -> None:
     assert "super-secret" not in event_text
     assert "acct-123" not in event_text
     assert "signature" not in event_text
+
+
+def test_reconciliation_drift_alert_ignores_matched_status() -> None:
+    event = build_reconciliation_drift_alert(
+        status="MATCHED",
+        severity="OK",
+        difference_count=0,
+    )
+
+    assert event is None
+
+
+def test_reconciliation_drift_alert_uses_only_safe_operational_fields() -> None:
+    event = build_reconciliation_drift_alert(
+        status="DRIFT_DETECTED",
+        severity="critical user_id acct BTCUSDT 0.7",
+        difference_count=9_999,
+    )
+
+    assert event is not None
+    assert event.severity == "warning"
+    assert event.title == "Position reconciliation drift detected"
+    assert event.message == "Position reconciliation detected drift that requires operator review."
+    assert event.metadata == {
+        "component": "position_reconciliation",
+        "status": "DRIFT_DETECTED",
+        "severity": "WARNING",
+        "difference_count": "1000",
+        "auto_fix_allowed": "false",
+    }
+    event_text = f"{event.title} {event.message} {event.metadata}"
+    assert "user_id" not in event_text
+    assert "acct" not in event_text
+    assert "BTCUSDT" not in event_text
+    assert "0.7" not in event_text
 
 
 def test_emergency_stop_dispatch_sends_safe_event() -> None:
@@ -323,6 +360,66 @@ def test_rate_limit_dispatch_is_throttled_within_window() -> None:
 
     assert results == ()
     assert state == {"rate_limit:binance:account:order": 100}
+    assert http.requests == []
+
+
+def test_reconciliation_drift_dispatch_sends_safe_event() -> None:
+    http = CapturingHttpTransport()
+    state: dict[str, int] = {}
+    config = ExternalAlertConfig(
+        webhook_enabled=True,
+        webhook_url="https://alerts.example/hooks/token",
+    )
+
+    results = maybe_send_reconciliation_drift_alert(
+        status="DRIFT_DETECTED",
+        severity="CRITICAL",
+        difference_count=2,
+        config=config,
+        now_seconds=100,
+        dispatch_state=state,
+        transports=ExternalAlertTransports(http=http),
+    )
+
+    assert len(results) == 1
+    assert results[0].delivered is True
+    assert state == {"reconciliation_drift:CRITICAL": 100}
+    assert len(http.requests) == 1
+    assert http.requests[0]["payload"] == {
+        "severity": "critical",
+        "title": "Position reconciliation drift detected",
+        "message": "Position reconciliation detected drift that requires operator review.",
+        "metadata": {
+            "component": "position_reconciliation",
+            "status": "DRIFT_DETECTED",
+            "severity": "CRITICAL",
+            "difference_count": "2",
+            "auto_fix_allowed": "false",
+        },
+    }
+
+
+def test_reconciliation_drift_dispatch_is_throttled_within_window() -> None:
+    http = CapturingHttpTransport()
+    state = {"reconciliation_drift:WARNING": 100}
+    config = ExternalAlertConfig(
+        webhook_enabled=True,
+        webhook_url="https://alerts.example/hooks/token",
+    )
+
+    results = maybe_send_reconciliation_drift_alert(
+        status="DRIFT_DETECTED",
+        severity="WARNING",
+        difference_count=1,
+        config=config,
+        now_seconds=200,
+        throttle_seconds=300,
+        dispatch_state=state,
+        transports=ExternalAlertTransports(http=http),
+    )
+
+    assert results == ()
+    assert state == {"reconciliation_drift:WARNING": 100}
     assert http.requests == []
 
 

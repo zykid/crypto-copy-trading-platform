@@ -105,3 +105,37 @@ def test_runtime_sends_rate_limit_alert_with_safe_payload() -> None:
             "retry_after_seconds": "5",
         },
     }
+
+
+def test_runtime_sends_reconciliation_drift_alert_with_safe_payload() -> None:
+    http = CapturingHttpTransport()
+    runtime = OperationalAlertRuntime(
+        ExternalAlertConfig(
+            webhook_enabled=True,
+            webhook_url="https://alerts.example/hooks/token",
+        ),
+        now_seconds_factory=lambda: 100,
+        transports=ExternalAlertTransports(http=http),
+    )
+
+    results = runtime.notify_reconciliation_drift(
+        status="DRIFT_DETECTED",
+        severity="CRITICAL",
+        difference_count=2,
+    )
+
+    assert len(results) == 1
+    assert results[0].delivered is True
+    assert runtime.dispatch_state == {"reconciliation_drift:CRITICAL": 100}
+    assert http.requests[0]["payload"] == {
+        "severity": "critical",
+        "title": "Position reconciliation drift detected",
+        "message": "Position reconciliation detected drift that requires operator review.",
+        "metadata": {
+            "component": "position_reconciliation",
+            "status": "DRIFT_DETECTED",
+            "severity": "CRITICAL",
+            "difference_count": "2",
+            "auto_fix_allowed": "false",
+        },
+    }

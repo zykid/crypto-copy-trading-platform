@@ -102,6 +102,8 @@ External alerts should use coarse operational messages such as:
 - `maybe_send_order_failure_alert` dispatches the safe order failure event through the same guarded sender and throttles repeated events by terminal status and failure type.
 - `build_rate_limit_alert` converts runtime rate-limit protection events into a `Rate limit protection triggered` event with only component, exchange, scope, request category, and bounded retry-after metadata.
 - `maybe_send_rate_limit_alert` dispatches the safe rate-limit event and throttles repeated events by exchange, scope, and request category.
+- `build_reconciliation_drift_alert` converts position reconciliation drift into a `Position reconciliation drift detected` event with only component, status, severity, bounded difference count, and auto-fix-disabled metadata.
+- `maybe_send_reconciliation_drift_alert` dispatches the safe reconciliation drift event and throttles repeated events by severity.
 
 `app.services.operational_alert_runtime` provides a small runtime bridge for service integrations. It centralizes the external alert config, dispatch throttle state, timestamp source, and optional transports. Its notification methods keep alert delivery non-blocking and return an empty result when alert configuration or delivery fails, so trading safety decisions never depend on a third-party alert destination.
 
@@ -110,6 +112,8 @@ External alerts should use coarse operational messages such as:
 `app.api.v1.orders` wires order terminal failure alerts into manual signal execution. When the order engine stores a terminal `FAILED` execution because the order is risk-rejected or zero-quantity, it emits only terminal status and coarse failure type through the runtime bridge. The alert omits user IDs, account IDs, signal IDs, execution IDs, client order IDs, exchange order IDs, symbols, side, order type, quantities, prices, risk reasons, error messages, request paths, and exchange responses.
 
 `app.services.rate_limit_service.RuntimeRateLimitService` can accept an optional operational alert runtime. When one is explicitly injected, repeated testnet order requests blocked by runtime rate-limit protection emit only safe rate-limit metadata: exchange name, coarse scope, request category, and bounded retry-after seconds. The alert payload omits exchange account IDs, request paths, user data, order IDs, quantities, prices, and exchange responses. The default global limiter still has no alert runtime attached.
+
+`app.services.reconciliation_hooks` wires position reconciliation drift into the operational alert runtime. The internal audit and system event plans still retain reconciliation details for authorized backend use, while the external alert runtime receives only safe operational metadata: drift status, severity, bounded difference count, and auto-fix-disabled intent. The external alert payload omits user IDs, exchange account IDs, symbols, balances, position quantities, deltas, reasons, target quantities, request paths, actor identity, order IDs, signals, and exchange responses.
 
 `app.services.dependency_health_monitor` provides a disabled-by-default monitor tick helper. It validates interval and throttle settings, skips the health check provider while disabled, and reuses the guarded dependency health alert sender when explicitly enabled by runtime wiring.
 
@@ -130,8 +134,6 @@ python -m app.workers.external_alert_smoke_test
 The command reads the guarded external alert settings and sends only a synthetic `External alert smoke test` event when at least one channel is explicitly enabled. If all channels are disabled, it exits successfully without sending anything. The payload contains only `component=external_alerts` and `event_type=smoke_test` metadata.
 
 The first wired delivery integration point is PostgreSQL backup failure reporting. The backup script sends only a coarse `PostgreSQL backup failed` event with component and error type metadata. Alert delivery errors do not change the backup job's failure code.
-
-Reconciliation drift alert helpers are available for explicit service integration, but they do not automatically alter order execution behavior. When wired into trading flows, alert delivery must stay non-blocking and must not include user, account, order, quantity, price, signal, client order, request path, actor identity, or exchange response data.
 
 ## Operational Guidance
 

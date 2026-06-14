@@ -15,14 +15,18 @@ SAFE_ORDER_FAILURE_TYPES = frozenset(
 )
 SAFE_RATE_LIMIT_SCOPES = frozenset({"account", "global", "ip"})
 SAFE_RATE_LIMIT_REQUEST_CATEGORIES = frozenset({"market_data", "order", "private", "unknown"})
+SAFE_RECONCILIATION_SEVERITIES = frozenset({"WARNING", "CRITICAL"})
+SAFE_RECONCILIATION_STATUSES = frozenset({"DRIFT_DETECTED"})
 DEPENDENCY_HEALTH_ALERT_KEY = "dependency_health"
 EMERGENCY_STOP_ALERT_KEY_PREFIX = "emergency_stop"
 ORDER_FAILURE_ALERT_KEY_PREFIX = "order_failure"
 RATE_LIMIT_ALERT_KEY_PREFIX = "rate_limit"
+RECONCILIATION_DRIFT_ALERT_KEY_PREFIX = "reconciliation_drift"
 DEFAULT_DEPENDENCY_ALERT_THROTTLE_SECONDS = 300
 DEFAULT_EMERGENCY_STOP_ALERT_THROTTLE_SECONDS = 300
 DEFAULT_ORDER_FAILURE_ALERT_THROTTLE_SECONDS = 300
 DEFAULT_RATE_LIMIT_ALERT_THROTTLE_SECONDS = 300
+DEFAULT_RECONCILIATION_DRIFT_ALERT_THROTTLE_SECONDS = 300
 
 
 def build_dependency_health_alert(
@@ -112,6 +116,34 @@ def build_rate_limit_alert(
             "scope": safe_scope,
             "request_category": safe_request_category,
             "retry_after_seconds": safe_retry_after_seconds,
+        },
+    )
+
+
+def build_reconciliation_drift_alert(
+    *,
+    status: str,
+    severity: str,
+    difference_count: int,
+) -> object | None:
+    safe_status = _safe_reconciliation_status(status)
+    if safe_status is None:
+        return None
+
+    from app.services.external_alerts import ExternalAlertEvent
+
+    safe_severity = _safe_reconciliation_severity(severity)
+    safe_difference_count = str(max(0, min(difference_count, 1_000)))
+    return ExternalAlertEvent(
+        severity="critical" if safe_severity == "CRITICAL" else "warning",
+        title="Position reconciliation drift detected",
+        message="Position reconciliation detected drift that requires operator review.",
+        metadata={
+            "component": "position_reconciliation",
+            "status": safe_status,
+            "severity": safe_severity,
+            "difference_count": safe_difference_count,
+            "auto_fix_allowed": "false",
         },
     )
 
@@ -247,6 +279,43 @@ def maybe_send_rate_limit_alert(
     return results
 
 
+def maybe_send_reconciliation_drift_alert(
+    *,
+    status: str,
+    severity: str,
+    difference_count: int,
+    config: object,
+    now_seconds: int,
+    throttle_seconds: int = DEFAULT_RECONCILIATION_DRIFT_ALERT_THROTTLE_SECONDS,
+    dispatch_state: dict[str, int] | None = None,
+    transports: object | None = None,
+) -> tuple[object, ...]:
+    event = build_reconciliation_drift_alert(
+        status=status,
+        severity=severity,
+        difference_count=difference_count,
+    )
+    if event is None:
+        return ()
+
+    safe_severity = str(event.metadata["severity"])
+    key = f"{RECONCILIATION_DRIFT_ALERT_KEY_PREFIX}:{safe_severity}"
+    state = dispatch_state if dispatch_state is not None else {}
+    if _is_throttled(
+        state=state,
+        key=key,
+        now_seconds=now_seconds,
+        throttle_seconds=throttle_seconds,
+    ):
+        return ()
+
+    from app.services.external_alerts import send_external_alert
+
+    results = send_external_alert(config, event, transports)
+    state[key] = now_seconds
+    return results
+
+
 def _is_throttled(
     state: dict[str, int],
     key: str,
@@ -308,3 +377,17 @@ def _safe_rate_limit_request_category(value: str) -> str:
     if normalized in SAFE_RATE_LIMIT_REQUEST_CATEGORIES:
         return normalized
     return "unknown"
+
+
+def _safe_reconciliation_status(value: str) -> str | None:
+    normalized = value.strip().upper()
+    if normalized in SAFE_RECONCILIATION_STATUSES:
+        return normalized
+    return None
+
+
+def _safe_reconciliation_severity(value: str) -> str:
+    normalized = value.strip().upper()
+    if normalized in SAFE_RECONCILIATION_SEVERITIES:
+        return normalized
+    return "WARNING"

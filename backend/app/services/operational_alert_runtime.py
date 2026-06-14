@@ -6,6 +6,7 @@ from app.services.operational_alerts import (
     maybe_send_emergency_stop_alert,
     maybe_send_order_failure_alert,
     maybe_send_rate_limit_alert,
+    maybe_send_reconciliation_drift_alert,
 )
 
 
@@ -67,6 +68,26 @@ class OperationalAlertRuntime:
                 scope=scope,
                 request_category=request_category,
                 retry_after_seconds=retry_after_seconds,
+                config=self.config,
+                now_seconds=self.now_seconds_factory(),
+                dispatch_state=self.dispatch_state,
+                transports=self.transports,
+            )
+        except Exception:
+            return ()
+
+    def notify_reconciliation_drift(
+        self,
+        *,
+        status: str,
+        severity: str,
+        difference_count: int,
+    ) -> tuple[object, ...]:
+        try:
+            return maybe_send_reconciliation_drift_alert(
+                status=status,
+                severity=severity,
+                difference_count=difference_count,
                 config=self.config,
                 now_seconds=self.now_seconds_factory(),
                 dispatch_state=self.dispatch_state,

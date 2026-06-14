@@ -12,11 +12,33 @@ from app.services.reconciliation_hooks import (
 )
 
 
+class CapturingReconciliationAlertRuntime:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def notify_reconciliation_drift(
+        self,
+        *,
+        status: str,
+        severity: str,
+        difference_count: int,
+    ) -> tuple[object, ...]:
+        self.calls.append(
+            {
+                "status": status,
+                "severity": severity,
+                "difference_count": difference_count,
+            }
+        )
+        return ()
+
+
 def snapshot(symbol: str, quantity: str) -> PositionQuantitySnapshot:
     return PositionQuantitySnapshot(symbol=symbol, quantity=Decimal(quantity))
 
 
 def test_build_reconciliation_hook_plan_records_matched_audit_without_notifications() -> None:
+    runtime = CapturingReconciliationAlertRuntime()
     report = reconcile_position_snapshots(
         user_id="user-1",
         exchange_account_id="acct-1",
@@ -25,7 +47,7 @@ def test_build_reconciliation_hook_plan_records_matched_audit_without_notificati
         target_positions=(snapshot("BTCUSDT", "1"),),
     )
 
-    plan = build_reconciliation_hook_plan(report)
+    plan = build_reconciliation_hook_plan(report, alert_runtime=runtime)
 
     assert plan.audit_entry.action == "position_reconciliation.matched"
     assert plan.audit_entry.severity == PositionReconciliationSeverity.OK
@@ -34,6 +56,7 @@ def test_build_reconciliation_hook_plan_records_matched_audit_without_notificati
     assert plan.system_event is None
     assert plan.notifications == ()
     assert plan.auto_fix_allowed is False
+    assert runtime.calls == []
 
 
 def test_build_reconciliation_hook_plan_records_drift_event_and_notification() -> None:
@@ -108,3 +131,30 @@ def test_build_reconciliation_hook_plan_supports_reserved_notification_channels(
         ReconciliationNotificationChannel.WEBHOOK,
     )
     assert all(item.title == "Position reconciliation CRITICAL" for item in plan.notifications)
+
+
+def test_reconciliation_drift_alert_runtime_receives_only_safe_operational_fields() -> None:
+    runtime = CapturingReconciliationAlertRuntime()
+    report = reconcile_position_snapshots(
+        user_id="sensitive-user-id",
+        exchange_account_id="sensitive-account-id",
+        exchange_positions=(snapshot("BTCUSDT", "1"),),
+        database_positions=(snapshot("BTCUSDT", "0.7"),),
+        target_positions=(snapshot("BTCUSDT", "1"),),
+    )
+
+    build_reconciliation_hook_plan(report, alert_runtime=runtime)
+
+    assert runtime.calls == [
+        {
+            "status": "DRIFT_DETECTED",
+            "severity": "WARNING",
+            "difference_count": 1,
+        }
+    ]
+    call_text = str(runtime.calls[0])
+    assert "sensitive-user-id" not in call_text
+    assert "sensitive-account-id" not in call_text
+    assert "BTCUSDT" not in call_text
+    assert "0.7" not in call_text
+    assert "0.3" not in call_text
