@@ -1,6 +1,6 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, safe operational alert helpers, PostgreSQL backup job wiring, backup failure alert wiring, disabled-by-default dependency health monitor helpers, frontend production image wiring, systemd backup timer templates, restore drill guidance, production incident response guidance, backup retention guidance, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, safe operational alert helpers, PostgreSQL backup job wiring, backup failure alert wiring, disabled-by-default dependency health monitor helpers, frontend production image wiring, systemd backup timer templates, restore drill guidance, production incident response guidance, backup retention guidance, Compose project isolation, and log rotation, but it does not enable real trading.
 
 ## Files
 
@@ -32,6 +32,7 @@ This file documents the first production runtime skeleton for the platform. It i
 
 The production Compose file sets:
 
+- explicit Compose project name `trading-prod`
 - `restart: unless-stopped` for long-running services
 - health checks for PostgreSQL, Redis, and the backend API
 - named production volumes for PostgreSQL, Redis, Caddy, Prometheus, and Grafana
@@ -53,6 +54,12 @@ The production Compose file sets:
 - production incident response runbook for restore and trading-freeze decisions
 - disabled-by-default Telegram, email, and webhook alert senders
 - `TESTNET_ADAPTERS_ENABLED=false` by default
+
+## Compose Project Isolation
+
+`docker-compose.prod.yml` declares `name: trading-prod`. The development Compose file declares `name: trading-dev`. Keep these names in place so production-like tests, production deployments, and development containers are managed as separate Compose projects even when commands are run from the same repository directory.
+
+When running recovery drills on a shared Ubuntu test host, start and stop the production stack with `docker-compose.prod.yml` only. Do not use development Compose commands to manage production containers, and do not use production Compose commands to manage development containers.
 
 ## HTTPS Reverse Proxy
 
@@ -112,6 +119,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml down --remove-orp
 - Do not enable testnet trading unless that specific testnet phase is being executed manually.
 - Keep withdrawal permissions disabled on exchange API keys when later testing with exchange accounts.
 - Keep backup and restore drills separate from destructive Docker cleanup commands.
+- Keep development and production Compose project names isolated.
 - Review backup retention dry-run output before applying deletion of old backup files.
 - Do not expose Prometheus or Grafana publicly without authentication and network controls.
 - Do not send user, account, order, balance, or API secret data through external alerts.
