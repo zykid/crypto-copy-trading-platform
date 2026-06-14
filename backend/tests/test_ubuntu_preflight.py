@@ -45,17 +45,7 @@ def test_validate_compose_safety_rejects_destructive_command() -> None:
 
 
 def test_run_preflight_accepts_safe_mock_repository(tmp_path: Path) -> None:
-    (tmp_path / "backend").mkdir()
-    (tmp_path / "frontend").mkdir()
-    (tmp_path / "scripts" / "integration").mkdir(parents=True)
-    (tmp_path / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
-    (tmp_path / ".env.example").write_text("ENVIRONMENT=development\n", encoding="utf-8")
-    (tmp_path / "backend" / "Dockerfile").write_text("FROM python:3.12\n", encoding="utf-8")
-    (tmp_path / "frontend" / "Dockerfile").write_text("FROM node:22\n", encoding="utf-8")
-    (tmp_path / "scripts" / "integration" / "mock_compose_check.py").write_text(
-        "print('ok')\n",
-        encoding="utf-8",
-    )
+    _write_minimal_repo(tmp_path)
     env_file = tmp_path / ".env"
     env_file.write_text(
         "ENVIRONMENT=development\nTESTNET_ADAPTERS_ENABLED=false\n",
@@ -70,5 +60,21 @@ def test_run_preflight_accepts_safe_mock_repository(tmp_path: Path) -> None:
 
 
 def test_run_preflight_rejects_missing_env_file(tmp_path: Path) -> None:
+    _write_minimal_repo(tmp_path)
+
     with pytest.raises(UbuntuIntegrationPreflightError, match="Environment file"):
         run_preflight(tmp_path, tmp_path / ".env")
+
+
+def _write_minimal_repo(repo_root: Path) -> None:
+    (repo_root / "backend").mkdir()
+    (repo_root / "frontend").mkdir()
+    (repo_root / "scripts" / "integration").mkdir(parents=True)
+    (repo_root / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    (repo_root / ".env.example").write_text("ENVIRONMENT=development\n", encoding="utf-8")
+    (repo_root / "backend" / "Dockerfile").write_text("FROM python:3.12\n", encoding="utf-8")
+    (repo_root / "frontend" / "Dockerfile").write_text("FROM node:22\n", encoding="utf-8")
+    (repo_root / "scripts" / "integration" / "mock_compose_check.py").write_text(
+        "print('ok')\n",
+        encoding="utf-8",
+    )
