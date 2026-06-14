@@ -1,3 +1,6 @@
+with open("../docker-compose.yml", encoding="utf-8") as compose_file:
+    DEVELOPMENT_COMPOSE = compose_file.read()
+
 with open("../docker-compose.prod.yml", encoding="utf-8") as compose_file:
     PRODUCTION_COMPOSE = compose_file.read()
 
@@ -14,6 +17,13 @@ def service_block(service_name: str) -> str:
             break
 
     return "\n".join(lines[start:end])
+
+
+def test_compose_project_names_are_explicitly_isolated() -> None:
+    assert DEVELOPMENT_COMPOSE.startswith("name: trading-dev\n")
+    assert PRODUCTION_COMPOSE.startswith("name: trading-prod\n")
+    assert "container_name: trading-dev-backend" in DEVELOPMENT_COMPOSE
+    assert "container_name: trading-prod-backend" in PRODUCTION_COMPOSE
 
 
 def test_dependency_health_monitor_service_is_guarded() -> None:
