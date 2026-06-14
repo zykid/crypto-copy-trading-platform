@@ -44,6 +44,8 @@ The backend metrics currently include:
 - `trading_real_trading_enabled 0`
 - `trading_testnet_adapters_enabled` as a 0/1 flag
 
+Follow `docs/prometheus-grafana-verification.md` to verify targets and build the starter Grafana dashboard.
+
 ## Metrics Review Checklist
 
 Backend metrics must not contain:

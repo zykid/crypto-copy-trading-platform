@@ -1,6 +1,6 @@
 # Production Compose Skeleton
 
-This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, safe operational alert helpers, PostgreSQL backup job wiring, backup failure alert wiring, disabled-by-default dependency health monitor helpers, frontend production image wiring, systemd backup timer templates, restore drill guidance, production incident response guidance, and log rotation, but it does not enable real trading.
+This file documents the first production runtime skeleton for the platform. It is intentionally conservative: it improves process supervision, health checks, HTTPS reverse proxy wiring, optional monitoring placeholders, safe backend metrics scraping, guarded external alert senders, safe operational alert helpers, PostgreSQL backup job wiring, backup failure alert wiring, disabled-by-default dependency health monitor helpers, frontend production image wiring, systemd backup timer templates, restore drill guidance, production incident response guidance, backup retention guidance, and log rotation, but it does not enable real trading.
 
 ## Files
 
@@ -13,14 +13,20 @@ This file documents the first production runtime skeleton for the platform. It i
 - `deploy/systemd/trading-postgres-backup.service`
 - `deploy/systemd/trading-postgres-backup.timer`
 - `scripts/backup/verify_backup_file.py`
+- `scripts/backup/verify_systemd_backup_timer.py`
+- `scripts/backup/retention_cleanup.py`
+- `docs/caddy-tailscale-verification.md`
 - `docs/frontend-production-image.md`
 - `docs/monitoring-placeholders.md`
+- `docs/prometheus-grafana-verification.md`
 - `docs/external-alert-placeholders.md`
 - `docs/production-backups.md`
 - `docs/production-incident-response.md`
+- `docs/production-preflight-checklist.md`
 - `docs/production-readiness-checklist.md`
 - `docs/restore-drill-runbook.md`
 - `docs/systemd-backup-timer.md`
+- `docs/testnet-real-mode-runbook.md`
 
 ## Runtime Properties
 
@@ -43,7 +49,7 @@ The production Compose file sets:
 - runnable dependency health monitor worker service behind the `monitoring` profile
 - safe emergency stop, order failure, and rate-limit alert construction with throttled dispatch helpers
 - non-blocking operational alert runtime bridge for future trading-service integration points
-- backup file verification helper and restore drill runbook
+- backup file verification helper, systemd timer verification helper, retention dry-run helper, and restore drill runbook
 - production incident response runbook for restore and trading-freeze decisions
 - disabled-by-default Telegram, email, and webhook alert senders
 - `TESTNET_ADAPTERS_ENABLED=false` by default
@@ -59,6 +65,8 @@ Caddy terminates HTTPS and routes traffic inside the Compose network:
 - all other requests -> frontend
 
 Before using the production proxy, point `PUBLIC_DOMAIN` DNS to the server and make sure inbound ports 80 and 443 are reachable. Caddy needs port 80 or DNS-compatible challenge support to issue certificates.
+
+Follow `docs/caddy-tailscale-verification.md` to verify HTTPS issuance and private Tailscale access.
 
 ## Start Command
 
@@ -104,21 +112,10 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml down --remove-orp
 - Do not enable testnet trading unless that specific testnet phase is being executed manually.
 - Keep withdrawal permissions disabled on exchange API keys when later testing with exchange accounts.
 - Keep backup and restore drills separate from destructive Docker cleanup commands.
+- Review backup retention dry-run output before applying deletion of old backup files.
 - Do not expose Prometheus or Grafana publicly without authentication and network controls.
 - Do not send user, account, order, balance, or API secret data through external alerts.
 
-Do not use:
-
-```bash
-docker system prune
-docker volume prune
-docker network prune
-docker compose down -v
-```
-
 ## Known Gaps
 
-This is not yet a complete production release. Remaining production work includes:
-
-- server-specific enablement of the backup timer on the target host
-- explicit runtime wiring from trading services to the guarded operational alert helpers
+This is not yet a complete production release. Remaining production work includes server-specific execution of the preflight checklist and separate approval for later TESTNET or REAL phases.

@@ -9,6 +9,11 @@ This checklist tracks the remaining work before the platform can be considered a
 - Docker log rotation through bounded `json-file` settings.
 - PostgreSQL backup job, backup verification helper, restore drill runbook, and systemd timer templates.
 - Host systemd backup timer installation and verification runbook with a read-only timer validation script.
+- Backup retention guidance and non-destructive cleanup helper with dry-run default behavior.
+- Caddy HTTPS certificate verification and private Tailscale access runbook.
+- Prometheus scrape verification and starter Grafana dashboard documentation.
+- TESTNET adapter disablement and REAL-unavailable safety runbook.
+- Explicit production preflight checklist for secrets, account mode, backups, monitoring, alerts, and rollback.
 - Guarded Telegram, email, and webhook alert senders disabled by default.
 - Safe operational alert helpers for dependency health, backup failure, emergency stop, order failure, rate-limit events, and reconciliation drift.
 - Non-blocking operational alert runtime bridge for future service integrations.
@@ -22,15 +27,21 @@ This checklist tracks the remaining work before the platform can be considered a
 
 ## Remaining Tasks
 
-1. Add production deployment verification steps for Caddy HTTPS certificate issuance and private access through Tailscale.
-2. Add Prometheus scrape verification and starter Grafana dashboard documentation for backend health and dependency state.
-3. Add backup retention guidance and a non-destructive cleanup script that never deletes active PostgreSQL volumes.
-4. Add operational runbook steps for disabling TESTNET adapters and confirming `REAL` remains unavailable by default.
-5. Add an explicit production preflight checklist covering secrets, API key withdrawal permissions, account mode, database backup, restore drill, monitoring, alerts, and rollback.
+No production-readiness documentation tasks remain in this checklist. This does not mean the system is approved for REAL trading.
+
+## Next Phase Gate
+
+Before moving beyond this GitHub and mock-integration phase, complete a separate operator review for:
+
+- Target host provisioning and Tailscale access.
+- Staging `.env.prod` values stored outside GitHub.
+- Restore drill execution on an isolated database.
+- TESTNET adapter enablement only in the approved testnet phase.
+- REAL trading approval only in the later small-funds validation phase.
 
 ## Safety Notes
 
 - Keep all external alert channels disabled until destinations are configured and tested.
 - Do not send user, account, order, balance, position, signal, client order, exchange response, or API secret data through alerts.
-- Do not use Docker prune commands or `docker compose down -v` for this project.
+- Do not use destructive Docker cleanup commands for this project.
 - This checklist does not enable real trading; REAL mode requires a later, separate small-funds validation phase.

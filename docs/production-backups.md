@@ -8,6 +8,7 @@ Set a host directory in `.env.prod`:
 
 ```bash
 POSTGRES_BACKUP_DIR=/srv/trading/backups
+POSTGRES_BACKUP_RETENTION_DAYS=30
 ```
 
 Create it on the server and restrict access before running backups:
@@ -87,21 +88,29 @@ This check is read-only. It confirms that the timer is active, the service last 
 
 For an isolated restore drill, follow `docs/restore-drill-runbook.md`. Do not restore over the production database.
 
+## Retention Cleanup
+
+Retention cleanup is intentionally separate from backup creation. Always inspect a dry run first:
+
+```bash
+python scripts/backup/retention_cleanup.py --backup-dir /srv/trading/backups --retention-days 30
+```
+
+Apply deletion only after confirming off-server copies, restore drills, and disk capacity:
+
+```bash
+python scripts/backup/retention_cleanup.py --backup-dir /srv/trading/backups --retention-days 30 --apply
+```
+
+The cleanup helper only considers files named `backup_YYYYMMDD.sql`. It ignores other files and directories, and it does not touch Docker volumes, containers, networks, or database files.
+
 ## Safety Notes
 
 - `POSTGRES_PASSWORD` is passed to `pg_dump` through `PGPASSWORD` in the container environment, not as a command argument.
 - Backup files contain sensitive account, order, audit, and user data. Protect the directory and do not commit dumps to GitHub.
 - Keep backups outside the application source tree in staging and production.
 - Test restore drills separately before production use.
-- Add retention only after confirming off-server backup copies and restore procedures.
-
-Do not use these cleanup commands for backup management:
-
-```bash
-docker system prune
-docker volume prune
-docker network prune
-docker compose down -v
-```
+- Keep at least one verified off-server copy before applying retention deletion.
+- Do not use destructive Docker cleanup commands for backup management.
 
 These can remove data volumes, networks, cache, or evidence needed for audit and reconciliation.
