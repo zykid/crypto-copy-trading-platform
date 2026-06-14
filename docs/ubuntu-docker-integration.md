@@ -15,6 +15,7 @@ Validate that the GitHub-built project runs correctly on a persistent Ubuntu Doc
 - idempotency and risk-control behavior.
 - Tailscale private access.
 - safe backup and restore drill preparation.
+- isolated development and production Compose project names.
 
 ## Server Prerequisites
 
@@ -80,6 +81,20 @@ Keep these values for phase 2:
 ENVIRONMENT=development
 TESTNET_ADAPTERS_ENABLED=false
 ```
+
+## Compose Project Isolation
+
+The development Compose file declares `name: trading-dev`. The production Compose file declares `name: trading-prod`. Keep those names unchanged so production-like recovery tests do not accidentally manage development containers when both stacks are tested from the same repository directory.
+
+If a host already has containers created before these explicit project names were added, recreate only the containers and keep the named volumes:
+
+```bash
+docker stop trading-dev-frontend trading-dev-backend trading-dev-postgres trading-dev-redis
+docker rm trading-dev-frontend trading-dev-backend trading-dev-postgres trading-dev-redis
+docker compose up -d postgres redis backend frontend
+```
+
+Do not delete named volumes during this migration.
 
 ## Preflight Check
 
@@ -218,6 +233,7 @@ Record these results before considering phase 2 complete:
 - PostgreSQL persistence counts before and after restart.
 - Redis `PONG` result.
 - Tailscale IP or MagicDNS name used for private access.
+- Compose project names reported as `trading-dev` and `trading-prod` during isolation checks.
 
 Do not record secrets, JWTs, API keys, order responses with sensitive IDs, or database dumps in shared tickets or GitHub.
 
