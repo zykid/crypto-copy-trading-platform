@@ -2,29 +2,19 @@
 
 This guide covers the phase 2 mock-only integration environment. It is intended for an Ubuntu server accessed through Tailscale.
 
-No real exchange trading is enabled in this phase.
+No real exchange trading is enabled in this phase. Do not configure real exchange API keys, do not enable TESTNET by default, and do not enable REAL trading.
 
-## Scope
+## Phase Goal
 
-Validated services:
+Validate that the GitHub-built project runs correctly on a persistent Ubuntu Docker host with:
 
-- FastAPI backend
-- Next.js frontend
-- PostgreSQL
-- Redis
-- Alembic migrations
-- Mock exchange execution path
-- PostgreSQL-backed integration checks
-
-Validated safety behaviors:
-
-- Tenant isolation by `user_id`
-- API secret metadata without secret disclosure
-- Default risk rejection
-- Explicit SIMULATION risk enablement
-- Idempotent order execution
-- Position delta execution
-- Mock fill and position update
+- Docker Compose services for PostgreSQL, Redis, backend, and frontend.
+- MockExchange full-chain API execution.
+- PostgreSQL and Redis health checks.
+- data persistence across container restarts.
+- idempotency and risk-control behavior.
+- Tailscale private access.
+- safe backup and restore drill preparation.
 
 ## Server Prerequisites
 
@@ -32,7 +22,7 @@ Install on Ubuntu:
 
 ```bash
 sudo apt update
-sudo apt install -y git ca-certificates curl
+sudo apt install -y git ca-certificates curl python3
 ```
 
 Install Docker using Docker's official Ubuntu instructions, then verify:
@@ -47,6 +37,8 @@ Install and enable Tailscale if remote private access is needed:
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
+tailscale status
+tailscale ip -4
 ```
 
 Use the Tailscale IP or MagicDNS name for private access. Do not expose the service publicly during phase 2.
@@ -54,6 +46,9 @@ Use the Tailscale IP or MagicDNS name for private access. Do not expose the serv
 ## Clone Repository
 
 ```bash
+sudo mkdir -p /srv/trading
+sudo chown "$USER":"$USER" /srv/trading
+cd /srv/trading
 git clone https://github.com/zykid/crypto-copy-trading-platform.git
 cd crypto-copy-trading-platform
 ```
@@ -79,6 +74,30 @@ At minimum, change:
 
 The `DATABASE_URL` password must match `POSTGRES_PASSWORD`.
 
+Keep these values for phase 2:
+
+```bash
+ENVIRONMENT=development
+TESTNET_ADAPTERS_ENABLED=false
+```
+
+## Preflight Check
+
+Run the repository preflight before starting containers:
+
+```bash
+python3 scripts/integration/ubuntu_preflight.py --repo-root . --env-file .env
+```
+
+Expected output includes:
+
+```text
+Ubuntu integration preflight passed
+TESTNET adapters enabled: false
+```
+
+Do not continue if preflight fails.
+
 ## Start Services
 
 ```bash
@@ -94,7 +113,7 @@ docker compose ps
 Check backend logs:
 
 ```bash
-docker compose logs backend
+docker compose logs --tail=200 backend
 ```
 
 Do not continue if Alembic migration fails or backend health checks are unhealthy.
@@ -126,19 +145,19 @@ python3 scripts/integration/mock_compose_check.py
 
 The full script validates:
 
-- PostgreSQL and Redis health
-- register/login
-- duplicate email and username rejection
-- account persistence
-- cross-user access rejection
-- permission sharing defaults
-- API key metadata without secret disclosure
-- default risk rejection
-- idempotent execution
-- risk enablement for SIMULATION
-- Mock fill
-- position update
-- target position delta execution
+- PostgreSQL and Redis health.
+- register/login.
+- duplicate email and username rejection.
+- account persistence.
+- cross-user access rejection.
+- permission sharing defaults.
+- API key metadata without secret disclosure.
+- default risk rejection.
+- idempotent execution.
+- risk enablement for SIMULATION.
+- Mock fill.
+- position update.
+- target position delta execution.
 
 ## Data Persistence Verification
 
@@ -148,7 +167,7 @@ Create data through the app or run the integration script, then restart services
 docker compose restart postgres redis backend
 ```
 
-Verify data still exists by listing accounts through the API after logging in, or by checking PostgreSQL directly:
+Verify data still exists by checking PostgreSQL directly:
 
 ```bash
 docker compose exec postgres psql -U trading -d trading_dev -c "select count(*) from users;"
@@ -156,7 +175,7 @@ docker compose exec postgres psql -U trading -d trading_dev -c "select count(*) 
 docker compose exec postgres psql -U trading -d trading_dev -c "select count(*) from order_executions;"
 ```
 
-Redis persistence can be checked with:
+Redis health can be checked with:
 
 ```bash
 docker compose exec redis redis-cli ping
@@ -167,6 +186,40 @@ Expected output:
 ```text
 PONG
 ```
+
+## Backup Smoke Test
+
+Create a host backup directory outside the source tree:
+
+```bash
+sudo mkdir -p /srv/trading/backups
+sudo chown "$USER":"$USER" /srv/trading/backups
+chmod 700 /srv/trading/backups
+```
+
+Run the production-style backup profile against the mock integration database only after the core services are healthy:
+
+```bash
+POSTGRES_BACKUP_DIR=/srv/trading/backups docker compose --profile backup run --rm postgres-backup
+```
+
+If the development Compose file does not include the backup profile in your current branch, keep this step for the later production Compose validation and do not improvise destructive cleanup commands.
+
+## Acceptance Record
+
+Record these results before considering phase 2 complete:
+
+- Git commit SHA deployed on the Ubuntu server.
+- `python3 scripts/integration/ubuntu_preflight.py` output.
+- `docker compose ps` output.
+- `/api/v1/health` and `/api/v1/health/dependencies` responses.
+- `docker compose run --rm integration-test` result.
+- `python3 scripts/integration/mock_compose_check.py` result.
+- PostgreSQL persistence counts before and after restart.
+- Redis `PONG` result.
+- Tailscale IP or MagicDNS name used for private access.
+
+Do not record secrets, JWTs, API keys, order responses with sensitive IDs, or database dumps in shared tickets or GitHub.
 
 ## Safe Shutdown
 
@@ -197,4 +250,4 @@ These can remove data, networks, caches, and named volumes. In a trading system,
 - Testnet trading is not enabled by default.
 - Risk settings can only be modified for `SIMULATION` accounts in V1.
 - MockExchange is the only execution adapter covered by this integration guide.
-- Production requirements such as HTTPS reverse proxy, monitoring, alerting, backups, and log rotation are reserved for later phases.
+- Public HTTPS, production monitoring, and alerting are documented but not required for phase 2 completion.
