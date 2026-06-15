@@ -1,4 +1,4 @@
-from typing import Iterable
+from collections.abc import Iterable
 
 from app.api.metrics import METRICS_CONTENT_TYPE, build_metrics_text
 from app.main import app
