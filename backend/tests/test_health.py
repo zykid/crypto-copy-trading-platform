@@ -1,5 +1,5 @@
 import asyncio
-from typing import Iterable
+from collections.abc import Iterable
 
 from fastapi.middleware.cors import CORSMiddleware
 
