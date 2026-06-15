@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     jwt_expires_minutes: int = Field(default=60)
     secret_encryption_key: str = Field(default="change-me-32-byte-key")
 
+    cors_allowed_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000,http://192.168.2.42:3000"
+    )
+
     testnet_adapters_enabled: bool = Field(default=False)
     binance_testnet_rest_base_url: str = Field(default="https://testnet.binance.vision")
     bybit_testnet_rest_base_url: str = Field(default="https://api-testnet.bybit.com")
@@ -42,6 +46,10 @@ class Settings(BaseSettings):
     dependency_health_alert_throttle_seconds: int = Field(default=300)
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
 
 
 @lru_cache
