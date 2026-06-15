@@ -1,22 +1,10 @@
 import asyncio
-from collections.abc import Iterable
 
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.health import health_check
 from app.core.config import settings
 from app.main import app
-
-
-def collect_route_paths(routes: Iterable[object]) -> set[str]:
-    paths: set[str] = set()
-    for route in routes:
-        if hasattr(route, "path"):
-            paths.add(route.path)
-        nested_routes = getattr(route, "routes", None)
-        if nested_routes is not None:
-            paths.update(collect_route_paths(nested_routes))
-    return paths
 
 
 def test_health_check_returns_service_status() -> None:
@@ -31,7 +19,7 @@ def test_health_check_returns_service_status() -> None:
 
 
 def test_health_route_is_registered() -> None:
-    assert "/api/v1/health" in collect_route_paths(app.routes)
+    assert "/api/v1/health" in app.openapi()["paths"]
 
 
 def test_frontend_cors_origin_is_configured() -> None:
