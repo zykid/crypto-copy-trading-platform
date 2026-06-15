@@ -1,9 +1,18 @@
+from typing import Iterable
+
 from app.api.metrics import METRICS_CONTENT_TYPE, build_metrics_text
 from app.main import app
 
 
-def app_route_paths() -> set[str]:
-    return {route.path for route in app.routes if hasattr(route, "path")}
+def collect_route_paths(routes: Iterable[object]) -> set[str]:
+    paths: set[str] = set()
+    for route in routes:
+        if hasattr(route, "path"):
+            paths.add(route.path)
+        nested_routes = getattr(route, "routes", None)
+        if nested_routes is not None:
+            paths.update(collect_route_paths(nested_routes))
+    return paths
 
 
 def test_metrics_text_exposes_only_safe_operational_values() -> None:
@@ -22,7 +31,7 @@ def test_metrics_text_exposes_only_safe_operational_values() -> None:
 
 
 def test_metrics_route_is_registered_outside_api_prefix() -> None:
-    assert "/metrics" in app_route_paths()
+    assert "/metrics" in collect_route_paths(app.routes)
 
 
 def test_metrics_content_type_is_prometheus_text_format() -> None:
