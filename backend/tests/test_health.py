@@ -7,6 +7,10 @@ from app.core.config import settings
 from app.main import app
 
 
+def app_route_paths() -> set[str]:
+    return {route.path for route in app.routes if hasattr(route, "path")}
+
+
 def test_health_check_returns_service_status() -> None:
     response = asyncio.run(health_check())
 
@@ -19,9 +23,7 @@ def test_health_check_returns_service_status() -> None:
 
 
 def test_health_route_is_registered() -> None:
-    route_paths = {route.path for route in app.routes}
-
-    assert "/api/v1/health" in route_paths
+    assert "/api/v1/health" in app_route_paths()
 
 
 def test_frontend_cors_origin_is_configured() -> None:
