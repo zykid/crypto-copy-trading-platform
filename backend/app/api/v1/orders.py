@@ -14,7 +14,11 @@ from app.schemas.trading import (
 from app.services.external_alerts import ExternalAlertConfig
 from app.services.operational_alert_runtime import OperationalAlertRuntime
 from app.services.order_engine import execute_signal_for_account
-from app.services.rate_limit_service import RateLimitExceededError, runtime_rate_limit_service
+from app.services.rate_limit_service import (
+    RateLimitExceededError,
+    RateLimitStoreUnavailableError,
+    runtime_rate_limit_service,
+)
 from app.services.testnet_http_client import create_testnet_signed_http_client
 from app.services.testnet_order_api import (
     TestnetOrderApiBlockedError,
@@ -75,6 +79,11 @@ def submit_testnet_order(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"reasons": list(exc.reasons)},
+        ) from exc
+    except RateLimitStoreUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="testnet order rate limit service unavailable",
         ) from exc
     except RateLimitExceededError as exc:
         raise HTTPException(
