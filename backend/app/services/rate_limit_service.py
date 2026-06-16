@@ -4,7 +4,9 @@ from time import monotonic
 from typing import Protocol
 
 from redis import Redis
+from redis.exceptions import RedisError
 
+from app.core.config import settings
 from app.db.models.exchange_account import ExchangeName
 from app.exchanges.rate_limit import RateLimitScope, get_exchange_rate_limit_config
 
@@ -34,6 +36,11 @@ class RateLimitExceededError(RuntimeError):
         super().__init__("runtime rate limit exceeded")
         self.rule_name = rule_name
         self.retry_after_seconds = retry_after_seconds
+
+
+class RateLimitStoreUnavailableError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("runtime rate limit store is unavailable")
 
 
 class RateLimitAlertRuntime(Protocol):
@@ -109,10 +116,14 @@ class RedisRateLimitWindowStore:
         now: float,
     ) -> RateLimitWindow:
         redis_key = self._redis_key(key)
-        count = int(self._redis.incr(redis_key))
-        if count == 1:
-            self._redis.expire(redis_key, interval_seconds)
-        ttl = self._redis.ttl(redis_key)
+        try:
+            count = int(self._redis.incr(redis_key))
+            if count == 1:
+                self._redis.expire(redis_key, interval_seconds)
+            ttl = self._redis.ttl(redis_key)
+        except RedisError as exc:
+            raise RateLimitStoreUnavailableError() from exc
+
         retry_after_seconds = max(1, int(ttl if ttl and ttl > 0 else interval_seconds))
         return RateLimitWindow(count=count, retry_after_seconds=retry_after_seconds)
 
@@ -186,6 +197,18 @@ class RuntimeRateLimitService:
         )
 
 
+def create_runtime_rate_limit_service(
+    *,
+    redis_url: str | None = None,
+    alert_runtime: RateLimitAlertRuntime | None = None,
+) -> RuntimeRateLimitService:
+    redis = Redis.from_url(redis_url or settings.redis_url, decode_responses=True)
+    return RuntimeRateLimitService(
+        store=RedisRateLimitWindowStore(redis),
+        alert_runtime=alert_runtime,
+    )
+
+
 def _testnet_order_rules(exchange_name: ExchangeName) -> tuple[RuntimeRateLimitRule, ...]:
     rules = [
         RuntimeRateLimitRule(
@@ -238,4 +261,4 @@ def _escape_key_part(value: str) -> str:
     return value.replace(":", "_").replace("/", "_")
 
 
-runtime_rate_limit_service = RuntimeRateLimitService()
+runtime_rate_limit_service = create_runtime_rate_limit_service()
