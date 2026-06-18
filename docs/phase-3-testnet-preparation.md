@@ -58,6 +58,7 @@ Implemented so far:
 - Position reconciliation snapshot comparison service.
 - Reconciliation audit, system-event, and notification hook plan generation.
 - Persistent reconciliation audit, system event, and internal notification storage.
+- Reconciliation worker orchestration with tenant-scoped database snapshots and injected exchange/target providers.
 
 Not implemented yet:
 
@@ -207,6 +208,18 @@ The reconciliation persistence service stores hook plans in database-backed obse
 - The persistence service does not update or delete audit log rows.
 - Stored payloads retain the same secret-free structure produced by the hook-plan service.
 
+## Reconciliation Worker Orchestration
+
+The reconciliation worker composes snapshot collection, comparison, hook planning, and persistence.
+
+- Exchange and target snapshots are supplied through injected providers.
+- Database snapshots are filtered by both `user_id` and `exchange_account_id`.
+- Provider failures propagate before any audit log, system event, or notification is written.
+- Drift alerts receive status, severity, and difference count only.
+- The worker flushes observability records but does not commit the caller's transaction.
+- Worker, report, and hook plan all keep `auto_fix_allowed=False`.
+- The worker does not place orders, update positions, or repair drift.
+
 ## Testnet Order Execution Service
 
 The testnet order execution service sends a prepared request only after the order preflight gate and runtime rate-limit checks approve the request.
@@ -286,7 +299,7 @@ Runtime enforcement applies conservative testnet order throttling and concrete s
 15. Add reconciliation checks comparing exchange state, database state, and target state. Done with snapshot tests.
 16. Add reconciliation audit/event recording and notification hooks. Done with hook-plan tests.
 17. Add persistent audit/system-event writes and internal notification storage. Done with persistence tests.
-18. Add reconciliation worker orchestration around snapshot providers and persistence.
+18. Add reconciliation worker orchestration around snapshot providers and persistence. Done with tenant-scoped database snapshots and injected providers.
 
 ## Safety Rules Before Any Testnet Order
 
