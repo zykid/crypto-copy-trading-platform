@@ -52,6 +52,7 @@ Implemented so far:
 - Internal encrypted API key loading into `ExchangeCredentials` after preflight approval.
 - Real testnet/demo REST transport wiring behind the existing preflight gate.
 - Runtime rate-limit enforcement before testnet order HTTP submission.
+- Redis-backed distributed runtime rate-limit counters with fail-closed behavior.
 - Testnet private user stream connection plan generation.
 - Testnet user stream lifecycle and event parser shell with injected fake socket tests.
 - Position reconciliation snapshot comparison service.
@@ -60,7 +61,6 @@ Implemented so far:
 
 Not implemented yet:
 
-- Redis-backed distributed rate-limit counters.
 - Real WebSocket transport implementation.
 - Continuous WebSocket event consumption loop.
 - Balance or position synchronization writes.
@@ -141,8 +141,9 @@ The runtime rate-limit service is now connected to testnet order execution befor
 - Unknown dynamic limits remain documented metadata and are not guessed as hard exchange limits.
 - If a rate limit is exceeded, the API returns HTTP 429 with a `Retry-After` header.
 - If rate limiting blocks a request, no exchange HTTP request is sent.
-- Current counters are in-memory for GitHub and mock integration testing.
-- Redis-backed distributed counters are still required before multi-process staging or production use.
+- Runtime counters use Redis so multiple backend processes share the same windows.
+- Redis errors fail closed and the API returns HTTP 503 before any exchange request is sent.
+- In-memory counters remain available only for isolated unit tests.
 
 ## Testnet User Stream Connection Plans
 
@@ -226,6 +227,7 @@ The testnet order API endpoint is wired at `/api/v1/orders/testnet/submit`.
 - API key checks use metadata before internal credential loading.
 - Blocked preflight gates return HTTP 400 with reasons.
 - Runtime rate-limit blocks return HTTP 429 with `Retry-After`.
+- Rate-limit store outages return HTTP 503 before any exchange request is sent.
 - Runtime exchange failures return HTTP 502 with a generic error message.
 - Successful responses do not include request headers, params, body, API keys, or signatures.
 
@@ -257,13 +259,13 @@ For testnet/demo API keys:
 
 ## Rate Limit Preparation
 
-Current metadata supports both runtime enforcement and future Redis-backed enforcement.
+Current metadata supports runtime enforcement backed by Redis.
 
 - Binance: tracks `Retry-After`, `X-MBX-USED-WEIGHT-*`, `X-MBX-ORDER-COUNT-*`, and marks `REQUEST_WEIGHT` / `ORDERS` as runtime values from `exchangeInfo` and response headers.
 - Bybit: tracks `X-Bapi-Limit`, `X-Bapi-Limit-Status`, `X-Bapi-Limit-Reset-Timestamp`, the 600 requests / 5 seconds HTTP IP cap, WebSocket connection creation cap, and market-data connection cap.
 - OKX: tracks IP-scoped public REST limits, User ID scoped private REST limits, REST/WebSocket shared order-management limits, and error code `50011` as a rate-limit signal.
 
-Runtime enforcement currently applies conservative testnet order throttling and concrete static REST rules only. Dynamic header-driven updates and Redis persistence are intentionally left for later hardening.
+Runtime enforcement applies conservative testnet order throttling and concrete static REST rules through Redis-backed counters. Dynamic header-driven updates remain intentionally deferred.
 
 ## Phase 3 Recommended Order
 
@@ -278,7 +280,7 @@ Runtime enforcement currently applies conservative testnet order throttling and 
 9. Add API endpoint preflight wiring for testnet-only order placement. Done.
 10. Add internal secret decryption into `ExchangeCredentials`. Done.
 11. Add real testnet transport wiring behind the existing preflight gate. Done.
-12. Add runtime rate-limit enforcement. Done with in-memory testnet order enforcement.
+12. Add runtime rate-limit enforcement. Done with Redis-backed fail-closed testnet order enforcement.
 13. Add WebSocket user stream connection plans. Done without opening real sockets.
 14. Add WebSocket socket lifecycle and event parser shell. Done with injected fake-client tests.
 15. Add reconciliation checks comparing exchange state, database state, and target state. Done with snapshot tests.
