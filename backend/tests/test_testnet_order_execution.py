@@ -10,7 +10,12 @@ from app.exchanges.http_client import (
     PreparedExchangeRequest,
     SignedExchangeHttpClient,
 )
-from app.services.rate_limit_service import RateLimitExceededError, RuntimeRateLimitService
+from app.services.rate_limit_service import (
+    RateLimitExceededError,
+    RateLimitStoreUnavailableError,
+    RateLimitWindow,
+    RuntimeRateLimitService,
+)
 from app.services.testnet_order_execution import execute_testnet_order
 from app.services.testnet_order_gate import check_testnet_order_gate
 from app.services.testnet_order_request import (
@@ -35,6 +40,18 @@ class ControlledClock:
 
     def __call__(self) -> float:
         return self.now
+
+
+class FailingRateLimitStore:
+    def acquire(
+        self,
+        *,
+        key: tuple[str, str, str],
+        limit: int,
+        interval_seconds: int,
+        now: float,
+    ) -> RateLimitWindow:
+        raise RateLimitStoreUnavailableError()
 
 
 def credentials() -> ExchangeCredentials:
@@ -167,3 +184,27 @@ def test_execute_testnet_order_does_not_send_when_rate_limited() -> None:
         )
 
     assert len(transport.requests) == 1
+
+
+def test_execute_testnet_order_does_not_send_when_rate_limit_store_is_unavailable() -> None:
+    transport = RecordingTransport(response={"status": "ACCEPTED"})
+    client = SignedExchangeHttpClient(
+        exchange_name=ExchangeName.BINANCE,
+        rest_base_url="https://testnet.binance.vision",
+        transport=transport,
+    )
+    limiter = RuntimeRateLimitService(
+        store=FailingRateLimitStore(),
+    )
+
+    with pytest.raises(RateLimitStoreUnavailableError):
+        execute_testnet_order(
+            order=market_order(),
+            gate_result=gate_result(approved=True),
+            http_client=client,
+            credentials=credentials(),
+            rate_limiter=limiter,
+            exchange_account_id="acct-1",
+        )
+
+    assert transport.requests == []
