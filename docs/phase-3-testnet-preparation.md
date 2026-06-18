@@ -56,6 +56,7 @@ Implemented so far:
 - Testnet private user stream connection plan generation.
 - Testnet user stream lifecycle and event parser shell with injected fake socket tests.
 - Testnet-only WebSocket transport with endpoint allowlisting, timeouts, message limits, and injected connection tests.
+- Controlled user stream consumption with bounded reconnects and exponential backoff.
 - Position reconciliation snapshot comparison service.
 - Reconciliation audit, system-event, and notification hook plan generation.
 - Persistent reconciliation audit, system event, and internal notification storage.
@@ -63,7 +64,6 @@ Implemented so far:
 
 Not implemented yet:
 
-- Continuous WebSocket event consumption loop.
 - Balance or position synchronization writes.
 - External notification delivery.
 - Automatic reconciliation repair.
@@ -171,6 +171,9 @@ The runtime shell defines lifecycle and parsing behavior without real exchange c
 - Binance sessions connect without a WebSocket login message after listenKey preparation.
 - Event parsing currently classifies raw payloads into `ORDER`, `BALANCE`, `POSITION`, or `UNKNOWN`.
 - Parsed events keep raw payloads only and do not write balances, positions, or orders to the database.
+- The consumer reconnects only after transport failures and enforces a reconnect budget.
+- Event handler failures propagate without reconnect or replay to avoid duplicate side effects.
+- Stop checks, message limits, retry sleeps, transports, and event handlers are injectable for deterministic tests.
 
 ## Position Reconciliation Preparation
 
@@ -258,7 +261,7 @@ Current adapter skeletons behave as follows:
 - Authenticated read-only methods require injected credentials.
 - Authenticated read-only methods are only tested through fake clients unless a signed client is explicitly injected.
 - Runtime rate-limit enforcement is active for the testnet order API path.
-- User stream support includes connection plans and a testnet-only transport; continuous consumption remains disabled.
+- User stream support includes connection plans, testnet-only transport, and bounded consumption/reconnect orchestration.
 - Position reconciliation support is limited to snapshot comparison reports, hook plans, and persistence.
 - MockExchange remains the only adapter that can execute SIMULATION orders in the current codebase.
 
@@ -304,6 +307,7 @@ Runtime enforcement applies conservative testnet order throttling and concrete s
 16. Add reconciliation audit/event recording and notification hooks. Done with hook-plan tests.
 17. Add persistent audit/system-event writes and internal notification storage. Done with persistence tests.
 18. Add reconciliation worker orchestration around snapshot providers and persistence. Done with tenant-scoped database snapshots and injected providers.
+19. Add controlled WebSocket event consumption and reconnect orchestration. Done with injected transports and no database writes.
 
 ## Safety Rules Before Any Testnet Order
 
