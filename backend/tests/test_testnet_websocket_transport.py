@@ -8,7 +8,7 @@ from app.services.testnet_websocket_transport import (
     TestnetWebSocketTransport as WebSocketTransport,
 )
 from app.services.testnet_websocket_transport import (
-    WebSocketTransportError as WebSocketTransportError,
+    TestnetWebSocketTransportError as WebSocketTransportError,
 )
 
 
