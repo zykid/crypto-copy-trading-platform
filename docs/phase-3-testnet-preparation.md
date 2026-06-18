@@ -55,6 +55,7 @@ Implemented so far:
 - Redis-backed distributed runtime rate-limit counters with fail-closed behavior.
 - Testnet private user stream connection plan generation.
 - Testnet user stream lifecycle and event parser shell with injected fake socket tests.
+- Testnet-only WebSocket transport with endpoint allowlisting, timeouts, message limits, and injected connection tests.
 - Position reconciliation snapshot comparison service.
 - Reconciliation audit, system-event, and notification hook plan generation.
 - Persistent reconciliation audit, system event, and internal notification storage.
@@ -62,7 +63,6 @@ Implemented so far:
 
 Not implemented yet:
 
-- Real WebSocket transport implementation.
 - Continuous WebSocket event consumption loop.
 - Balance or position synchronization writes.
 - External notification delivery.
@@ -161,6 +161,10 @@ The user stream service can prepare private WebSocket connection material withou
 The runtime shell defines lifecycle and parsing behavior without real exchange connectivity.
 
 - Socket behavior is behind an injected `TestnetUserStreamSocketClient` protocol.
+- The concrete transport accepts only configured testnet/demo `wss://` endpoints.
+- Production endpoints and unresolved Binance `{listenKey}` placeholders are rejected before connection.
+- Connect and receive timeouts plus a maximum message size are enforced.
+- Transport failures are converted to generic errors without endpoint payload or secret details.
 - Tests use fake socket clients and do not open real network connections.
 - Session states include `CONNECTED`, `AUTHENTICATED`, `CLOSED`, and `FAILED`.
 - Bybit and OKX login messages are sent through the injected client when present.
@@ -254,7 +258,7 @@ Current adapter skeletons behave as follows:
 - Authenticated read-only methods require injected credentials.
 - Authenticated read-only methods are only tested through fake clients unless a signed client is explicitly injected.
 - Runtime rate-limit enforcement is active for the testnet order API path.
-- User stream support is limited to connection-plan generation and injected lifecycle shell tests.
+- User stream support includes connection plans and a testnet-only transport; continuous consumption remains disabled.
 - Position reconciliation support is limited to snapshot comparison reports, hook plans, and persistence.
 - MockExchange remains the only adapter that can execute SIMULATION orders in the current codebase.
 
