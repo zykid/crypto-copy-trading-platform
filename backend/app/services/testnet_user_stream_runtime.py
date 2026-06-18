@@ -43,6 +43,9 @@ class TestnetUserStreamSocketClient(Protocol):
     def send_json(self, payload: dict[str, Any]) -> None:
         raise NotImplementedError
 
+    def receive_json(self) -> dict[str, Any]:
+        raise NotImplementedError
+
     def close(self) -> None:
         raise NotImplementedError
 
