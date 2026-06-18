@@ -1,10 +1,13 @@
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.db.models.exchange_account import ExchangeName
 from app.services.rate_limit_service import (
     RateLimitExceededError,
+    RateLimitStoreUnavailableError,
     RedisRateLimitWindowStore,
     RuntimeRateLimitService,
+    create_runtime_rate_limit_service,
 )
 
 
@@ -58,6 +61,17 @@ class FakeRedis:
 
     def ttl(self, key: str) -> int:
         return self.expirations.get(key, -1)
+
+
+class FailingRedis:
+    def incr(self, key: str) -> int:
+        raise RedisConnectionError("redis unavailable")
+
+    def expire(self, key: str, seconds: int) -> bool:
+        raise AssertionError("expire should not run after incr failure")
+
+    def ttl(self, key: str) -> int:
+        raise AssertionError("ttl should not run after incr failure")
 
 
 def test_runtime_rate_limiter_blocks_repeated_testnet_order_in_same_window() -> None:
@@ -200,6 +214,30 @@ def test_redis_rate_limit_store_sets_ttl_for_new_window() -> None:
     assert window.retry_after_seconds == 1
     assert redis.values[redis_key] == 1
     assert redis.expirations[redis_key] == 1
+
+
+def test_redis_rate_limit_store_fails_closed_when_redis_is_unavailable() -> None:
+    store = RedisRateLimitWindowStore(FailingRedis())  # type: ignore[arg-type]
+
+    with pytest.raises(RateLimitStoreUnavailableError):
+        store.acquire(
+            key=(
+                "binance",
+                "TESTNET_ORDER_ACCOUNT_SAFETY",
+                "acct-1:/api/v3/order",
+            ),
+            limit=1,
+            interval_seconds=1,
+            now=1_000.0,
+        )
+
+
+def test_runtime_rate_limiter_factory_uses_redis_store_without_connecting() -> None:
+    limiter = create_runtime_rate_limit_service(
+        redis_url="redis://example.invalid:6379/0"
+    )
+
+    assert isinstance(limiter, RuntimeRateLimitService)
 
 
 def test_runtime_rate_limiter_can_use_redis_window_store() -> None:
