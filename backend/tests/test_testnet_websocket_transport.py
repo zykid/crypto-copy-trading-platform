@@ -5,8 +5,10 @@ from websocket import WebSocketException
 
 from app.db.models.exchange_account import ExchangeName
 from app.services.testnet_websocket_transport import (
-    TestnetWebSocketTransport,
-    TestnetWebSocketTransportError,
+    TestnetWebSocketTransport as WebSocketTransport,
+)
+from app.services.testnet_websocket_transport import (
+    WebSocketTransportError as WebSocketTransportError,
 )
 
 
@@ -51,7 +53,7 @@ class RecordingConnectionFactory:
 def test_transport_connects_only_to_configured_bybit_testnet_endpoint() -> None:
     connection = FakeConnection()
     factory = RecordingConnectionFactory(connection)
-    transport = TestnetWebSocketTransport(
+    transport = WebSocketTransport(
         exchange_name=ExchangeName.BYBIT,
         connection_factory=factory,
         connect_timeout_seconds=4,
@@ -71,13 +73,13 @@ def test_transport_connects_only_to_configured_bybit_testnet_endpoint() -> None:
 
 def test_transport_rejects_production_endpoint_before_network_connection() -> None:
     factory = RecordingConnectionFactory()
-    transport = TestnetWebSocketTransport(
+    transport = WebSocketTransport(
         exchange_name=ExchangeName.BYBIT,
         connection_factory=factory,
     )
 
     with pytest.raises(
-        TestnetWebSocketTransportError,
+        WebSocketTransportError,
         match="testnet WebSocket endpoint is not allowed",
     ):
         transport.connect("wss://stream.bybit.com/v5/private")
@@ -87,12 +89,12 @@ def test_transport_rejects_production_endpoint_before_network_connection() -> No
 
 def test_transport_rejects_unresolved_binance_listen_key_placeholder() -> None:
     factory = RecordingConnectionFactory()
-    transport = TestnetWebSocketTransport(
+    transport = WebSocketTransport(
         exchange_name=ExchangeName.BINANCE,
         connection_factory=factory,
     )
 
-    with pytest.raises(TestnetWebSocketTransportError):
+    with pytest.raises(WebSocketTransportError):
         transport.connect("wss://stream.testnet.binance.vision/ws/{listenKey}")
 
     assert factory.calls == []
@@ -100,7 +102,7 @@ def test_transport_rejects_unresolved_binance_listen_key_placeholder() -> None:
 
 def test_transport_accepts_resolved_binance_testnet_listen_key() -> None:
     factory = RecordingConnectionFactory()
-    transport = TestnetWebSocketTransport(
+    transport = WebSocketTransport(
         exchange_name=ExchangeName.BINANCE,
         connection_factory=factory,
     )
@@ -112,7 +114,7 @@ def test_transport_accepts_resolved_binance_testnet_listen_key() -> None:
 
 def test_transport_sends_and_receives_json_objects() -> None:
     connection = FakeConnection(messages=['{"topic":"order","data":[]}'])
-    transport = TestnetWebSocketTransport(
+    transport = WebSocketTransport(
         exchange_name=ExchangeName.OKX,
         connection_factory=RecordingConnectionFactory(connection),
     )
@@ -129,7 +131,7 @@ def test_transport_sends_and_receives_json_objects() -> None:
 
 def test_transport_rejects_oversized_message() -> None:
     connection = FakeConnection(messages=['{"data":"' + ("x" * 100) + '"}'])
-    transport = TestnetWebSocketTransport(
+    transport = WebSocketTransport(
         exchange_name=ExchangeName.BYBIT,
         connection_factory=RecordingConnectionFactory(connection),
         max_message_bytes=32,
@@ -137,7 +139,7 @@ def test_transport_rejects_oversized_message() -> None:
     transport.connect("wss://stream-testnet.bybit.com/v5/private")
 
     with pytest.raises(
-        TestnetWebSocketTransportError,
+        WebSocketTransportError,
         match="testnet WebSocket message is too large",
     ):
         transport.receive_json()
@@ -145,14 +147,14 @@ def test_transport_rejects_oversized_message() -> None:
 
 def test_transport_rejects_non_object_json_message() -> None:
     connection = FakeConnection(messages=["[]"])
-    transport = TestnetWebSocketTransport(
+    transport = WebSocketTransport(
         exchange_name=ExchangeName.BYBIT,
         connection_factory=RecordingConnectionFactory(connection),
     )
     transport.connect("wss://stream-testnet.bybit.com/v5/private")
 
     with pytest.raises(
-        TestnetWebSocketTransportError,
+        WebSocketTransportError,
         match="testnet WebSocket message must be a JSON object",
     ):
         transport.receive_json()
@@ -162,12 +164,12 @@ def test_transport_wraps_connection_error_without_sensitive_details() -> None:
     factory = RecordingConnectionFactory(
         error=WebSocketException("test-api-secret network detail")
     )
-    transport = TestnetWebSocketTransport(
+    transport = WebSocketTransport(
         exchange_name=ExchangeName.OKX,
         connection_factory=factory,
     )
 
-    with pytest.raises(TestnetWebSocketTransportError) as exc_info:
+    with pytest.raises(WebSocketTransportError) as exc_info:
         transport.connect("wss://wspap.okx.com:8443/ws/v5/private")
 
     assert str(exc_info.value) == "testnet WebSocket transport failed"
@@ -176,7 +178,7 @@ def test_transport_wraps_connection_error_without_sensitive_details() -> None:
 
 def test_transport_close_is_idempotent() -> None:
     connection = FakeConnection()
-    transport = TestnetWebSocketTransport(
+    transport = WebSocketTransport(
         exchange_name=ExchangeName.BYBIT,
         connection_factory=RecordingConnectionFactory(connection),
     )
