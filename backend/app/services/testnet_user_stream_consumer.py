@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
 from time import sleep
@@ -151,10 +152,8 @@ class TestnetUserStreamConsumer:
 
 
 def _close_transport(transport: TestnetUserStreamSocketClient) -> None:
-    try:
+    with suppress(RuntimeError):
         transport.close()
-    except RuntimeError:
-        pass
 
 
 def _result(
