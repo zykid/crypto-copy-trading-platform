@@ -2,7 +2,6 @@ import re
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-
 _STORAGE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 
 
