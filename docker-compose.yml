@@ -50,6 +50,8 @@ services:
       SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:-change-me-use-a-32-byte-key}
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://trading:trading@postgres:5432/trading_dev}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      TRADING_DATA_ROOT: ${TRADING_DATA_ROOT:-}
+      STORAGE_LOCATION_ALLOWLIST: ${STORAGE_LOCATION_ALLOWLIST:-}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:

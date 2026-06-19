@@ -12,6 +12,7 @@ def new_uuid() -> str:
 
 
 class UserRole(StrEnum):
+    SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
     NORMAL_USER = "normal_user"
     TEAM_ADMIN = "team_admin"

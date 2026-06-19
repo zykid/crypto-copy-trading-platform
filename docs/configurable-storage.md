@@ -80,3 +80,27 @@ The Compose files use bounded Docker `json-file` logging. Those files are stored
 Moving Docker logs requires changing Docker's system-wide `data-root` in `/etc/docker/daemon.json`. That affects every container on the host and requires a separate Docker maintenance procedure. It is intentionally not automated by this project.
 
 Database backups should ideally be copied to another physical disk or remote backup target. Keeping primary data and its only backup on the same disk does not protect against disk failure.
+
+
+## Super Administrator Read-only Control Plane
+
+The backend exposes `GET /api/v1/admin/storage/locations` as groundwork for a
+future Web control plane.
+
+- Only the `super_admin` role can call the endpoint.
+- Existing `admin` and normal users receive HTTP 403.
+- Locations come only from the server-managed `STORAGE_LOCATION_ALLOWLIST`.
+- The endpoint cannot add paths, switch storage, copy data, mount disks, or run Docker.
+- Invalid allowlist configuration fails closed with HTTP 503.
+- Absolute host paths are visible only to authenticated super administrators.
+
+Example server configuration:
+
+```env
+TRADING_DATA_ROOT=/home/zykid/trading-storage-test
+STORAGE_LOCATION_ALLOWLIST=test_storage=/home/zykid/trading-storage-test
+```
+
+Do not promote users to `super_admin` through public registration. Production
+promotion requires a separate audited operator procedure and, before any write
+operation is added, password re-authentication and MFA.
