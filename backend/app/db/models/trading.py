@@ -86,6 +86,30 @@ class RiskSetting(Base):
     )
 
 
+class Balance(Base):
+    __tablename__ = "balances"
+    __table_args__ = (UniqueConstraint("exchange_account_id", "asset"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    exchange_account_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_accounts.id"), index=True, nullable=False
+    )
+    asset: Mapped[str] = mapped_column(String(40), nullable=False)
+    available_quantity: Mapped[Decimal] = mapped_column(
+        Numeric(28, 10), default=Decimal("0"), nullable=False
+    )
+    locked_quantity: Mapped[Decimal] = mapped_column(
+        Numeric(28, 10), default=Decimal("0"), nullable=False
+    )
+    total_quantity: Mapped[Decimal] = mapped_column(
+        Numeric(28, 10), default=Decimal("0"), nullable=False
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class Position(Base):
     __tablename__ = "positions"
     __table_args__ = (UniqueConstraint("exchange_account_id", "symbol"),)
