@@ -7,6 +7,7 @@ from app.db.models.observability import (
     SystemEvent,
 )
 from app.db.models.trading import (
+    Balance,
     OrderExecution,
     OrderExecutionStatus,
     OrderSide,
@@ -23,6 +24,7 @@ __all__ = [
     "AccountMode",
     "ApiKeySecret",
     "AuditLog",
+    "Balance",
     "ExchangeAccount",
     "ExchangeName",
     "InternalNotification",
