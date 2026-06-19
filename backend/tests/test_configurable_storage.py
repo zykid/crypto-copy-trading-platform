@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 DEV_STORAGE = (ROOT / "docker-compose.storage.yml").read_text(encoding="utf-8")
 PROD_STORAGE = (ROOT / "docker-compose.prod.storage.yml").read_text(
