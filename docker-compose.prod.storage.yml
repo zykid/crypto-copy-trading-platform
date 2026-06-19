@@ -1,0 +1,27 @@
+# Optional production storage override.
+# Prepare every host directory and complete any offline migration before enabling it.
+services:
+  postgres:
+    volumes:
+      - ${TRADING_DATA_ROOT:?TRADING_DATA_ROOT must be an absolute host path}/postgres:/var/lib/postgresql/data
+
+  redis:
+    volumes:
+      - ${TRADING_DATA_ROOT:?TRADING_DATA_ROOT must be an absolute host path}/redis:/data
+
+  caddy:
+    volumes:
+      - ${TRADING_DATA_ROOT:?TRADING_DATA_ROOT must be an absolute host path}/caddy-data:/data
+      - ${TRADING_DATA_ROOT:?TRADING_DATA_ROOT must be an absolute host path}/caddy-config:/config
+
+  postgres-backup:
+    volumes:
+      - ${TRADING_DATA_ROOT:?TRADING_DATA_ROOT must be an absolute host path}/backups:/backups
+
+  prometheus:
+    volumes:
+      - ${TRADING_DATA_ROOT:?TRADING_DATA_ROOT must be an absolute host path}/prometheus:/prometheus
+
+  grafana:
+    volumes:
+      - ${TRADING_DATA_ROOT:?TRADING_DATA_ROOT must be an absolute host path}/grafana:/var/lib/grafana

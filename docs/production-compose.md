@@ -5,6 +5,7 @@ This file documents the first production runtime skeleton for the platform. It i
 ## Files
 
 - `docker-compose.prod.yml`
+- `docker-compose.prod.storage.yml`
 - `.env.prod.example`
 - `frontend/Dockerfile`
 - `frontend/next.config.mjs`
@@ -35,7 +36,8 @@ The production Compose file sets:
 - explicit Compose project name `trading-prod`
 - `restart: unless-stopped` for long-running services
 - health checks for PostgreSQL, Redis, and the backend API
-- named production volumes for PostgreSQL, Redis, Caddy, Prometheus, and Grafana
+- named production volumes for PostgreSQL, Redis, Caddy, Prometheus, and Grafana by default
+- optional bind-mounted persistent storage rooted at `TRADING_DATA_ROOT`
 - bounded Docker `json-file` log rotation
 - required environment variables for secrets and connection strings
 - Caddy reverse proxy on ports 80 and 443
@@ -54,6 +56,12 @@ The production Compose file sets:
 - production incident response runbook for restore and trading-freeze decisions
 - disabled-by-default Telegram, email, and webhook alert senders
 - `TESTNET_ADAPTERS_ENABLED=false` by default
+
+## Configurable Persistent Storage
+
+Persistent data can remain in the default named volumes or be placed under a selected absolute host path with `docker-compose.prod.storage.yml`. See `docs/configurable-storage.md` before enabling the override or moving existing data.
+
+The storage override is opt-in. It does not migrate existing named-volume data and must not be enabled against an existing deployment until a verified backup and offline migration have been completed.
 
 ## Compose Project Isolation
 
@@ -82,6 +90,10 @@ Create a real `.env.prod` from the example and replace every placeholder secret 
 ```bash
 cp .env.prod.example .env.prod
 docker compose --env-file .env.prod -f docker-compose.prod.yml up --build -d postgres redis backend frontend caddy
+
+# Optional selected-disk storage override:
+# docker compose --env-file .env.prod -f docker-compose.prod.yml \
+#   -f docker-compose.prod.storage.yml up --build -d postgres redis backend frontend caddy
 ```
 
 Check health and logs:

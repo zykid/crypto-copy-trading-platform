@@ -1,0 +1,10 @@
+# Optional development/integration storage override.
+# The base Compose file keeps named volumes unless this file is explicitly included.
+services:
+  postgres:
+    volumes:
+      - ${TRADING_DATA_ROOT:?TRADING_DATA_ROOT must be an absolute host path}/postgres:/var/lib/postgresql/data
+
+  redis:
+    volumes:
+      - ${TRADING_DATA_ROOT:?TRADING_DATA_ROOT must be an absolute host path}/redis:/data
