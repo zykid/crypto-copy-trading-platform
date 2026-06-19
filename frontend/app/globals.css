@@ -237,6 +237,7 @@ input:focus {
 }
 
 .login-panel,
+.storage-panel,
 .log-panel {
   grid-column: 1 / -1;
 }
@@ -340,4 +341,61 @@ input:focus {
   .button-grid {
     grid-template-columns: 1fr;
   }
+}
+
+
+.panel-note {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.storage-list {
+  display: grid;
+}
+
+.storage-row {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--soft);
+  padding: 10px 0;
+}
+
+.storage-row:last-child {
+  border-bottom: 0;
+}
+
+.storage-row > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.storage-row strong {
+  font-size: 14px;
+}
+
+.storage-row div span {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
+.current-storage,
+.standby-storage {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.current-storage {
+  color: var(--success);
+}
+
+.standby-storage {
+  color: var(--muted);
 }

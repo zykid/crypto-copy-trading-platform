@@ -14,15 +14,24 @@ type SessionState = {
   token: string;
   userId: string;
   username: string;
+  role: string;
   accountId: string;
   signalId: string;
   executionId: string;
+};
+
+type StorageLocation = {
+  id: string;
+  label: string;
+  path: string;
+  is_current: boolean;
 };
 
 const emptySession: SessionState = {
   token: "",
   userId: "",
   username: "",
+  role: "",
   accountId: "",
   signalId: "",
   executionId: "",
@@ -53,6 +62,7 @@ export default function Home() {
   const [apiBase, setApiBase] = useState("http://localhost:8000");
   const [session, setSession] = useState<SessionState>(emptySession);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([]);
   const [busy, setBusy] = useState(false);
   const [manualLogin, setManualLogin] = useState({
     usernameOrEmail: "",
@@ -126,6 +136,52 @@ export default function Home() {
     });
   }
 
+  async function loadAuthenticatedSession(
+    token: string,
+  ): Promise<Record<string, unknown>> {
+    const profile = requireObject(
+      await apiRequest("GET", "/users/me", undefined, token),
+      "用户资料",
+    );
+    const role = String(profile.role);
+    let locations: StorageLocation[] = [];
+
+    if (role === "super_admin") {
+      const result = await apiRequest(
+        "GET",
+        "/admin/storage/locations",
+        undefined,
+        token,
+      );
+      if (!Array.isArray(result)) {
+        throw new Error("存储位置返回格式异常");
+      }
+      locations = result as StorageLocation[];
+    }
+
+    setSession((current) => ({
+      ...current,
+      token,
+      userId: String(profile.id),
+      username: String(profile.username),
+      role,
+    }));
+    setStorageLocations(locations);
+    return profile;
+  }
+
+  async function refreshStorageLocations() {
+    await runStep("刷新存储位置", async () => {
+      const result = await apiRequest("GET", "/admin/storage/locations");
+      if (!Array.isArray(result)) {
+        throw new Error("存储位置返回格式异常");
+      }
+      const locations = result as StorageLocation[];
+      setStorageLocations(locations);
+      return locations;
+    });
+  }
+
   async function registerAndLogin() {
     await runStep("注册并登录测试用户", async () => {
       const suffix = Date.now().toString();
@@ -154,13 +210,10 @@ export default function Home() {
         ),
         "登录",
       );
-      setSession((current) => ({
-        ...current,
-        token: String(tokenResponse.access_token),
-        userId: String(user.id),
-        username,
-      }));
-      return { user_id: user.id, username };
+      const profile = await loadAuthenticatedSession(
+        String(tokenResponse.access_token),
+      );
+      return { user_id: profile.id, username: profile.username };
     });
   }
 
@@ -178,12 +231,15 @@ export default function Home() {
         ),
         "登录",
       );
-      setSession((current) => ({
-        ...current,
-        token: String(tokenResponse.access_token),
-        username: manualLogin.usernameOrEmail,
-      }));
-      return { username_or_email: manualLogin.usernameOrEmail, token_loaded: true };
+      const profile = await loadAuthenticatedSession(
+        String(tokenResponse.access_token),
+      );
+      return {
+        username: profile.username,
+        user_id: profile.id,
+        role: profile.role,
+        token_loaded: true,
+      };
     });
   }
 
@@ -350,6 +406,7 @@ export default function Home() {
           <dl className="state-list">
             <div><dt>用户</dt><dd>{session.username || "未登录"}</dd></div>
             <div><dt>User ID</dt><dd>{session.userId || "-"}</dd></div>
+            <div><dt>角色</dt><dd>{session.role || "-"}</dd></div>
             <div><dt>账户 ID</dt><dd>{session.accountId || "-"}</dd></div>
             <div><dt>最近信号</dt><dd>{session.signalId || "-"}</dd></div>
             <div><dt>最近执行</dt><dd>{session.executionId || "-"}</dd></div>
@@ -384,6 +441,38 @@ export default function Home() {
             </button>
           </div>
         </section>
+
+
+        {session.role === "super_admin" && (
+          <section className="panel storage-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>存储位置</h2>
+                <p className="panel-note">服务器预注册白名单，只读显示</p>
+              </div>
+              <button onClick={refreshStorageLocations} disabled={busy}>
+                刷新
+              </button>
+            </div>
+            <div className="storage-list">
+              {storageLocations.length === 0 ? (
+                <div className="empty-log">未配置可用存储位置</div>
+              ) : (
+                storageLocations.map((location) => (
+                  <div className="storage-row" key={location.id}>
+                    <div>
+                      <strong>{location.label}</strong>
+                      <span>{location.path}</span>
+                    </div>
+                    <span className={location.is_current ? "current-storage" : "standby-storage"}>
+                      {location.is_current ? "当前配置" : "可选"}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="panel log-panel">
           <div className="panel-heading">
