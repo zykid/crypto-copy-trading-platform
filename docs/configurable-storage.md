@@ -104,3 +104,32 @@ STORAGE_LOCATION_ALLOWLIST=test_storage=/home/zykid/trading-storage-test
 Do not promote users to `super_admin` through public registration. Production
 promotion requires a separate audited operator procedure and, before any write
 operation is added, password re-authentication and MFA.
+
+
+## Audited Super Administrator Bootstrap
+
+Public registration always creates `normal_user` accounts. Create the first
+super administrator only from the server console with the one-shot bootstrap
+command:
+
+```bash
+docker compose exec -T \
+  -e SUPER_ADMIN_BOOTSTRAP_ENABLED=true \
+  backend python -m app.cli.bootstrap_super_admin \
+  --email admin@example.com \
+  --username platform_super_admin \
+  --generate-password
+```
+
+The command:
+
+- fails unless `SUPER_ADMIN_BOOTSTRAP_ENABLED=true` is set for that invocation;
+- refuses to promote or replace an existing username or email;
+- generates a password once and prints it only to the invoking terminal;
+- stores only a password hash;
+- creates an append-only audit record in the same transaction;
+- never enables testnet adapters, REAL mode, storage migration, or Docker access.
+
+Do not place the generated password in shell history, environment files, Git,
+application logs, screenshots, or issue trackers. Production use additionally
+requires MFA and a documented credential rotation procedure.
