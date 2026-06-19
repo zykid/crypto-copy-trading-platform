@@ -57,6 +57,7 @@ Implemented so far:
 - Testnet user stream lifecycle and event parser shell with injected fake socket tests.
 - Testnet-only WebSocket transport with endpoint allowlisting, timeouts, message limits, and injected connection tests.
 - Controlled user stream consumption with bounded reconnects and exponential backoff.
+- Tenant-scoped testnet balance and position event synchronization with atomic validation.
 - Position reconciliation snapshot comparison service.
 - Reconciliation audit, system-event, and notification hook plan generation.
 - Persistent reconciliation audit, system event, and internal notification storage.
@@ -64,7 +65,6 @@ Implemented so far:
 
 Not implemented yet:
 
-- Balance or position synchronization writes.
 - External notification delivery.
 - Automatic reconciliation repair.
 
@@ -169,8 +169,13 @@ The runtime shell defines lifecycle and parsing behavior without real exchange c
 - Session states include `CONNECTED`, `AUTHENTICATED`, `CLOSED`, and `FAILED`.
 - Bybit and OKX login messages are sent through the injected client when present.
 - Binance sessions connect without a WebSocket login message after listenKey preparation.
-- Event parsing currently classifies raw payloads into `ORDER`, `BALANCE`, `POSITION`, or `UNKNOWN`.
-- Parsed events keep raw payloads only and do not write balances, positions, or orders to the database.
+- Event parsing classifies raw payloads into `ORDER`, `BALANCE`, `POSITION`, or `UNKNOWN` while preserving the raw parser boundary.
+- A dedicated account-state synchronization service can normalize `BALANCE` and `POSITION` events into database rows.
+- Synchronization requires tenant ownership, an active `TESTNET` account, and an event exchange matching the account exchange.
+- Every record in an event is validated before any database write; malformed multi-record events remain atomic.
+- Synchronization flushes without committing so the caller retains transaction ownership.
+- `ORDER` and `UNKNOWN` events are ignored by the account-state synchronizer.
+- The synchronizer is available only as an explicit event handler service; no background consumer is enabled.
 - The consumer reconnects only after transport failures and enforces a reconnect budget.
 - Event handler failures propagate without reconnect or replay to avoid duplicate side effects.
 - Stop checks, message limits, retry sleeps, transports, and event handlers are injectable for deterministic tests.
@@ -261,7 +266,8 @@ Current adapter skeletons behave as follows:
 - Authenticated read-only methods require injected credentials.
 - Authenticated read-only methods are only tested through fake clients unless a signed client is explicitly injected.
 - Runtime rate-limit enforcement is active for the testnet order API path.
-- User stream support includes connection plans, testnet-only transport, and bounded consumption/reconnect orchestration.
+- User stream support includes connection plans, testnet-only transport, bounded consumption/reconnect orchestration, and explicit tenant-scoped balance/position synchronization.
+- No default background user-stream worker, order synchronization, or automatic repair is enabled.
 - Position reconciliation support is limited to snapshot comparison reports, hook plans, and persistence.
 - MockExchange remains the only adapter that can execute SIMULATION orders in the current codebase.
 
@@ -307,7 +313,8 @@ Runtime enforcement applies conservative testnet order throttling and concrete s
 16. Add reconciliation audit/event recording and notification hooks. Done with hook-plan tests.
 17. Add persistent audit/system-event writes and internal notification storage. Done with persistence tests.
 18. Add reconciliation worker orchestration around snapshot providers and persistence. Done with tenant-scoped database snapshots and injected providers.
-19. Add controlled WebSocket event consumption and reconnect orchestration. Done with injected transports and no database writes.
+19. Add controlled WebSocket event consumption and reconnect orchestration. Done with injected transports.
+20. Add safe testnet balance and position event synchronization. Done with tenant/account/exchange gates, atomic validation, and caller-owned transactions.
 
 ## Safety Rules Before Any Testnet Order
 
