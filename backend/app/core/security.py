@@ -33,11 +33,20 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hmac.compare_digest(_b64encode(digest), expected)
 
 
-def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
+def create_access_token(
+    subject: str,
+    *,
+    auth_version: int = 0,
+    expires_delta: timedelta | None = None,
+) -> str:
     token_lifetime = expires_delta or timedelta(minutes=settings.jwt_expires_minutes)
     expires_at = datetime.now(UTC) + token_lifetime
     header = {"alg": "HS256", "typ": "JWT"}
-    payload = {"sub": subject, "exp": int(expires_at.timestamp())}
+    payload = {
+        "sub": subject,
+        "ver": auth_version,
+        "exp": int(expires_at.timestamp()),
+    }
     signing_input = f"{_json_b64(header)}.{_json_b64(payload)}"
     signature = _sign(signing_input)
     return f"{signing_input}.{signature}"

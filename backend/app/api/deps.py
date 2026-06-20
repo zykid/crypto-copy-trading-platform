@@ -26,6 +26,11 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="inactive or missing user",
         )
+    if payload.get("ver") != user.auth_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="authentication token has been revoked",
+        )
     return user
 
 
@@ -36,7 +41,6 @@ def get_current_admin_user(current_user: User = Depends(get_current_user)) -> Us
             detail="admin privileges required",
         )
     return current_user
-
 
 
 def get_current_super_admin_user(

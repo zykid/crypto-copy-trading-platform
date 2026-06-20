@@ -17,11 +17,16 @@ def test_password_hash_is_not_plaintext_and_verifies() -> None:
 
 
 def test_access_token_roundtrip_and_expiry() -> None:
-    token = create_access_token("user-123")
+    token = create_access_token("user-123", auth_version=3)
     payload = decode_access_token(token)
 
     assert payload is not None
     assert payload["sub"] == "user-123"
+    assert payload["ver"] == 3
 
-    expired = create_access_token("user-123", expires_delta=timedelta(seconds=-1))
+    expired = create_access_token(
+        "user-123",
+        auth_version=3,
+        expires_delta=timedelta(seconds=-1),
+    )
     assert decode_access_token(expired) is None
