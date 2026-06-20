@@ -15,6 +15,7 @@ from app.schemas.auth import (
 from app.schemas.user import UserResponse
 from app.services.users import (
     DuplicateUserError,
+    MfaRequiredError,
     ReauthenticationError,
     authenticate_user,
     create_user,
@@ -39,15 +40,22 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    user = authenticate_user(
-        db,
-        username_or_email=payload.username_or_email,
-        password=payload.password,
-    )
+    try:
+        user = authenticate_user(
+            db,
+            username_or_email=payload.username_or_email,
+            password=payload.password,
+            mfa_code=payload.mfa_code,
+        )
+    except MfaRequiredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="mfa code required",
+        ) from exc
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="invalid username/email or password",
+            detail="invalid username/email, password, or mfa code",
         )
     return TokenResponse(
         access_token=create_access_token(

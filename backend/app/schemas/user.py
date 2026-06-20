@@ -27,3 +27,22 @@ class StorageLocationResponse(BaseModel):
     label: str
     path: str
     is_current: bool
+
+
+class MfaStatusResponse(BaseModel):
+    enabled: bool
+    enrollment_pending: bool
+
+
+class MfaEnrollmentResponse(BaseModel):
+    provisioning_uri: str
+    manual_entry_key: str
+
+
+class MfaConfirmRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class MfaConfirmResponse(BaseModel):
+    enabled: bool
+    recovery_codes: list[str]

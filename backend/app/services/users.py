@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.security import hash_password, verify_password
 from app.db.models.observability import AuditLog
 from app.db.models.user import User, UserRole
+from app.services.mfa import verify_mfa_challenge
 
 
 class DuplicateUserError(ValueError):
@@ -15,6 +16,10 @@ class PasswordChangeError(ValueError):
 
 
 class ReauthenticationError(ValueError):
+    pass
+
+
+class MfaRequiredError(ValueError):
     pass
 
 
@@ -34,16 +39,30 @@ def create_user(db: Session, *, email: str, username: str, password: str) -> Use
     return user
 
 
-def authenticate_user(db: Session, *, username_or_email: str, password: str) -> User | None:
+def authenticate_user(
+    db: Session,
+    *,
+    username_or_email: str,
+    password: str,
+    mfa_code: str | None = None,
+) -> User | None:
     user = db.scalar(
-        select(User).where(
+        select(User)
+        .where(
             or_(User.email == username_or_email, User.username == username_or_email)
         )
+        .with_for_update()
     )
     if user is None or not user.is_active:
         return None
     if not verify_password(password, user.password_hash):
         return None
+    if user.mfa_enabled:
+        if mfa_code is None:
+            raise MfaRequiredError("mfa code required")
+        if not verify_mfa_challenge(db, user=user, code=mfa_code):
+            return None
+        db.commit()
     return user
 
 

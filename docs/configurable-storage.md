@@ -140,3 +140,23 @@ The command:
 Do not place the generated password in shell history, environment files, Git,
 application logs, screenshots, or issue trackers. Production use additionally
 requires MFA and a documented credential rotation procedure.
+
+
+## Super Administrator TOTP MFA
+
+The backend supports a staged TOTP enrollment flow for super administrators:
+
+1. Obtain a five-minute password reauthentication token.
+2. Call `POST /api/v1/users/me/mfa/enroll` with that token in
+   `X-Reauthentication-Token`.
+3. Add the returned provisioning URI or manual key to an authenticator.
+4. Call `POST /api/v1/users/me/mfa/confirm` with a current six-digit code.
+5. Store the returned recovery codes offline. They are shown once.
+
+TOTP secrets are encrypted with the platform secret-encryption key. Recovery
+codes are random, single-use, and stored only as keyed hashes. Confirming MFA
+increments the user's authentication version and revokes existing access and
+reauthentication tokens. TOTP time steps cannot be replayed.
+
+MFA is not enabled automatically for existing accounts. The Web enrollment UI
+and any storage write operation remain separate follow-up steps.

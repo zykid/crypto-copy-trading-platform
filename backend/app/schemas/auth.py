@@ -10,6 +10,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     username_or_email: str
     password: str
+    mfa_code: str | None = Field(default=None, min_length=6, max_length=64)
 
 
 class TokenResponse(BaseModel):

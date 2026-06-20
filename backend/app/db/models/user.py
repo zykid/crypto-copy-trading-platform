@@ -7,6 +7,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Integer,
+    JSON,
     String,
     UniqueConstraint,
     func,
@@ -38,6 +39,30 @@ class User(Base):
         Integer,
         default=0,
         server_default="0",
+        nullable=False,
+    )
+    mfa_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
+    )
+    mfa_secret_encrypted: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+    mfa_pending_secret_encrypted: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+    mfa_last_used_step: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    mfa_recovery_code_hashes: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=list,
+        server_default="[]",
         nullable=False,
     )
     role: Mapped[UserRole] = mapped_column(
