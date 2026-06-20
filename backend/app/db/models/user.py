@@ -2,12 +2,12 @@ import uuid
 from enum import StrEnum
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     Enum,
     ForeignKey,
     Integer,
-    JSON,
     String,
     UniqueConstraint,
     func,
