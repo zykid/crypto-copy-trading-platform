@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from app.core.security import (
     create_access_token,
+    create_reauthentication_token,
     decode_access_token,
     hash_password,
     verify_password,
@@ -23,6 +24,7 @@ def test_access_token_roundtrip_and_expiry() -> None:
     assert payload is not None
     assert payload["sub"] == "user-123"
     assert payload["ver"] == 3
+    assert payload["purpose"] == "access"
 
     expired = create_access_token(
         "user-123",
@@ -30,3 +32,13 @@ def test_access_token_roundtrip_and_expiry() -> None:
         expires_delta=timedelta(seconds=-1),
     )
     assert decode_access_token(expired) is None
+
+
+def test_reauthentication_token_has_distinct_purpose() -> None:
+    token = create_reauthentication_token("user-123", auth_version=4)
+    payload = decode_access_token(token)
+
+    assert payload is not None
+    assert payload["sub"] == "user-123"
+    assert payload["ver"] == 4
+    assert payload["purpose"] == "reauthentication"

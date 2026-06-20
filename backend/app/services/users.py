@@ -14,6 +14,10 @@ class PasswordChangeError(ValueError):
     pass
 
 
+class ReauthenticationError(ValueError):
+    pass
+
+
 def create_user(db: Session, *, email: str, username: str, password: str) -> User:
     existing = db.scalar(select(User).where(or_(User.email == email, User.username == username)))
     if existing is not None:
@@ -41,6 +45,37 @@ def authenticate_user(db: Session, *, username_or_email: str, password: str) -> 
     if not verify_password(password, user.password_hash):
         return None
     return user
+
+
+def record_reauthentication(
+    db: Session,
+    *,
+    user: User,
+    password: str,
+) -> None:
+    if not verify_password(password, user.password_hash):
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                exchange_account_id=None,
+                action="user.reauthentication.failed",
+                severity="WARNING",
+                payload={"user_id": user.id, "reason": "invalid_password"},
+            )
+        )
+        db.commit()
+        raise ReauthenticationError("password reauthentication failed")
+
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            exchange_account_id=None,
+            action="user.reauthentication.succeeded",
+            severity="INFO",
+            payload={"user_id": user.id},
+        )
+    )
+    db.commit()
 
 
 def change_password(

@@ -9,6 +9,7 @@ from typing import Any
 from app.core.config import settings
 
 _HASH_ITERATIONS = 390_000
+_REAUTHENTICATION_TOKEN_MINUTES = 5
 
 
 def hash_password(password: str) -> str:
@@ -40,11 +41,36 @@ def create_access_token(
     expires_delta: timedelta | None = None,
 ) -> str:
     token_lifetime = expires_delta or timedelta(minutes=settings.jwt_expires_minutes)
-    expires_at = datetime.now(UTC) + token_lifetime
+    return _create_token(
+        subject,
+        auth_version=auth_version,
+        purpose="access",
+        expires_delta=token_lifetime,
+    )
+
+
+def create_reauthentication_token(subject: str, *, auth_version: int) -> str:
+    return _create_token(
+        subject,
+        auth_version=auth_version,
+        purpose="reauthentication",
+        expires_delta=timedelta(minutes=_REAUTHENTICATION_TOKEN_MINUTES),
+    )
+
+
+def _create_token(
+    subject: str,
+    *,
+    auth_version: int,
+    purpose: str,
+    expires_delta: timedelta,
+) -> str:
+    expires_at = datetime.now(UTC) + expires_delta
     header = {"alg": "HS256", "typ": "JWT"}
     payload = {
         "sub": subject,
         "ver": auth_version,
+        "purpose": purpose,
         "exp": int(expires_at.timestamp()),
     }
     signing_input = f"{_json_b64(header)}.{_json_b64(payload)}"

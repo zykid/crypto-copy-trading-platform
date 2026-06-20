@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -15,7 +15,11 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     payload = decode_access_token(token)
-    if payload is None or not payload.get("sub"):
+    if (
+        payload is None
+        or not payload.get("sub")
+        or payload.get("purpose", "access") != "access"
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid authentication token",
@@ -50,5 +54,26 @@ def get_current_super_admin_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="super admin privileges required",
+        )
+    return current_user
+
+
+def get_reauthenticated_user(
+    current_user: User = Depends(get_current_user),
+    x_reauth_token: str | None = Header(
+        default=None,
+        alias="X-Reauthentication-Token",
+    ),
+) -> User:
+    payload = decode_access_token(x_reauth_token or "")
+    if (
+        payload is None
+        or payload.get("purpose") != "reauthentication"
+        or payload.get("sub") != current_user.id
+        or payload.get("ver") != current_user.auth_version
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="recent password reauthentication required",
         )
     return current_user

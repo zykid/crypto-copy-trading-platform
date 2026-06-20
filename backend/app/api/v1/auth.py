@@ -1,11 +1,25 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token
+from app.api.deps import get_current_user
+from app.core.security import create_access_token, create_reauthentication_token
+from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.schemas.auth import (
+    LoginRequest,
+    ReauthenticationRequest,
+    ReauthenticationResponse,
+    RegisterRequest,
+    TokenResponse,
+)
 from app.schemas.user import UserResponse
-from app.services.users import DuplicateUserError, authenticate_user, create_user
+from app.services.users import (
+    DuplicateUserError,
+    ReauthenticationError,
+    authenticate_user,
+    create_user,
+    record_reauthentication,
+)
 
 router = APIRouter()
 
@@ -39,5 +53,31 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         access_token=create_access_token(
             user.id,
             auth_version=user.auth_version,
+        )
+    )
+
+
+@router.post("/reauthenticate", response_model=ReauthenticationResponse)
+def reauthenticate(
+    payload: ReauthenticationRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReauthenticationResponse:
+    try:
+        record_reauthentication(
+            db,
+            user=current_user,
+            password=payload.password,
+        )
+    except ReauthenticationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="password reauthentication failed",
+        ) from exc
+
+    return ReauthenticationResponse(
+        reauthentication_token=create_reauthentication_token(
+            current_user.id,
+            auth_version=current_user.auth_version,
         )
     )

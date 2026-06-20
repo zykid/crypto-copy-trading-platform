@@ -105,6 +105,13 @@ Do not promote users to `super_admin` through public registration. Production
 promotion requires a separate audited operator procedure and, before any write
 operation is added, password re-authentication and MFA.
 
+The backend now provides `POST /api/v1/auth/reauthenticate` as the first part
+of that gate. It verifies the current password, records the result in the
+append-only audit log, and returns a five-minute token scoped only to future
+privileged operations. The token is rejected by normal Bearer authentication.
+No storage write endpoint consumes it yet, and MFA remains required before
+storage switching can be implemented.
+
 
 ## Audited Super Administrator Bootstrap
 

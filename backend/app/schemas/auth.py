@@ -15,3 +15,12 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class ReauthenticationRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+class ReauthenticationResponse(BaseModel):
+    reauthentication_token: str
+    expires_in_seconds: int = 300
