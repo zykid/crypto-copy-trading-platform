@@ -1,5 +1,6 @@
 "use client";
 
+import QRCode from "qrcode";
 import { useEffect, useMemo, useState } from "react";
 
 type ApiResult = Record<string, unknown> | Record<string, unknown>[] | null;
@@ -25,6 +26,11 @@ type StorageLocation = {
   label: string;
   path: string;
   is_current: boolean;
+};
+
+type MfaStatus = {
+  enabled: boolean;
+  enrollmentPending: boolean;
 };
 
 const emptySession: SessionState = {
@@ -67,11 +73,25 @@ export default function Home() {
   const [manualLogin, setManualLogin] = useState({
     usernameOrEmail: "",
     password: "",
+    mfaCode: "",
   });
   const [passwordChange, setPasswordChange] = useState({
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
+  });
+  const [mfaStatus, setMfaStatus] = useState<MfaStatus>({
+    enabled: false,
+    enrollmentPending: false,
+  });
+  const [mfaForm, setMfaForm] = useState({
+    password: "",
+    code: "",
+  });
+  const [mfaEnrollment, setMfaEnrollment] = useState({
+    qrDataUrl: "",
+    manualEntryKey: "",
+    recoveryCodes: [] as string[],
   });
 
   useEffect(() => {
@@ -93,6 +113,7 @@ export default function Home() {
     payload?: Record<string, unknown>,
     token = session.token,
     expectedStatus = 200,
+    extraHeaders: Record<string, string> = {},
   ): Promise<ApiResult> {
     const response = await fetch(`${apiRoot}${path}`, {
       method,
@@ -100,6 +121,7 @@ export default function Home() {
         Accept: "application/json",
         ...(payload ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...extraHeaders,
       },
       body: payload ? JSON.stringify(payload) : undefined,
     });
@@ -150,6 +172,10 @@ export default function Home() {
     );
     const role = String(profile.role);
     let locations: StorageLocation[] = [];
+    let nextMfaStatus: MfaStatus = {
+      enabled: false,
+      enrollmentPending: false,
+    };
 
     if (role === "super_admin") {
       const result = await apiRequest(
@@ -162,6 +188,15 @@ export default function Home() {
         throw new Error("存储位置返回格式异常");
       }
       locations = result as StorageLocation[];
+
+      const mfaResult = requireObject(
+        await apiRequest("GET", "/users/me/mfa", undefined, token),
+        "MFA 状态",
+      );
+      nextMfaStatus = {
+        enabled: Boolean(mfaResult.enabled),
+        enrollmentPending: Boolean(mfaResult.enrollment_pending),
+      };
     }
 
     setSession((current) => ({
@@ -172,6 +207,7 @@ export default function Home() {
       role,
     }));
     setStorageLocations(locations);
+    setMfaStatus(nextMfaStatus);
     return profile;
   }
 
@@ -231,6 +267,7 @@ export default function Home() {
           {
             username_or_email: manualLogin.usernameOrEmail,
             password: manualLogin.password,
+            ...(manualLogin.mfaCode ? { mfa_code: manualLogin.mfaCode } : {}),
           },
           "",
         ),
@@ -239,6 +276,11 @@ export default function Home() {
       const profile = await loadAuthenticatedSession(
         String(tokenResponse.access_token),
       );
+      setManualLogin((current) => ({
+        ...current,
+        password: "",
+        mfaCode: "",
+      }));
       return {
         username: profile.username,
         user_id: profile.id,
@@ -251,10 +293,101 @@ export default function Home() {
   function clearSession() {
     setSession(emptySession);
     setStorageLocations([]);
+    setManualLogin((current) => ({
+      ...current,
+      password: "",
+      mfaCode: "",
+    }));
     setPasswordChange({
       currentPassword: "",
       newPassword: "",
       confirmPassword: "",
+    });
+    setMfaStatus({ enabled: false, enrollmentPending: false });
+    setMfaForm({ password: "", code: "" });
+    setMfaEnrollment({
+      qrDataUrl: "",
+      manualEntryKey: "",
+      recoveryCodes: [],
+    });
+  }
+
+  async function startMfaEnrollment() {
+    await runStep("开始 MFA 配置", async () => {
+      const reauthentication = requireObject(
+        await apiRequest("POST", "/auth/reauthenticate", {
+          password: mfaForm.password,
+        }),
+        "密码再认证",
+      );
+      const reauthenticationToken = String(
+        reauthentication.reauthentication_token,
+      );
+      const enrollment = requireObject(
+        await apiRequest(
+          "POST",
+          "/users/me/mfa/enroll",
+          undefined,
+          session.token,
+          200,
+          {
+            "X-Reauthentication-Token": reauthenticationToken,
+          },
+        ),
+        "MFA 注册",
+      );
+      const provisioningUri = String(enrollment.provisioning_uri);
+      const qrDataUrl = await QRCode.toDataURL(provisioningUri, {
+        margin: 1,
+        width: 200,
+      });
+      setMfaStatus({ enabled: false, enrollmentPending: true });
+      setMfaEnrollment({
+        qrDataUrl,
+        manualEntryKey: String(enrollment.manual_entry_key),
+        recoveryCodes: [],
+      });
+      return { enrollment_started: true };
+    });
+  }
+
+  async function confirmMfaEnrollment() {
+    await runStep("启用 MFA", async () => {
+      const reauthentication = requireObject(
+        await apiRequest("POST", "/auth/reauthenticate", {
+          password: mfaForm.password,
+        }),
+        "密码再认证",
+      );
+      const confirmation = requireObject(
+        await apiRequest(
+          "POST",
+          "/users/me/mfa/confirm",
+          { code: mfaForm.code },
+          session.token,
+          200,
+          {
+            "X-Reauthentication-Token": String(
+              reauthentication.reauthentication_token,
+            ),
+          },
+        ),
+        "MFA 确认",
+      );
+      const recoveryCodes = Array.isArray(confirmation.recovery_codes)
+        ? confirmation.recovery_codes.map(String)
+        : [];
+      setMfaStatus({ enabled: true, enrollmentPending: false });
+      setMfaEnrollment((current) => ({
+        ...current,
+        recoveryCodes,
+      }));
+      setMfaForm({ password: "", code: "" });
+      return {
+        mfa_enabled: true,
+        recovery_code_count: recoveryCodes.length,
+        login_required: true,
+      };
     });
   }
 
@@ -470,6 +603,18 @@ export default function Home() {
                 placeholder="password"
               />
             </label>
+            <label>
+              MFA 验证码或恢复码
+              <input
+                value={manualLogin.mfaCode}
+                onChange={(event) => setManualLogin({
+                  ...manualLogin,
+                  mfaCode: event.target.value,
+                })}
+                placeholder="启用 MFA 后填写"
+                autoComplete="one-time-code"
+              />
+            </label>
             <button onClick={loginExisting} disabled={busy || !manualLogin.usernameOrEmail || !manualLogin.password}>
               登录
             </button>
@@ -537,6 +682,110 @@ export default function Home() {
                 修改密码
               </button>
             </div>
+          </section>
+        )}
+
+        {session.role === "super_admin" && (
+          <section className="panel mfa-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>多因素认证</h2>
+                <p className="panel-note">
+                  {mfaStatus.enabled
+                    ? "TOTP MFA 已启用"
+                    : "敏感管理操作启用前必须配置 MFA"}
+                </p>
+              </div>
+              <span className={mfaStatus.enabled ? "mfa-enabled" : "mfa-disabled"}>
+                {mfaStatus.enabled ? "已启用" : "未启用"}
+              </span>
+            </div>
+
+            {!mfaStatus.enabled && mfaEnrollment.recoveryCodes.length === 0 && (
+              <>
+                <div className="mfa-start">
+                  <label>
+                    当前密码
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      value={mfaForm.password}
+                      onChange={(event) => setMfaForm({
+                        ...mfaForm,
+                        password: event.target.value,
+                      })}
+                    />
+                  </label>
+                  <button
+                    onClick={startMfaEnrollment}
+                    disabled={busy || !mfaForm.password}
+                  >
+                    {mfaStatus.enrollmentPending ? "重新生成密钥" : "开始配置"}
+                  </button>
+                </div>
+
+                {mfaStatus.enrollmentPending &&
+                  !mfaEnrollment.manualEntryKey && (
+                    <p className="mfa-warning">
+                      上次配置尚未确认。重新生成密钥后再继续。
+                    </p>
+                  )}
+
+                {mfaEnrollment.manualEntryKey && (
+                  <div className="mfa-setup">
+                    <img
+                      className="mfa-qr"
+                      src={mfaEnrollment.qrDataUrl}
+                      alt="TOTP MFA 配置二维码"
+                    />
+                    <div className="mfa-confirm">
+                      <div>
+                        <strong>在认证器中扫描二维码</strong>
+                        <p>也可手工输入下方密钥。密钥仅在当前页面显示。</p>
+                        <code>{mfaEnrollment.manualEntryKey}</code>
+                      </div>
+                      <label>
+                        6 位验证码
+                        <input
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          value={mfaForm.code}
+                          onChange={(event) => setMfaForm({
+                            ...mfaForm,
+                            code: event.target.value.replace(/\D/g, ""),
+                          })}
+                          placeholder="000000"
+                        />
+                      </label>
+                      <button
+                        onClick={confirmMfaEnrollment}
+                        disabled={busy || mfaForm.code.length !== 6}
+                      >
+                        确认并启用
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {mfaEnrollment.recoveryCodes.length > 0 && (
+              <div className="recovery-section">
+                <strong>恢复码仅显示一次</strong>
+                <p>
+                  请离线保存。任何一个恢复码只能使用一次，保存后退出并重新登录。
+                </p>
+                <div className="recovery-codes">
+                  {mfaEnrollment.recoveryCodes.map((code) => (
+                    <code key={code}>{code}</code>
+                  ))}
+                </div>
+                <button onClick={clearSession}>
+                  已保存恢复码并退出登录
+                </button>
+              </div>
+            )}
           </section>
         )}
 
