@@ -68,6 +68,11 @@ export default function Home() {
     usernameOrEmail: "",
     password: "",
   });
+  const [passwordChange, setPasswordChange] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
 
   useEffect(() => {
     setApiBase(resolveApiBase());
@@ -240,6 +245,35 @@ export default function Home() {
         role: profile.role,
         token_loaded: true,
       };
+    });
+  }
+
+  function clearSession() {
+    setSession(emptySession);
+    setStorageLocations([]);
+    setPasswordChange({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+  }
+
+  async function changeOwnPassword() {
+    if (passwordChange.newPassword !== passwordChange.confirmPassword) {
+      appendLog("修改密码", false, "两次输入的新密码不一致");
+      return;
+    }
+    if (passwordChange.newPassword.length < 16) {
+      appendLog("修改密码", false, "新密码至少需要 16 个字符");
+      return;
+    }
+    await runStep("修改密码", async () => {
+      const result = await apiRequest("POST", "/users/me/password", {
+        current_password: passwordChange.currentPassword,
+        new_password: passwordChange.newPassword,
+      });
+      clearSession();
+      return { result, session_cleared: true, login_required: true };
     });
   }
 
@@ -442,6 +476,69 @@ export default function Home() {
           </div>
         </section>
 
+        {session.token && (
+          <section className="panel password-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>账户安全</h2>
+                <p className="panel-note">修改成功后所有旧登录令牌立即失效</p>
+              </div>
+              <button onClick={clearSession} disabled={busy}>
+                退出登录
+              </button>
+            </div>
+            <div className="password-form">
+              <label>
+                当前密码
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={passwordChange.currentPassword}
+                  onChange={(event) => setPasswordChange({
+                    ...passwordChange,
+                    currentPassword: event.target.value,
+                  })}
+                />
+              </label>
+              <label>
+                新密码
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={passwordChange.newPassword}
+                  onChange={(event) => setPasswordChange({
+                    ...passwordChange,
+                    newPassword: event.target.value,
+                  })}
+                  placeholder="至少 16 个字符"
+                />
+              </label>
+              <label>
+                确认新密码
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={passwordChange.confirmPassword}
+                  onChange={(event) => setPasswordChange({
+                    ...passwordChange,
+                    confirmPassword: event.target.value,
+                  })}
+                />
+              </label>
+              <button
+                onClick={changeOwnPassword}
+                disabled={
+                  busy ||
+                  !passwordChange.currentPassword ||
+                  !passwordChange.newPassword ||
+                  !passwordChange.confirmPassword
+                }
+              >
+                修改密码
+              </button>
+            </div>
+          </section>
+        )}
 
         {session.role === "super_admin" && (
           <section className="panel storage-panel">

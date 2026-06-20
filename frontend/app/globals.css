@@ -237,6 +237,7 @@ input:focus {
 }
 
 .login-panel,
+.password-panel,
 .storage-panel,
 .log-panel {
   grid-column: 1 / -1;
@@ -398,4 +399,21 @@ input:focus {
 
 .standby-storage {
   color: var(--muted);
+}
+
+.password-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.password-form label {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .password-form {
+    grid-template-columns: 1fr;
+  }
 }
