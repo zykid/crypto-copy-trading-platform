@@ -56,7 +56,7 @@ function resolveApiBase() {
 
 function formatDetail(value: unknown) {
   if (value === null || value === undefined || value === "") {
-    return "完成";
+    return "瀹屾垚";
   }
   if (typeof value === "string") {
     return value;
@@ -128,14 +128,14 @@ export default function Home() {
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     if (response.status !== expectedStatus) {
-      throw new Error(`${method} ${path} 返回 ${response.status}: ${formatDetail(body)}`);
+      throw new Error(`${method} ${path} 杩斿洖 ${response.status}: ${formatDetail(body)}`);
     }
     return body;
   }
 
   function requireObject(result: ApiResult, label: string) {
     if (result === null || Array.isArray(result)) {
-      throw new Error(`${label} 返回格式异常`);
+      throw new Error(`${label} 杩斿洖鏍煎紡寮傚父`);
     }
     return result;
   }
@@ -156,7 +156,7 @@ export default function Home() {
   }
 
   async function checkHealth() {
-    await runStep("健康检查", async () => {
+    await runStep("鍋ュ悍妫€鏌?, async () => {
       const health = await apiRequest("GET", "/health", undefined, "");
       const dependencies = await apiRequest("GET", "/health/dependencies", undefined, "");
       return { health, dependencies };
@@ -168,7 +168,7 @@ export default function Home() {
   ): Promise<Record<string, unknown>> {
     const profile = requireObject(
       await apiRequest("GET", "/users/me", undefined, token),
-      "用户资料",
+      "鐢ㄦ埛璧勬枡",
     );
     const role = String(profile.role);
     let locations: StorageLocation[] = [];
@@ -185,13 +185,13 @@ export default function Home() {
         token,
       );
       if (!Array.isArray(result)) {
-        throw new Error("存储位置返回格式异常");
+        throw new Error("瀛樺偍浣嶇疆杩斿洖鏍煎紡寮傚父");
       }
       locations = result as StorageLocation[];
 
       const mfaResult = requireObject(
         await apiRequest("GET", "/users/me/mfa", undefined, token),
-        "MFA 状态",
+        "MFA 鐘舵€?,
       );
       nextMfaStatus = {
         enabled: Boolean(mfaResult.enabled),
@@ -212,10 +212,10 @@ export default function Home() {
   }
 
   async function refreshStorageLocations() {
-    await runStep("刷新存储位置", async () => {
+    await runStep("鍒锋柊瀛樺偍浣嶇疆", async () => {
       const result = await apiRequest("GET", "/admin/storage/locations");
       if (!Array.isArray(result)) {
-        throw new Error("存储位置返回格式异常");
+        throw new Error("瀛樺偍浣嶇疆杩斿洖鏍煎紡寮傚父");
       }
       const locations = result as StorageLocation[];
       setStorageLocations(locations);
@@ -224,7 +224,7 @@ export default function Home() {
   }
 
   async function registerAndLogin() {
-    await runStep("注册并登录测试用户", async () => {
+    await runStep("娉ㄥ唽骞剁櫥褰曟祴璇曠敤鎴?, async () => {
       const suffix = Date.now().toString();
       const username = `ui_user_${suffix}`;
       const password = "ChangeMe12345!";
@@ -240,7 +240,7 @@ export default function Home() {
           "",
           201,
         ),
-        "注册",
+        "娉ㄥ唽",
       );
       const tokenResponse = requireObject(
         await apiRequest(
@@ -249,7 +249,7 @@ export default function Home() {
           { username_or_email: username, password },
           "",
         ),
-        "登录",
+        "鐧诲綍",
       );
       const profile = await loadAuthenticatedSession(
         String(tokenResponse.access_token),
@@ -259,7 +259,7 @@ export default function Home() {
   }
 
   async function loginExisting() {
-    await runStep("登录已有用户", async () => {
+    await runStep("鐧诲綍宸叉湁鐢ㄦ埛", async () => {
       const tokenResponse = requireObject(
         await apiRequest(
           "POST",
@@ -271,7 +271,7 @@ export default function Home() {
           },
           "",
         ),
-        "登录",
+        "鐧诲綍",
       );
       const profile = await loadAuthenticatedSession(
         String(tokenResponse.access_token),
@@ -313,12 +313,12 @@ export default function Home() {
   }
 
   async function startMfaEnrollment() {
-    await runStep("开始 MFA 配置", async () => {
+    await runStep("寮€濮?MFA 閰嶇疆", async () => {
       const reauthentication = requireObject(
         await apiRequest("POST", "/auth/reauthenticate", {
           password: mfaForm.password,
         }),
-        "密码再认证",
+        "瀵嗙爜鍐嶈璇?,
       );
       const reauthenticationToken = String(
         reauthentication.reauthentication_token,
@@ -334,7 +334,7 @@ export default function Home() {
             "X-Reauthentication-Token": reauthenticationToken,
           },
         ),
-        "MFA 注册",
+        "MFA 娉ㄥ唽",
       );
       const provisioningUri = String(enrollment.provisioning_uri);
       const qrDataUrl = await QRCode.toDataURL(provisioningUri, {
@@ -352,12 +352,12 @@ export default function Home() {
   }
 
   async function confirmMfaEnrollment() {
-    await runStep("启用 MFA", async () => {
+    await runStep("鍚敤 MFA", async () => {
       const reauthentication = requireObject(
         await apiRequest("POST", "/auth/reauthenticate", {
           password: mfaForm.password,
         }),
-        "密码再认证",
+        "瀵嗙爜鍐嶈璇?,
       );
       const confirmation = requireObject(
         await apiRequest(
@@ -372,7 +372,7 @@ export default function Home() {
             ),
           },
         ),
-        "MFA 确认",
+        "MFA 纭",
       );
       const recoveryCodes = Array.isArray(confirmation.recovery_codes)
         ? confirmation.recovery_codes.map(String)
@@ -391,16 +391,41 @@ export default function Home() {
     });
   }
 
+  async function disableMfa() {
+    await runStep("鍏抽棴 MFA", async () => {
+      const reauthentication = requireObject(
+        await apiRequest("POST", "/auth/reauthenticate", {
+          password: mfaForm.password,
+        }),
+        "瀵嗙爜鍐嶈璇?,
+      );
+      const result = await apiRequest(
+        "POST",
+        "/users/me/mfa/disable",
+        { code: mfaForm.code },
+        session.token,
+        200,
+        {
+          "X-Reauthentication-Token": String(
+            reauthentication.reauthentication_token,
+          ),
+        },
+      );
+      clearSession();
+      return { result, session_cleared: true, login_required: true };
+    });
+  }
+
   async function changeOwnPassword() {
     if (passwordChange.newPassword !== passwordChange.confirmPassword) {
-      appendLog("修改密码", false, "两次输入的新密码不一致");
+      appendLog("淇敼瀵嗙爜", false, "涓ゆ杈撳叆鐨勬柊瀵嗙爜涓嶄竴鑷?);
       return;
     }
     if (passwordChange.newPassword.length < 16) {
-      appendLog("修改密码", false, "新密码至少需要 16 个字符");
+      appendLog("淇敼瀵嗙爜", false, "鏂板瘑鐮佽嚦灏戦渶瑕?16 涓瓧绗?);
       return;
     }
-    await runStep("修改密码", async () => {
+    await runStep("淇敼瀵嗙爜", async () => {
       const result = await apiRequest("POST", "/users/me/password", {
         current_password: passwordChange.currentPassword,
         new_password: passwordChange.newPassword,
@@ -411,7 +436,7 @@ export default function Home() {
   }
 
   async function createMockAccount() {
-    await runStep("创建 Mock 模拟账户", async () => {
+    await runStep("鍒涘缓 Mock 妯℃嫙璐︽埛", async () => {
       const account = requireObject(
         await apiRequest("POST", "/exchange-accounts", {
           exchange_name: "mock",
@@ -419,7 +444,7 @@ export default function Home() {
           account_mode: "SIMULATION",
           trading_enabled: true,
         }),
-        "创建账户",
+        "鍒涘缓璐︽埛",
       );
       const accountId = String(account.id);
       setSession((current) => ({ ...current, accountId }));
@@ -428,7 +453,7 @@ export default function Home() {
   }
 
   async function configureMockKey() {
-    await runStep("写入模拟 API Key 元数据", async () => {
+    await runStep("鍐欏叆妯℃嫙 API Key 鍏冩暟鎹?, async () => {
       const metadata = await apiRequest(
         "POST",
         `/exchange-accounts/${session.accountId}/api-key`,
@@ -443,7 +468,7 @@ export default function Home() {
   }
 
   async function enableRisk() {
-    await runStep("开启模拟风控交易", async () => {
+    await runStep("寮€鍚ā鎷熼鎺т氦鏄?, async () => {
       return apiRequest("PATCH", `/risk-settings/${session.accountId}`, {
         trading_enabled: true,
         min_order_quantity: "0.01",
@@ -454,7 +479,7 @@ export default function Home() {
   }
 
   async function previewTarget() {
-    await runStep("仓位差额预览", async () => {
+    await runStep("浠撲綅宸棰勮", async () => {
       return apiRequest(
         "POST",
         `/positions/${session.accountId}/target-preview?symbol=BTCUSDT&target_quantity=0.5`,
@@ -463,7 +488,7 @@ export default function Home() {
   }
 
   async function executeManualOrder() {
-    await runStep("执行手工 Mock 订单", async () => {
+    await runStep("鎵ц鎵嬪伐 Mock 璁㈠崟", async () => {
       const signal = requireObject(
         await apiRequest(
           "POST",
@@ -472,13 +497,13 @@ export default function Home() {
           session.token,
           201,
         ),
-        "创建信号",
+        "鍒涘缓淇″彿",
       );
       const execution = requireObject(
         await apiRequest("POST", `/orders/execute-signal/${signal.id}`, {
           exchange_account_id: session.accountId,
         }),
-        "执行订单",
+        "鎵ц璁㈠崟",
       );
       setSession((current) => ({
         ...current,
@@ -490,12 +515,12 @@ export default function Home() {
   }
 
   async function verifyIdempotency() {
-    await runStep("幂等重复执行校验", async () => {
+    await runStep("骞傜瓑閲嶅鎵ц鏍￠獙", async () => {
       const duplicate = requireObject(
         await apiRequest("POST", `/orders/execute-signal/${session.signalId}`, {
           exchange_account_id: session.accountId,
         }),
-        "重复执行",
+        "閲嶅鎵ц",
       );
       return {
         original_execution_id: session.executionId,
@@ -528,8 +553,8 @@ export default function Home() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <div className="brand">多租户加密货币交易执行与跟单平台</div>
-          <div className="subtle">Ubuntu 集成测试控制台</div>
+          <div className="brand">澶氱鎴峰姞瀵嗚揣甯佷氦鏄撴墽琛屼笌璺熷崟骞冲彴</div>
+          <div className="subtle">Ubuntu 闆嗘垚娴嬭瘯鎺у埗鍙?/div>
         </div>
         <div className="status">SIMULATION ONLY</div>
       </header>
@@ -537,57 +562,55 @@ export default function Home() {
       <div className="main console-layout">
         <section className="panel hero-panel">
           <div>
-            <h1>开发环境操作台</h1>
+            <h1>寮€鍙戠幆澧冩搷浣滃彴</h1>
             <p>
-              当前页面只走 MockExchange 与 SIMULATION 模式，用于验证登录、租户隔离、风控、仓位差额、订单状态机和幂等执行。
-            </p>
+              褰撳墠椤甸潰鍙蛋 MockExchange 涓?SIMULATION 妯″紡锛岀敤浜庨獙璇佺櫥褰曘€佺鎴烽殧绂汇€侀鎺с€佷粨浣嶅樊棰濄€佽鍗曠姸鎬佹満鍜屽箓绛夋墽琛屻€?            </p>
           </div>
           <div className="api-chip">API {apiRoot}</div>
         </section>
 
         <section className="panel controls-panel">
           <div className="panel-heading">
-            <h2>快速流程</h2>
-            <span>不会发送真实交易所订单</span>
+            <h2>蹇€熸祦绋?/h2>
+            <span>涓嶄細鍙戦€佺湡瀹炰氦鏄撴墍璁㈠崟</span>
           </div>
           <div className="button-grid">
-            <button onClick={checkHealth} disabled={busy}>健康检查</button>
-            <button onClick={registerAndLogin} disabled={busy}>注册测试用户</button>
-            <button onClick={createMockAccount} disabled={busy || !session.token}>创建 Mock 账户</button>
-            <button onClick={configureMockKey} disabled={busy || !canUseAccount}>配置模拟 Key</button>
-            <button onClick={enableRisk} disabled={busy || !canUseAccount}>开启风控交易</button>
-            <button onClick={previewTarget} disabled={busy || !canUseAccount}>仓位预览</button>
-            <button onClick={executeManualOrder} disabled={busy || !canUseAccount}>执行订单</button>
-            <button onClick={verifyIdempotency} disabled={busy || !canVerifyIdempotency}>幂等校验</button>
+            <button onClick={checkHealth} disabled={busy}>鍋ュ悍妫€鏌?/button>
+            <button onClick={registerAndLogin} disabled={busy}>娉ㄥ唽娴嬭瘯鐢ㄦ埛</button>
+            <button onClick={createMockAccount} disabled={busy || !session.token}>鍒涘缓 Mock 璐︽埛</button>
+            <button onClick={configureMockKey} disabled={busy || !canUseAccount}>閰嶇疆妯℃嫙 Key</button>
+            <button onClick={enableRisk} disabled={busy || !canUseAccount}>寮€鍚鎺т氦鏄?/button>
+            <button onClick={previewTarget} disabled={busy || !canUseAccount}>浠撲綅棰勮</button>
+            <button onClick={executeManualOrder} disabled={busy || !canUseAccount}>鎵ц璁㈠崟</button>
+            <button onClick={verifyIdempotency} disabled={busy || !canVerifyIdempotency}>骞傜瓑鏍￠獙</button>
           </div>
           <button className="primary-action" onClick={runFullMockFlow} disabled={busy}>
-            一键运行 Mock 全链路
-          </button>
+            涓€閿繍琛?Mock 鍏ㄩ摼璺?          </button>
         </section>
 
         <section className="panel state-panel">
           <div className="panel-heading">
-            <h2>会话状态</h2>
-            <span>{busy ? "运行中" : "待命"}</span>
+            <h2>浼氳瘽鐘舵€?/h2>
+            <span>{busy ? "杩愯涓? : "寰呭懡"}</span>
           </div>
           <dl className="state-list">
-            <div><dt>用户</dt><dd>{session.username || "未登录"}</dd></div>
+            <div><dt>鐢ㄦ埛</dt><dd>{session.username || "鏈櫥褰?}</dd></div>
             <div><dt>User ID</dt><dd>{session.userId || "-"}</dd></div>
-            <div><dt>角色</dt><dd>{session.role || "-"}</dd></div>
-            <div><dt>账户 ID</dt><dd>{session.accountId || "-"}</dd></div>
-            <div><dt>最近信号</dt><dd>{session.signalId || "-"}</dd></div>
-            <div><dt>最近执行</dt><dd>{session.executionId || "-"}</dd></div>
+            <div><dt>瑙掕壊</dt><dd>{session.role || "-"}</dd></div>
+            <div><dt>璐︽埛 ID</dt><dd>{session.accountId || "-"}</dd></div>
+            <div><dt>鏈€杩戜俊鍙?/dt><dd>{session.signalId || "-"}</dd></div>
+            <div><dt>鏈€杩戞墽琛?/dt><dd>{session.executionId || "-"}</dd></div>
           </dl>
         </section>
 
         <section className="panel login-panel">
           <div className="panel-heading">
-            <h2>已有用户登录</h2>
-            <span>可选</span>
+            <h2>宸叉湁鐢ㄦ埛鐧诲綍</h2>
+            <span>鍙€?/span>
           </div>
           <div className="form-row">
             <label>
-              用户名或邮箱
+              鐢ㄦ埛鍚嶆垨閭
               <input
                 value={manualLogin.usernameOrEmail}
                 onChange={(event) => setManualLogin({ ...manualLogin, usernameOrEmail: event.target.value })}
@@ -595,7 +618,7 @@ export default function Home() {
               />
             </label>
             <label>
-              密码
+              瀵嗙爜
               <input
                 type="password"
                 value={manualLogin.password}
@@ -604,19 +627,18 @@ export default function Home() {
               />
             </label>
             <label>
-              MFA 验证码或恢复码
-              <input
+              MFA 楠岃瘉鐮佹垨鎭㈠鐮?              <input
                 value={manualLogin.mfaCode}
                 onChange={(event) => setManualLogin({
                   ...manualLogin,
                   mfaCode: event.target.value,
                 })}
-                placeholder="启用 MFA 后填写"
+                placeholder="鍚敤 MFA 鍚庡～鍐?
                 autoComplete="one-time-code"
               />
             </label>
             <button onClick={loginExisting} disabled={busy || !manualLogin.usernameOrEmail || !manualLogin.password}>
-              登录
+              鐧诲綍
             </button>
           </div>
         </section>
@@ -625,16 +647,15 @@ export default function Home() {
           <section className="panel password-panel">
             <div className="panel-heading">
               <div>
-                <h2>账户安全</h2>
-                <p className="panel-note">修改成功后所有旧登录令牌立即失效</p>
+                <h2>璐︽埛瀹夊叏</h2>
+                <p className="panel-note">淇敼鎴愬姛鍚庢墍鏈夋棫鐧诲綍浠ょ墝绔嬪嵆澶辨晥</p>
               </div>
               <button onClick={clearSession} disabled={busy}>
-                退出登录
-              </button>
+                閫€鍑虹櫥褰?              </button>
             </div>
             <div className="password-form">
               <label>
-                当前密码
+                褰撳墠瀵嗙爜
                 <input
                   type="password"
                   autoComplete="current-password"
@@ -646,8 +667,7 @@ export default function Home() {
                 />
               </label>
               <label>
-                新密码
-                <input
+                鏂板瘑鐮?                <input
                   type="password"
                   autoComplete="new-password"
                   value={passwordChange.newPassword}
@@ -655,12 +675,11 @@ export default function Home() {
                     ...passwordChange,
                     newPassword: event.target.value,
                   })}
-                  placeholder="至少 16 个字符"
+                  placeholder="鑷冲皯 16 涓瓧绗?
                 />
               </label>
               <label>
-                确认新密码
-                <input
+                纭鏂板瘑鐮?                <input
                   type="password"
                   autoComplete="new-password"
                   value={passwordChange.confirmPassword}
@@ -679,7 +698,7 @@ export default function Home() {
                   !passwordChange.confirmPassword
                 }
               >
-                修改密码
+                淇敼瀵嗙爜
               </button>
             </div>
           </section>
@@ -689,15 +708,15 @@ export default function Home() {
           <section className="panel mfa-panel">
             <div className="panel-heading">
               <div>
-                <h2>多因素认证</h2>
+                <h2>澶氬洜绱犺璇?/h2>
                 <p className="panel-note">
                   {mfaStatus.enabled
-                    ? "TOTP MFA 已启用"
-                    : "敏感管理操作启用前必须配置 MFA"}
+                    ? "TOTP MFA 宸插惎鐢?
+                    : "鏁忔劅绠＄悊鎿嶄綔鍚敤鍓嶅繀椤婚厤缃?MFA"}
                 </p>
               </div>
               <span className={mfaStatus.enabled ? "mfa-enabled" : "mfa-disabled"}>
-                {mfaStatus.enabled ? "已启用" : "未启用"}
+                {mfaStatus.enabled ? "宸插惎鐢? : "鏈惎鐢?}
               </span>
             </div>
 
@@ -705,7 +724,7 @@ export default function Home() {
               <>
                 <div className="mfa-start">
                   <label>
-                    当前密码
+                    褰撳墠瀵嗙爜
                     <input
                       type="password"
                       autoComplete="current-password"
@@ -720,15 +739,14 @@ export default function Home() {
                     onClick={startMfaEnrollment}
                     disabled={busy || !mfaForm.password}
                   >
-                    {mfaStatus.enrollmentPending ? "重新生成密钥" : "开始配置"}
+                    {mfaStatus.enrollmentPending ? "閲嶆柊鐢熸垚瀵嗛挜" : "寮€濮嬮厤缃?}
                   </button>
                 </div>
 
                 {mfaStatus.enrollmentPending &&
                   !mfaEnrollment.manualEntryKey && (
                     <p className="mfa-warning">
-                      上次配置尚未确认。重新生成密钥后再继续。
-                    </p>
+                      涓婃閰嶇疆灏氭湭纭銆傞噸鏂扮敓鎴愬瘑閽ュ悗鍐嶇户缁€?                    </p>
                   )}
 
                 {mfaEnrollment.manualEntryKey && (
@@ -736,16 +754,16 @@ export default function Home() {
                     <img
                       className="mfa-qr"
                       src={mfaEnrollment.qrDataUrl}
-                      alt="TOTP MFA 配置二维码"
+                      alt="TOTP MFA 閰嶇疆浜岀淮鐮?
                     />
                     <div className="mfa-confirm">
                       <div>
-                        <strong>在认证器中扫描二维码</strong>
-                        <p>也可手工输入下方密钥。密钥仅在当前页面显示。</p>
+                        <strong>鍦ㄨ璇佸櫒涓壂鎻忎簩缁寸爜</strong>
+                        <p>涔熷彲鎵嬪伐杈撳叆涓嬫柟瀵嗛挜銆傚瘑閽ヤ粎鍦ㄥ綋鍓嶉〉闈㈡樉绀恒€?/p>
                         <code>{mfaEnrollment.manualEntryKey}</code>
                       </div>
                       <label>
-                        6 位验证码
+                        6 浣嶉獙璇佺爜
                         <input
                           inputMode="numeric"
                           autoComplete="one-time-code"
@@ -762,28 +780,60 @@ export default function Home() {
                         onClick={confirmMfaEnrollment}
                         disabled={busy || mfaForm.code.length !== 6}
                       >
-                        确认并启用
-                      </button>
+                        纭骞跺惎鐢?                      </button>
                     </div>
                   </div>
                 )}
               </>
             )}
 
+            {mfaStatus.enabled && (
+              <div className="mfa-start">
+                <label>
+                  褰撳墠瀵嗙爜
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={mfaForm.password}
+                    onChange={(event) => setMfaForm({
+                      ...mfaForm,
+                      password: event.target.value,
+                    })}
+                  />
+                </label>
+                <label>
+                  MFA 楠岃瘉鐮佹垨鎭㈠鐮?                  <input
+                    autoComplete="one-time-code"
+                    value={mfaForm.code}
+                    onChange={(event) => setMfaForm({
+                      ...mfaForm,
+                      code: event.target.value,
+                    })}
+                    placeholder="鍏抽棴 MFA 鏃跺～鍐?
+                  />
+                </label>
+                <button
+                  className="danger-action"
+                  onClick={disableMfa}
+                  disabled={busy || !mfaForm.password || mfaForm.code.length < 6}
+                >
+                  鍏抽棴 MFA
+                </button>
+              </div>
+            )}
+
             {mfaEnrollment.recoveryCodes.length > 0 && (
               <div className="recovery-section">
-                <strong>恢复码仅显示一次</strong>
+                <strong>鎭㈠鐮佷粎鏄剧ず涓€娆?/strong>
                 <p>
-                  请离线保存。任何一个恢复码只能使用一次，保存后退出并重新登录。
-                </p>
+                  璇风绾夸繚瀛樸€備换浣曚竴涓仮澶嶇爜鍙兘浣跨敤涓€娆★紝淇濆瓨鍚庨€€鍑哄苟閲嶆柊鐧诲綍銆?                </p>
                 <div className="recovery-codes">
                   {mfaEnrollment.recoveryCodes.map((code) => (
                     <code key={code}>{code}</code>
                   ))}
                 </div>
                 <button onClick={clearSession}>
-                  已保存恢复码并退出登录
-                </button>
+                  宸蹭繚瀛樻仮澶嶇爜骞堕€€鍑虹櫥褰?                </button>
               </div>
             )}
           </section>
@@ -793,16 +843,16 @@ export default function Home() {
           <section className="panel storage-panel">
             <div className="panel-heading">
               <div>
-                <h2>存储位置</h2>
-                <p className="panel-note">服务器预注册白名单，只读显示</p>
+                <h2>瀛樺偍浣嶇疆</h2>
+                <p className="panel-note">鏈嶅姟鍣ㄩ娉ㄥ唽鐧藉悕鍗曪紝鍙鏄剧ず</p>
               </div>
               <button onClick={refreshStorageLocations} disabled={busy}>
-                刷新
+                鍒锋柊
               </button>
             </div>
             <div className="storage-list">
               {storageLocations.length === 0 ? (
-                <div className="empty-log">未配置可用存储位置</div>
+                <div className="empty-log">鏈厤缃彲鐢ㄥ瓨鍌ㄤ綅缃?/div>
               ) : (
                 storageLocations.map((location) => (
                   <div className="storage-row" key={location.id}>
@@ -811,7 +861,7 @@ export default function Home() {
                       <span>{location.path}</span>
                     </div>
                     <span className={location.is_current ? "current-storage" : "standby-storage"}>
-                      {location.is_current ? "当前配置" : "可选"}
+                      {location.is_current ? "褰撳墠閰嶇疆" : "鍙€?}
                     </span>
                   </div>
                 ))
@@ -822,12 +872,12 @@ export default function Home() {
 
         <section className="panel log-panel">
           <div className="panel-heading">
-            <h2>执行日志</h2>
-            <span>{logs.length} 条</span>
+            <h2>鎵ц鏃ュ織</h2>
+            <span>{logs.length} 鏉?/span>
           </div>
           <div className="logs">
             {logs.length === 0 ? (
-              <div className="empty-log">等待操作</div>
+              <div className="empty-log">绛夊緟鎿嶄綔</div>
             ) : (
               logs.map((entry, index) => (
                 <article className={entry.ok ? "log-entry ok" : "log-entry error"} key={`${entry.label}-${index}`}>

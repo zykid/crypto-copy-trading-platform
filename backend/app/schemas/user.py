@@ -46,3 +46,11 @@ class MfaConfirmRequest(BaseModel):
 class MfaConfirmResponse(BaseModel):
     enabled: bool
     recovery_codes: list[str]
+
+
+class MfaDisableRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=64)
+
+
+class MfaDisableResponse(BaseModel):
+    disabled: bool

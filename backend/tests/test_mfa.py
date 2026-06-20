@@ -10,6 +10,7 @@ from app.db.models.observability import AuditLog
 from app.services.mfa import (
     MfaVerificationError,
     confirm_mfa_enrollment,
+    disable_mfa,
     start_mfa_enrollment,
 )
 from app.services.users import (
@@ -179,3 +180,66 @@ def test_recovery_code_is_single_use(
         mfa_code=recovery_code,
     )
     assert replay is None
+
+
+def test_disable_mfa_clears_secrets_revokes_tokens_and_audits(
+    db_session: Session,
+) -> None:
+    user = create_user(
+        db_session,
+        email="admin@example.com",
+        username="admin",
+        password="very-strong-password",
+    )
+    secret, _ = start_mfa_enrollment(db_session, user=user)
+    enabled_at = datetime(2026, 6, 20, 10, 0, tzinfo=UTC)
+    enable_code = pyotp.TOTP(secret).at(int(enabled_at.timestamp()))
+    recovery_codes = confirm_mfa_enrollment(
+        db_session,
+        user=user,
+        code=enable_code,
+        now=enabled_at,
+    )
+
+    disable_mfa(db_session, user=user, code=recovery_codes[0])
+
+    assert user.mfa_enabled is False
+    assert user.mfa_secret_encrypted is None
+    assert user.mfa_pending_secret_encrypted is None
+    assert user.mfa_last_used_step is None
+    assert user.mfa_recovery_code_hashes == []
+    assert user.auth_version == 2
+    audit = db_session.scalar(
+        select(AuditLog).where(AuditLog.action == "user.mfa.disabled")
+    )
+    assert audit is not None
+    assert audit.severity == "CRITICAL"
+    assert recovery_codes[0] not in str(audit.payload)
+
+
+def test_disable_mfa_rejects_invalid_code_without_changing_state(
+    db_session: Session,
+) -> None:
+    user = create_user(
+        db_session,
+        email="admin@example.com",
+        username="admin",
+        password="very-strong-password",
+    )
+    secret, _ = start_mfa_enrollment(db_session, user=user)
+    enabled_at = datetime(2026, 6, 20, 10, 0, tzinfo=UTC)
+    enable_code = pyotp.TOTP(secret).at(int(enabled_at.timestamp()))
+    confirm_mfa_enrollment(
+        db_session,
+        user=user,
+        code=enable_code,
+        now=enabled_at,
+    )
+
+    with pytest.raises(MfaVerificationError):
+        disable_mfa(db_session, user=user, code="INVALID-RECOVERY-CODE")
+
+    assert user.mfa_enabled is True
+    assert user.mfa_secret_encrypted is not None
+    assert len(user.mfa_recovery_code_hashes) == 8
+    assert user.auth_version == 1

@@ -55,6 +55,16 @@ button:hover:not(:disabled) {
   color: var(--accent-dark);
 }
 
+.danger-action {
+  border-color: #f0b4ae;
+  color: var(--danger);
+}
+
+.danger-action:hover:not(:disabled) {
+  background: #fff1f0;
+  border-color: var(--danger);
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.52;

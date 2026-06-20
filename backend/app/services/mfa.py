@@ -104,6 +104,39 @@ def confirm_mfa_enrollment(
     return recovery_codes
 
 
+def disable_mfa(
+    db: Session,
+    *,
+    user: User,
+    code: str,
+    now: datetime | None = None,
+) -> None:
+    if not user.mfa_enabled:
+        raise MfaEnrollmentError("mfa is not enabled")
+    if not verify_mfa_challenge(db, user=user, code=code, now=now):
+        raise MfaVerificationError("invalid mfa code")
+
+    user.mfa_enabled = False
+    user.mfa_secret_encrypted = None
+    user.mfa_pending_secret_encrypted = None
+    user.mfa_last_used_step = None
+    user.mfa_recovery_code_hashes = []
+    user.auth_version += 1
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            exchange_account_id=None,
+            action="user.mfa.disabled",
+            severity="CRITICAL",
+            payload={
+                "user_id": user.id,
+                "new_auth_version": user.auth_version,
+            },
+        )
+    )
+    db.commit()
+
+
 def verify_mfa_challenge(
     db: Session,
     *,

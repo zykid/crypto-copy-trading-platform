@@ -7,6 +7,8 @@ from app.db.session import get_db
 from app.schemas.user import (
     MfaConfirmRequest,
     MfaConfirmResponse,
+    MfaDisableRequest,
+    MfaDisableResponse,
     MfaEnrollmentResponse,
     MfaStatusResponse,
     PasswordChangeRequest,
@@ -17,6 +19,7 @@ from app.services.mfa import (
     MfaEnrollmentError,
     MfaVerificationError,
     confirm_mfa_enrollment,
+    disable_mfa,
     get_mfa_status,
     start_mfa_enrollment,
 )
@@ -115,3 +118,24 @@ def confirm_mfa(
         enabled=True,
         recovery_codes=recovery_codes,
     )
+
+
+@router.post("/me/mfa/disable", response_model=MfaDisableResponse)
+def remove_mfa(
+    payload: MfaDisableRequest,
+    current_user: User = Depends(get_reauthenticated_user),
+    db: Session = Depends(get_db),
+) -> MfaDisableResponse:
+    _require_super_admin(current_user)
+    try:
+        disable_mfa(
+            db,
+            user=current_user,
+            code=payload.code,
+        )
+    except (MfaEnrollmentError, MfaVerificationError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="mfa disable rejected",
+        ) from exc
+    return MfaDisableResponse(disabled=True)
