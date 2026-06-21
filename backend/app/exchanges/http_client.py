@@ -60,7 +60,8 @@ class UrllibExchangeHttpTransport:
         query = _canonical_query(prepared.params)
         url = f"{prepared.url}?{query}" if query else prepared.url
         body = _json_body(prepared.body).encode("utf-8") if prepared.body is not None else None
-        request = Request(url=url, data=body, headers=prepared.headers, method=prepared.method)
+        headers = {"User-Agent": "crypto-copy-trading-platform/0.1", **prepared.headers}
+        request = Request(url=url, data=body, headers=headers, method=prepared.method)
         try:
             with urlopen(request, timeout=10) as response:  # noqa: S310
                 payload = response.read().decode("utf-8")
