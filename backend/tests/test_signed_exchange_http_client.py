@@ -255,3 +255,34 @@ def test_urllib_transport_wraps_request_errors_without_sensitive_details(monkeyp
 
     assert str(exc_info.value) == "exchange HTTP request failed"
     assert "secret-signature" not in str(exc_info.value)
+
+def test_urllib_transport_sets_application_user_agent(monkeypatch) -> None:
+    captured: dict[str, str | None] = {}
+
+    class FakeResponse:
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def capture_urlopen(request: Any, *, timeout: int) -> FakeResponse:
+        assert timeout == 10
+        captured["user_agent"] = request.get_header("User-agent")
+        return FakeResponse()
+
+    monkeypatch.setattr("app.exchanges.http_client.urlopen", capture_urlopen)
+    transport = UrllibExchangeHttpTransport()
+    prepared = PreparedExchangeRequest(
+        method="GET",
+        url="https://www.okx.com/api/v5/public/time",
+        path="/api/v5/public/time",
+        params={},
+        headers={},
+    )
+
+    assert transport.request(prepared) == {}
+    assert captured["user_agent"] == "crypto-copy-trading-platform/0.1"
