@@ -13,7 +13,7 @@ def test_known_testnet_endpoint_configs_are_available() -> None:
 
     assert binance.rest_base_url == "https://testnet.binance.vision"
     assert bybit.rest_base_url == "https://api-testnet.bybit.com"
-    assert okx.rest_base_url == "https://openapi.okx.com"
+    assert okx.rest_base_url == "https://www.okx.com"
     assert okx.demo_header_required is True
 
 
