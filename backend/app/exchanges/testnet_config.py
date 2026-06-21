@@ -41,7 +41,7 @@ TESTNET_ENDPOINTS: dict[ExchangeName, ExchangeEndpointConfig] = {
     ),
     ExchangeName.OKX: ExchangeEndpointConfig(
         exchange_name=ExchangeName.OKX,
-        rest_base_url="https://openapi.okx.com",
+        rest_base_url="https://www.okx.com",
         public_ws_url="wss://wspap.okx.com:8443/ws/v5/public",
         private_ws_url="wss://wspap.okx.com:8443/ws/v5/private",
         demo_header_required=True,
