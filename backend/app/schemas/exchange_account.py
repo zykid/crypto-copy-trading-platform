@@ -47,3 +47,10 @@ class TestnetReadOnlyCheckResponse(BaseModel):
     exchange_name: ExchangeName
     authenticated: bool
     balance_asset_count: int
+
+
+class RealReadOnlyCheckResponse(BaseModel):
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    authenticated: bool
+    balance_asset_count: int
