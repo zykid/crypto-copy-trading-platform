@@ -148,6 +148,10 @@ export default function Home() {
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     if (response.status !== expectedStatus) {
+      if (response.status === 401 && token) {
+        clearSession();
+        throw new Error("登录会话已失效，请重新登录");
+      }
       throw new Error(`${method} ${path} 返回 ${response.status}: ${formatDetail(body)}`);
     }
     return body;
