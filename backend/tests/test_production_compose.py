@@ -26,6 +26,13 @@ def test_compose_project_names_are_explicitly_isolated() -> None:
     assert "container_name: trading-prod-backend" in PRODUCTION_COMPOSE
 
 
+def test_development_backend_keeps_testnet_adapters_disabled_by_default() -> None:
+    assert (
+        "TESTNET_ADAPTERS_ENABLED: ${TESTNET_ADAPTERS_ENABLED:-false}"
+        in DEVELOPMENT_COMPOSE
+    )
+
+
 def test_dependency_health_monitor_service_is_guarded() -> None:
     block = service_block("dependency-health-monitor")
 
