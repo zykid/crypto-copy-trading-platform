@@ -399,7 +399,7 @@ def test_testnet_trading_methods_are_not_supported() -> None:
 def test_adapter_endpoint_metadata_is_available_without_network() -> None:
     adapter = OKXAdapter()
 
-    assert adapter.endpoint_config.rest_base_url == "https://openapi.okx.com"
+    assert adapter.endpoint_config.rest_base_url == "https://www.okx.com"
     assert adapter.endpoint_config.demo_header_required is True
 
 
