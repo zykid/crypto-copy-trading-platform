@@ -1,4 +1,3 @@
-
 "use client";
 
 import QRCode from "qrcode";
@@ -150,6 +149,10 @@ export default function Home() {
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     if (response.status !== expectedStatus) {
+      if (response.status === 401 && token) {
+        clearSession();
+        throw new Error("登录会话已失效，请重新登录");
+      }
       throw new Error(`${method} ${path} 返回 ${response.status}: ${formatDetail(body)}`);
     }
     return body;
@@ -685,7 +688,97 @@ export default function Home() {
   }
 
   async function enableRisk() {
-    await runStep("开启模拟风…663 tokens truncated…topbar">
+    await runStep("开启模拟风控交易", async () => {
+      return apiRequest("PATCH", `/risk-settings/${session.accountId}`, {
+        trading_enabled: true,
+        min_order_quantity: "0.01",
+        max_order_quantity: "1",
+        max_single_order_notional: "1000",
+      });
+    });
+  }
+
+  async function previewTarget() {
+    await runStep("仓位差额预览", async () => {
+      return apiRequest(
+        "POST",
+        `/positions/${session.accountId}/target-preview?symbol=BTCUSDT&target_quantity=0.5`,
+      );
+    });
+  }
+
+  async function executeManualOrder() {
+    await runStep("执行手工 Mock 订单", async () => {
+      const signal = requireObject(
+        await apiRequest(
+          "POST",
+          "/signals/manual",
+          { symbol: "BTCUSDT", side: "BUY", order_type: "MARKET", quantity: "0.2" },
+          session.token,
+          201,
+        ),
+        "创建信号",
+      );
+      const execution = requireObject(
+        await apiRequest("POST", `/orders/execute-signal/${signal.id}`, {
+          exchange_account_id: session.accountId,
+        }),
+        "执行订单",
+      );
+      setSession((current) => ({
+        ...current,
+        signalId: String(signal.id),
+        executionId: String(execution.execution_id),
+      }));
+      return execution;
+    });
+  }
+
+  async function verifyIdempotency() {
+    await runStep("幂等重复执行校验", async () => {
+      const duplicate = requireObject(
+        await apiRequest("POST", `/orders/execute-signal/${session.signalId}`, {
+          exchange_account_id: session.accountId,
+        }),
+        "重复执行",
+      );
+      return {
+        original_execution_id: session.executionId,
+        duplicate_execution_id: duplicate.execution_id,
+        same_execution: duplicate.execution_id === session.executionId,
+      };
+    });
+  }
+
+  async function runFullMockFlow() {
+    setBusy(true);
+    try {
+      await checkHealth();
+      await registerAndLogin();
+      await createMockAccount();
+      await configureMockKey();
+      await enableRisk();
+      await previewTarget();
+      await executeManualOrder();
+      await verifyIdempotency();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canUseAccount = Boolean(session.token && session.accountId);
+  const canVerifyIdempotency = Boolean(canUseAccount && session.signalId);
+  const testnetAccounts = exchangeAccounts.filter(
+    (account) =>
+      account.account_mode === "TESTNET" || account.account_mode === "REAL",
+  );
+  const selectedTestnetAccount = testnetAccounts.find(
+    (account) => account.id === testnetAccountId,
+  );
+
+  return (
+    <main className="shell">
+      <header className="topbar">
         <div>
           <div className="brand">多租户加密货币交易执行与跟单平台</div>
           <div className="subtle">Ubuntu 集成测试控制台</div>
