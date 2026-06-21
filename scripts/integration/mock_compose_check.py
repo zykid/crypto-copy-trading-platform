@@ -14,6 +14,7 @@ def request(
     payload: dict[str, Any] | None = None,
     token: str | None = None,
     expected_status: int = 200,
+    extra_headers: dict[str, str] | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]] | None:
     data = None if payload is None else json.dumps(payload).encode("utf-8")
     headers = {"Accept": "application/json"}
@@ -21,6 +22,8 @@ def request(
         headers["Content-Type"] = "application/json"
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
+    if extra_headers is not None:
+        headers.update(extra_headers)
 
     req = urllib.request.Request(
         f"{BASE_URL}{path}",
@@ -91,6 +94,17 @@ def register_and_login(suffix: str) -> tuple[dict[str, Any], str]:
     user = register_user(suffix)
     token = login_user(suffix)
     return user, token
+
+
+def reauthenticate_user(token: str) -> str:
+    response = request(
+        "POST",
+        "/auth/reauthenticate",
+        {"password": "ChangeMe12345!"},
+        token=token,
+    )
+    assert isinstance(response, dict)
+    return str(response["reauthentication_token"])
 
 
 def create_manual_signal(
@@ -220,6 +234,7 @@ def main() -> None:
         expected_status=404,
     )
 
+    reauthentication_token = reauthenticate_user(owner_token)
     secret_metadata = request(
         "POST",
         f"/exchange-accounts/{account_id}/api-key",
@@ -229,6 +244,9 @@ def main() -> None:
             "passphrase": "mock-passphrase",
         },
         token=owner_token,
+        extra_headers={
+            "X-Reauthentication-Token": reauthentication_token,
+        },
     )
     assert isinstance(secret_metadata, dict)
     assert secret_metadata["configured"] is True
