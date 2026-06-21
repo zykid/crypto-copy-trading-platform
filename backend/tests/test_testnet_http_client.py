@@ -35,7 +35,7 @@ def test_testnet_signed_http_client_uses_okx_demo_endpoint() -> None:
 
     prepared = client.prepare_public_request("/api/v5/public/time")
 
-    assert prepared.url == "https://openapi.okx.com/api/v5/public/time"
+    assert prepared.url == "https://www.okx.com/api/v5/public/time"
 
 
 def test_testnet_signed_http_client_accepts_injected_transport_without_network() -> None:
