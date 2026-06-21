@@ -33,3 +33,4 @@ def test_cors_middleware_is_registered() -> None:
     assert "http://192.168.2.42:3000" in cors_middleware[0].kwargs["allow_origins"]
     assert "POST" in cors_middleware[0].kwargs["allow_methods"]
     assert "Authorization" in cors_middleware[0].kwargs["allow_headers"]
+    assert "X-Reauthentication-Token" in cors_middleware[0].kwargs["allow_headers"]
