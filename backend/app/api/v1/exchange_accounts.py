@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_reauthenticated_user
+from app.core.config import settings
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.exchange_account import (
@@ -10,6 +11,7 @@ from app.schemas.exchange_account import (
     ExchangeAccountCreate,
     ExchangeAccountResponse,
     ExchangeAccountUpdate,
+    TestnetReadOnlyCheckResponse,
 )
 from app.services.exchange_accounts import (
     create_account,
@@ -20,6 +22,12 @@ from app.services.exchange_accounts import (
     list_accounts,
     update_account,
     upsert_api_key_secret,
+)
+from app.services.testnet_read_only_check import (
+    TestnetReadOnlyAccountNotFoundError,
+    TestnetReadOnlyAuthenticationError,
+    TestnetReadOnlyCheckBlockedError,
+    run_testnet_read_only_check,
 )
 
 router = APIRouter()
@@ -142,3 +150,42 @@ def remove_api_key(
     if secret is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="api key not found")
     delete_api_key_secret(secret, db)
+
+
+@router.post(
+    "/{account_id}/testnet-read-only-check",
+    response_model=TestnetReadOnlyCheckResponse,
+)
+def check_testnet_read_only_credentials(
+    account_id: str,
+    current_user: User = Depends(get_reauthenticated_user),
+    db: Session = Depends(get_db),
+) -> TestnetReadOnlyCheckResponse:
+    try:
+        result = run_testnet_read_only_check(
+            db,
+            user_id=current_user.id,
+            exchange_account_id=account_id,
+            testnet_adapters_enabled=settings.testnet_adapters_enabled,
+        )
+    except TestnetReadOnlyAccountNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="account not found",
+        ) from exc
+    except TestnetReadOnlyCheckBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"reasons": list(exc.reasons)},
+        ) from exc
+    except TestnetReadOnlyAuthenticationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="testnet read-only authentication failed",
+        ) from exc
+    return TestnetReadOnlyCheckResponse(
+        exchange_account_id=result.exchange_account_id,
+        exchange_name=result.exchange_name,
+        authenticated=result.authenticated,
+        balance_asset_count=result.balance_asset_count,
+    )

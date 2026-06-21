@@ -40,3 +40,10 @@ class ApiKeySecretMetadata(BaseModel):
     configured: bool
     has_passphrase: bool
     warning: str = "Disable withdrawal permission on this exchange API key."
+
+
+class TestnetReadOnlyCheckResponse(BaseModel):
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    authenticated: bool
+    balance_asset_count: int
