@@ -13,6 +13,7 @@ def create_exchange_adapter(
     testnet_adapters_enabled: bool = False,
     http_client: ExchangeHttpClient | None = None,
     credentials: ExchangeCredentials | None = None,
+    okx_demo_trading: bool = True,
 ) -> ExchangeAdapter:
     if exchange_name == ExchangeName.MOCK:
         return MockExchange()
@@ -33,5 +34,6 @@ def create_exchange_adapter(
             adapters_enabled=testnet_adapters_enabled,
             http_client=http_client,
             credentials=credentials,
+            demo_trading=okx_demo_trading,
         )
     raise ValueError(f"unsupported exchange: {exchange_name}")
