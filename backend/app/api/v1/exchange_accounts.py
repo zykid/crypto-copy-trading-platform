@@ -11,6 +11,7 @@ from app.schemas.exchange_account import (
     ExchangeAccountCreate,
     ExchangeAccountResponse,
     ExchangeAccountUpdate,
+    RealReadOnlyCheckResponse,
     TestnetReadOnlyCheckResponse,
 )
 from app.services.exchange_accounts import (
@@ -22,6 +23,12 @@ from app.services.exchange_accounts import (
     list_accounts,
     update_account,
     upsert_api_key_secret,
+)
+from app.services.real_read_only_check import (
+    RealReadOnlyAccountNotFoundError,
+    RealReadOnlyAuthenticationError,
+    RealReadOnlyCheckBlockedError,
+    run_real_read_only_check,
 )
 from app.services.testnet_read_only_check import (
     TestnetReadOnlyAccountNotFoundError,
@@ -184,6 +191,44 @@ def check_testnet_read_only_credentials(
             detail="testnet read-only authentication failed",
         ) from exc
     return TestnetReadOnlyCheckResponse(
+        exchange_account_id=result.exchange_account_id,
+        exchange_name=result.exchange_name,
+        authenticated=result.authenticated,
+        balance_asset_count=result.balance_asset_count,
+    )
+
+
+@router.post(
+    "/{account_id}/real-read-only-check",
+    response_model=RealReadOnlyCheckResponse,
+)
+def check_real_read_only_credentials(
+    account_id: str,
+    current_user: User = Depends(get_reauthenticated_user),
+    db: Session = Depends(get_db),
+) -> RealReadOnlyCheckResponse:
+    try:
+        result = run_real_read_only_check(
+            db,
+            user_id=current_user.id,
+            exchange_account_id=account_id,
+        )
+    except RealReadOnlyAccountNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="account not found",
+        ) from exc
+    except RealReadOnlyCheckBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"reasons": list(exc.reasons)},
+        ) from exc
+    except RealReadOnlyAuthenticationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="production read-only authentication failed",
+        ) from exc
+    return RealReadOnlyCheckResponse(
         exchange_account_id=result.exchange_account_id,
         exchange_name=result.exchange_name,
         authenticated=result.authenticated,
