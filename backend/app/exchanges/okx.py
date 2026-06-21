@@ -12,7 +12,6 @@ class OKXAdapter(ReadOnlyTestnetAdapter):
     symbol_rules_path = "/api/v5/public/instruments"
     balances_path = "/api/v5/account/balance"
     positions_path = "/api/v5/account/positions"
-    private_security_type = ExchangeSecurityType.OKX_DEMO_SIGNED
 
     def __init__(
         self,
@@ -20,7 +19,13 @@ class OKXAdapter(ReadOnlyTestnetAdapter):
         adapters_enabled: bool = False,
         http_client: ExchangeHttpClient | None = None,
         credentials: ExchangeCredentials | None = None,
+        demo_trading: bool = True,
     ) -> None:
+        self.private_security_type = (
+            ExchangeSecurityType.OKX_DEMO_SIGNED
+            if demo_trading
+            else ExchangeSecurityType.SIGNED
+        )
         super().__init__(
             endpoint_config=get_testnet_endpoint_config(ExchangeName.OKX),
             adapters_enabled=adapters_enabled,
