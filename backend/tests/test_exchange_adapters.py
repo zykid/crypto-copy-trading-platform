@@ -266,6 +266,28 @@ def test_okx_authenticated_read_only_methods_use_demo_security_type() -> None:
     assert client.private_calls[1][2] == ExchangeSecurityType.OKX_DEMO_SIGNED
 
 
+def test_okx_production_read_only_methods_do_not_use_demo_security_type() -> None:
+    client = FakeHttpClient(
+        {},
+        {
+            (
+                "/api/v5/account/balance",
+                (),
+                ExchangeSecurityType.SIGNED,
+            ): {"data": [{"details": []}]},
+        },
+    )
+    adapter = OKXAdapter(
+        adapters_enabled=True,
+        http_client=client,
+        credentials=credentials(),
+        demo_trading=False,
+    )
+
+    assert adapter.get_balances() == []
+    assert client.private_calls[0][2] == ExchangeSecurityType.SIGNED
+
+
 def test_binance_public_methods_use_fake_client() -> None:
     client = FakeHttpClient(
         {
