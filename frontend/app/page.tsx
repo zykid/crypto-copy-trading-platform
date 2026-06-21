@@ -1,3 +1,4 @@
+
 "use client";
 
 import QRCode from "qrcode";
@@ -105,6 +106,7 @@ export default function Home() {
   const [exchangeAccounts, setExchangeAccounts] = useState<ExchangeAccount[]>([]);
   const [testnetAccountId, setTestnetAccountId] = useState("");
   const [testnetForm, setTestnetForm] = useState({
+    accountMode: "TESTNET" as "TESTNET" | "REAL",
     exchangeName: "binance" as "binance" | "bybit" | "okx",
     accountLabel: "",
     apiKey: "",
@@ -148,10 +150,6 @@ export default function Home() {
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     if (response.status !== expectedStatus) {
-      if (response.status === 401 && token) {
-        clearSession();
-        throw new Error("登录会话已失效，请重新登录");
-      }
       throw new Error(`${method} ${path} 返回 ${response.status}: ${formatDetail(body)}`);
     }
     return body;
@@ -210,21 +208,22 @@ export default function Home() {
       throw new Error("交易所账户返回格式异常");
     }
     const accounts = accountResult as ExchangeAccount[];
-    const firstTestnetAccount = accounts.find(
-      (account) => account.account_mode === "TESTNET",
+    const firstReadOnlyAccount = accounts.find(
+      (account) =>
+        account.account_mode === "REAL" || account.account_mode === "TESTNET",
     );
-    let firstTestnetKeyConfigured = false;
-    if (firstTestnetAccount) {
+    let firstReadOnlyKeyConfigured = false;
+    if (firstReadOnlyAccount) {
       const metadata = requireObject(
         await apiRequest(
           "GET",
-          `/exchange-accounts/${firstTestnetAccount.id}/api-key`,
+          `/exchange-accounts/${firstReadOnlyAccount.id}/api-key`,
           undefined,
           token,
         ),
         "测试网密钥状态",
       );
-      firstTestnetKeyConfigured = Boolean(metadata.configured);
+      firstReadOnlyKeyConfigured = Boolean(metadata.configured);
     }
 
     if (role === "super_admin") {
@@ -259,12 +258,13 @@ export default function Home() {
     setStorageLocations(locations);
     setMfaStatus(nextMfaStatus);
     setExchangeAccounts(accounts);
-    setTestnetAccountId(firstTestnetAccount?.id ?? "");
-    setTestnetKeyConfigured(firstTestnetKeyConfigured);
-    if (firstTestnetAccount && firstTestnetAccount.exchange_name !== "mock") {
+    setTestnetAccountId(firstReadOnlyAccount?.id ?? "");
+    setTestnetKeyConfigured(firstReadOnlyKeyConfigured);
+    if (firstReadOnlyAccount && firstReadOnlyAccount.exchange_name !== "mock") {
       setTestnetForm((current) => ({
         ...current,
-        exchangeName: firstTestnetAccount.exchange_name as
+        accountMode: firstReadOnlyAccount.account_mode as "TESTNET" | "REAL",
+        exchangeName: firstReadOnlyAccount.exchange_name as
           | "binance"
           | "bybit"
           | "okx",
@@ -376,6 +376,7 @@ export default function Home() {
     setTestnetAccountId("");
     setTestnetKeyConfigured(false);
     setTestnetForm({
+      accountMode: "TESTNET",
       exchangeName: "binance",
       accountLabel: "",
       apiKey: "",
@@ -517,17 +518,19 @@ export default function Home() {
   }
 
   async function createTestnetAccount() {
-    await runStep("创建 TESTNET 账户", async () => {
+    const mode = testnetForm.accountMode;
+    const exchangeName = mode === "REAL" ? "okx" : testnetForm.exchangeName;
+    await runStep(`创建 ${mode} 只读账户`, async () => {
       const account = requireObject(
         await apiRequest("POST", "/exchange-accounts", {
-          exchange_name: testnetForm.exchangeName,
+          exchange_name: exchangeName,
           account_label:
             testnetForm.accountLabel.trim() ||
-            `${testnetForm.exchangeName.toUpperCase()} Testnet`,
-          account_mode: "TESTNET",
+            `${exchangeName.toUpperCase()} ${mode === "REAL" ? "Production Read Only" : "Testnet"}`,
+          account_mode: mode,
           trading_enabled: false,
         }, session.token, 201),
-        "创建 TESTNET 账户",
+        `创建 ${mode} 只读账户`,
       ) as ExchangeAccount;
       setExchangeAccounts((current) => [...current, account]);
       setTestnetAccountId(account.id);
@@ -550,6 +553,7 @@ export default function Home() {
     if (selectedAccount && selectedAccount.exchange_name !== "mock") {
       setTestnetForm((current) => ({
         ...current,
+        accountMode: selectedAccount.account_mode as "TESTNET" | "REAL",
         exchangeName: selectedAccount.exchange_name as "binance" | "bybit" | "okx",
       }));
     }
@@ -572,11 +576,11 @@ export default function Home() {
 
   async function saveTestnetCredentials() {
     if (!testnetAccountId) {
-      appendLog("保存测试网 API Key", false, "请先创建或选择 TESTNET 账户");
+      appendLog("保存只读 API Key", false, "请先创建或选择只读账户");
       return;
     }
     if (testnetForm.exchangeName === "okx" && !testnetForm.passphrase) {
-      appendLog("保存测试网 API Key", false, "OKX Demo Trading 必须填写 Passphrase");
+      appendLog("保存只读 API Key", false, "OKX API 必须填写 Passphrase");
       return;
     }
     const credentials = {
@@ -586,7 +590,7 @@ export default function Home() {
       password: testnetForm.password,
     };
     try {
-      await runStep("保存测试网 API Key", async () => {
+      await runStep("保存只读 API Key", async () => {
         const reauthenticationToken = await createReauthenticationToken(
           credentials.password,
         );
@@ -618,22 +622,31 @@ export default function Home() {
 
   async function runTestnetReadOnlyCheck() {
     if (!testnetAccountId) {
-      appendLog("测试网只读认证", false, "请先创建或选择 TESTNET 账户");
+      appendLog("只读认证", false, "请先创建或选择只读账户");
       return;
     }
     const password = testnetForm.password;
     try {
-      await runStep("测试网只读认证", async () => {
-        const reauthenticationToken = await createReauthenticationToken(password);
-        return apiRequest(
-          "POST",
-          `/exchange-accounts/${testnetAccountId}/testnet-read-only-check`,
-          undefined,
-          session.token,
-          200,
-          { "X-Reauthentication-Token": reauthenticationToken },
-        );
-      });
+      await runStep(
+        selectedTestnetAccount?.account_mode === "REAL"
+          ? "OKX 正式 API 只读认证"
+          : "测试网只读认证",
+        async () => {
+          const reauthenticationToken = await createReauthenticationToken(password);
+          return apiRequest(
+            "POST",
+            `/exchange-accounts/${testnetAccountId}/${
+              selectedTestnetAccount?.account_mode === "REAL"
+                ? "real-read-only-check"
+                : "testnet-read-only-check"
+            }`,
+            undefined,
+            session.token,
+            200,
+            { "X-Reauthentication-Token": reauthenticationToken },
+          );
+        },
+      );
     } finally {
       setTestnetForm((current) => ({ ...current, password: "" }));
     }
@@ -672,101 +685,12 @@ export default function Home() {
   }
 
   async function enableRisk() {
-    await runStep("开启模拟风控交易", async () => {
-      return apiRequest("PATCH", `/risk-settings/${session.accountId}`, {
-        trading_enabled: true,
-        min_order_quantity: "0.01",
-        max_order_quantity: "1",
-        max_single_order_notional: "1000",
-      });
-    });
-  }
-
-  async function previewTarget() {
-    await runStep("仓位差额预览", async () => {
-      return apiRequest(
-        "POST",
-        `/positions/${session.accountId}/target-preview?symbol=BTCUSDT&target_quantity=0.5`,
-      );
-    });
-  }
-
-  async function executeManualOrder() {
-    await runStep("执行手工 Mock 订单", async () => {
-      const signal = requireObject(
-        await apiRequest(
-          "POST",
-          "/signals/manual",
-          { symbol: "BTCUSDT", side: "BUY", order_type: "MARKET", quantity: "0.2" },
-          session.token,
-          201,
-        ),
-        "创建信号",
-      );
-      const execution = requireObject(
-        await apiRequest("POST", `/orders/execute-signal/${signal.id}`, {
-          exchange_account_id: session.accountId,
-        }),
-        "执行订单",
-      );
-      setSession((current) => ({
-        ...current,
-        signalId: String(signal.id),
-        executionId: String(execution.execution_id),
-      }));
-      return execution;
-    });
-  }
-
-  async function verifyIdempotency() {
-    await runStep("幂等重复执行校验", async () => {
-      const duplicate = requireObject(
-        await apiRequest("POST", `/orders/execute-signal/${session.signalId}`, {
-          exchange_account_id: session.accountId,
-        }),
-        "重复执行",
-      );
-      return {
-        original_execution_id: session.executionId,
-        duplicate_execution_id: duplicate.execution_id,
-        same_execution: duplicate.execution_id === session.executionId,
-      };
-    });
-  }
-
-  async function runFullMockFlow() {
-    setBusy(true);
-    try {
-      await checkHealth();
-      await registerAndLogin();
-      await createMockAccount();
-      await configureMockKey();
-      await enableRisk();
-      await previewTarget();
-      await executeManualOrder();
-      await verifyIdempotency();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const canUseAccount = Boolean(session.token && session.accountId);
-  const canVerifyIdempotency = Boolean(canUseAccount && session.signalId);
-  const testnetAccounts = exchangeAccounts.filter(
-    (account) => account.account_mode === "TESTNET",
-  );
-  const selectedTestnetAccount = testnetAccounts.find(
-    (account) => account.id === testnetAccountId,
-  );
-
-  return (
-    <main className="shell">
-      <header className="topbar">
+    await runStep("开启模拟风…663 tokens truncated…topbar">
         <div>
           <div className="brand">多租户加密货币交易执行与跟单平台</div>
           <div className="subtle">Ubuntu 集成测试控制台</div>
         </div>
-        <div className="status">SIMULATION / TESTNET READ ONLY</div>
+        <div className="status">SIMULATION / TESTNET / REAL READ ONLY</div>
       </header>
 
       <div className="main console-layout">
@@ -924,9 +848,9 @@ export default function Home() {
           <section className="panel testnet-panel">
             <div className="panel-heading">
               <div>
-                <h2>测试网只读账户</h2>
+                <h2>交易所只读账户</h2>
                 <p className="panel-note">
-                  仅验证账户认证和余额读取；交易开关固定关闭，API Key 必须关闭提现权限
+                  支持测试网及 OKX 正式 API 只读认证；交易开关固定关闭，API Key 必须关闭提现权限
                 </p>
               </div>
               <span className={testnetKeyConfigured ? "mfa-enabled" : "mfa-disabled"}>
@@ -936,7 +860,7 @@ export default function Home() {
 
             <div className="testnet-account-row">
               <label>
-                已有 TESTNET 账户
+                已有只读账户
                 <select
                   value={testnetAccountId}
                   onChange={(event) => void selectTestnetAccount(event.target.value)}
@@ -945,9 +869,25 @@ export default function Home() {
                   <option value="">请选择</option>
                   {testnetAccounts.map((account) => (
                     <option key={account.id} value={account.id}>
-                      {account.account_label} · {account.exchange_name.toUpperCase()}
+                      {account.account_label} · {account.exchange_name.toUpperCase()} · {account.account_mode}
                     </option>
                   ))}
+                </select>
+              </label>
+              <label>
+                API 环境
+                <select
+                  value={testnetForm.accountMode}
+                  onChange={(event) => setTestnetForm({
+                    ...testnetForm,
+                    accountMode: event.target.value as "TESTNET" | "REAL",
+                    exchangeName:
+                      event.target.value === "REAL" ? "okx" : testnetForm.exchangeName,
+                  })}
+                  disabled={busy || Boolean(selectedTestnetAccount)}
+                >
+                  <option value="TESTNET">测试网 / Demo</option>
+                  <option value="REAL">OKX Production（仅只读）</option>
                 </select>
               </label>
               <label>
@@ -958,7 +898,11 @@ export default function Home() {
                     ...testnetForm,
                     exchangeName: event.target.value as "binance" | "bybit" | "okx",
                   })}
-                  disabled={busy || Boolean(selectedTestnetAccount)}
+                  disabled={
+                    busy ||
+                    Boolean(selectedTestnetAccount) ||
+                    testnetForm.accountMode === "REAL"
+                  }
                 >
                   <option value="binance">Binance Testnet</option>
                   <option value="bybit">Bybit Testnet</option>
