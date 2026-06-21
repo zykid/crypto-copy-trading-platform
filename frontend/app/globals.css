@@ -32,7 +32,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -70,7 +71,8 @@ button:disabled {
   opacity: 0.52;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 38px;
   border: 1px solid var(--border);
@@ -80,7 +82,8 @@ input {
   color: var(--foreground);
 }
 
-input:focus {
+input:focus,
+select:focus {
   border-color: var(--accent);
   outline: 2px solid rgba(4, 127, 117, 0.14);
 }
@@ -249,9 +252,49 @@ input:focus {
 .login-panel,
 .password-panel,
 .mfa-panel,
+.testnet-panel,
 .storage-panel,
 .log-panel {
   grid-column: 1 / -1;
+}
+
+.testnet-account-row,
+.testnet-credential-row,
+.testnet-action-row {
+  display: grid;
+  align-items: end;
+  gap: 10px;
+}
+
+.testnet-account-row {
+  grid-template-columns: 1.3fr 1fr 1fr auto;
+}
+
+.testnet-credential-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--soft);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.testnet-action-row {
+  grid-template-columns: minmax(240px, 1fr) auto auto;
+  margin-top: 12px;
+}
+
+.testnet-account-row label,
+.testnet-credential-row label,
+.testnet-action-row label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.testnet-check-action {
+  margin-top: 0;
+  width: auto;
 }
 
 .form-row {
@@ -424,7 +467,10 @@ input:focus {
 }
 
 @media (max-width: 900px) {
-  .password-form {
+  .password-form,
+  .testnet-account-row,
+  .testnet-credential-row,
+  .testnet-action-row {
     grid-template-columns: 1fr;
   }
 }

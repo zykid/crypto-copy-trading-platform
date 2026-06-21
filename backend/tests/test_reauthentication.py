@@ -1,9 +1,12 @@
+from inspect import signature
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_reauthenticated_user
+from app.api.v1.exchange_accounts import remove_api_key, set_api_key
 from app.core.security import (
     create_access_token,
     create_reauthentication_token,
@@ -141,3 +144,9 @@ def test_reauthentication_token_must_match_user_and_auth_version(
             x_reauth_token=access_token,
             current_user=user,
         )
+
+
+def test_api_key_mutations_require_recent_reauthentication() -> None:
+    for endpoint in (set_api_key, remove_api_key):
+        dependency = signature(endpoint).parameters["current_user"].default
+        assert dependency.dependency is get_reauthenticated_user
