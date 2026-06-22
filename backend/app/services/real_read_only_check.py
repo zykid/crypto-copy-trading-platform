@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -6,7 +5,11 @@ from sqlalchemy.orm import Session
 from app.db.models.exchange_account import AccountMode, ExchangeName
 from app.db.models.observability import AuditLog
 from app.exchanges.factory import create_exchange_adapter
-from app.exchanges.http_client import ExchangeHttpClient, SignedExchangeHttpClient
+from app.exchanges.http_client import (
+    ExchangeHttpClient,
+    ExchangeHttpRequestError,
+    SignedExchangeHttpClient,
+)
 from app.services.exchange_accounts import get_exchange_credentials, get_owned_account
 
 
@@ -21,7 +24,15 @@ class RealReadOnlyAccountNotFoundError(ValueError):
 
 
 class RealReadOnlyAuthenticationError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        *,
+        failure_type: str,
+        exchange_code: str | None = None,
+    ) -> None:
+        super().__init__("exchange authentication failed")
+        self.failure_type = failure_type
+        self.exchange_code = exchange_code
 
 
 @dataclass(frozen=True)
@@ -85,6 +96,21 @@ def run_real_read_only_check(
     )
     try:
         balances = adapter.get_balances()
+    except ExchangeHttpRequestError as exc:
+        _write_audit(
+            db,
+            user_id=user_id,
+            exchange_account_id=account.id,
+            exchange_name=account.exchange_name,
+            authenticated=False,
+            reasons=("exchange authentication failed",),
+            failure_type=exc.failure_type,
+            exchange_code=exc.exchange_code,
+        )
+        raise RealReadOnlyAuthenticationError(
+            failure_type=exc.failure_type,
+            exchange_code=exc.exchange_code,
+        ) from exc
     except Exception as exc:
         _write_audit(
             db,
@@ -93,8 +119,9 @@ def run_real_read_only_check(
             exchange_name=account.exchange_name,
             authenticated=False,
             reasons=("exchange authentication failed",),
+            failure_type="unexpected_error",
         )
-        raise RealReadOnlyAuthenticationError("exchange authentication failed") from exc
+        raise RealReadOnlyAuthenticationError(failure_type="unexpected_error") from exc
 
     _write_audit(
         db,
@@ -121,6 +148,8 @@ def _write_audit(
     authenticated: bool,
     reasons: tuple[str, ...] = (),
     balance_asset_count: int | None = None,
+    failure_type: str | None = None,
+    exchange_code: str | None = None,
 ) -> None:
     payload: dict[str, object] = {
         "exchange_name": exchange_name.value,
@@ -131,6 +160,10 @@ def _write_audit(
         payload["reasons"] = list(reasons)
     if balance_asset_count is not None:
         payload["balance_asset_count"] = balance_asset_count
+    if failure_type is not None:
+        payload["failure_type"] = failure_type
+    if exchange_code is not None:
+        payload["exchange_code"] = exchange_code
     db.add(
         AuditLog(
             user_id=user_id,
