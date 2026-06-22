@@ -338,3 +338,5 @@ Run on latest commit:
 - `Docker Integration`
 
 Both must stay green after this preparation step.
+
+The bounded OKX production read-only authentication validation and subsequent credential cleanup are recorded in `docs/phase-3-read-only-validation-20260623.md`. That record does not authorize REAL order execution.
