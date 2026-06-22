@@ -226,7 +226,11 @@ def check_real_read_only_credentials(
     except RealReadOnlyAuthenticationError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="production read-only authentication failed",
+            detail={
+                "reason": "production read-only authentication failed",
+                "failure_type": exc.failure_type,
+                "exchange_code": exc.exchange_code,
+            },
         ) from exc
     return RealReadOnlyCheckResponse(
         exchange_account_id=result.exchange_account_id,
