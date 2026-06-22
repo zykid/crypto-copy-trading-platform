@@ -1,13 +1,16 @@
 import base64
 import hashlib
 import hmac
+from io import BytesIO
 from typing import Any
+from urllib.error import HTTPError
 
 import pytest
 
 from app.db.models.exchange_account import ExchangeName
 from app.exchanges.http_client import (
     ExchangeCredentials,
+    ExchangeHttpRequestError,
     ExchangeSecurityType,
     PreparedExchangeRequest,
     SignedExchangeHttpClient,
@@ -255,6 +258,37 @@ def test_urllib_transport_wraps_request_errors_without_sensitive_details(monkeyp
 
     assert str(exc_info.value) == "exchange HTTP request failed"
     assert "secret-signature" not in str(exc_info.value)
+
+
+def test_urllib_transport_exposes_only_safe_exchange_error_metadata(monkeypatch) -> None:
+    def fail_urlopen(*_args: object, **_kwargs: object) -> object:
+        raise HTTPError(
+            "https://www.okx.com/api/v5/account/balance",
+            401,
+            "Unauthorized",
+            hdrs=None,
+            fp=BytesIO(b'{"code":"50111","msg":"Invalid key secret-value"}'),
+        )
+
+    monkeypatch.setattr("app.exchanges.http_client.urlopen", fail_urlopen)
+    transport = UrllibExchangeHttpTransport()
+    prepared = PreparedExchangeRequest(
+        method="GET",
+        url="https://www.okx.com/api/v5/account/balance",
+        path="/api/v5/account/balance",
+        params={},
+        headers={"OK-ACCESS-KEY": "secret-api-key"},
+    )
+
+    with pytest.raises(ExchangeHttpRequestError) as exc_info:
+        transport.request(prepared)
+
+    assert exc_info.value.failure_type == "authentication_failed"
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.exchange_code == "50111"
+    assert "secret-value" not in str(exc_info.value)
+    assert "secret-api-key" not in str(exc_info.value)
+
 
 def test_urllib_transport_sets_application_user_agent(monkeypatch) -> None:
     captured: dict[str, str | None] = {}
