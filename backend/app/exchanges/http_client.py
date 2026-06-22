@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -16,6 +17,20 @@ class ExchangeSecurityType(StrEnum):
     PUBLIC = "PUBLIC"
     SIGNED = "SIGNED"
     OKX_DEMO_SIGNED = "OKX_DEMO_SIGNED"
+
+
+class ExchangeHttpRequestError(RuntimeError):
+    def __init__(
+        self,
+        *,
+        failure_type: str,
+        status_code: int | None = None,
+        exchange_code: str | None = None,
+    ) -> None:
+        super().__init__("exchange HTTP request failed")
+        self.failure_type = failure_type
+        self.status_code = status_code
+        self.exchange_code = exchange_code
 
 
 @dataclass(frozen=True)
@@ -65,8 +80,15 @@ class UrllibExchangeHttpTransport:
         try:
             with urlopen(request, timeout=10) as response:  # noqa: S310
                 payload = response.read().decode("utf-8")
+        except HTTPError as exc:
+            exchange_code = _read_exchange_error_code(exc)
+            raise ExchangeHttpRequestError(
+                failure_type=_http_failure_type(exc.code),
+                status_code=exc.code,
+                exchange_code=exchange_code,
+            ) from exc
         except Exception as exc:
-            raise RuntimeError("exchange HTTP request failed") from exc
+            raise ExchangeHttpRequestError(failure_type="transport_error") from exc
         return json.loads(payload) if payload else {}
 
 
@@ -329,3 +351,27 @@ def _default_iso_timestamp() -> str:
     from datetime import UTC, datetime
 
     return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _read_exchange_error_code(exc: HTTPError) -> str | None:
+    try:
+        payload = json.loads(exc.read(4096).decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    code = payload.get("code")
+    if code is None:
+        return None
+    value = str(code)
+    return value[:40] if value else None
+
+
+def _http_failure_type(status_code: int) -> str:
+    if status_code in {401, 403}:
+        return "authentication_failed"
+    if status_code == 429:
+        return "rate_limited"
+    if status_code >= 500:
+        return "exchange_unavailable"
+    return "request_rejected"
