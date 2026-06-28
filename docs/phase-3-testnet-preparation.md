@@ -339,6 +339,7 @@ Runtime enforcement applies conservative testnet order throttling and concrete s
 24. Add read-only validation result template. Done.
 25. Add TESTNET order admission checklist. Done.
 26. Add TESTNET order validation result template. Done.
+27. Add read-only TESTNET order admission self-check. Done.
 
 ## Safety Rules Before Any Testnet Order
 
@@ -354,6 +355,7 @@ Before real testnet order submission can pass, the platform must enforce:
 - The adapter must support idempotent `client_order_id`.
 - The adapter must never run when account mode is `REAL`.
 - `docs/phase-3-testnet-order-admission-checklist.md` must be completed before a separately approved order window.
+- `GET /api/v1/orders/testnet/admission-check` must remain read-only and return `order_submission_authorized=false` outside an approved order window.
 
 ## Current Validation
 

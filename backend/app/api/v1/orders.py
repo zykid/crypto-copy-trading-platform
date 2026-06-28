@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.schemas.trading import (
     ExecuteSignalRequest,
     OrderExecutionResponse,
+    TestnetOrderAdmissionResponse,
     TestnetOrderSubmitRequest,
     TestnetOrderSubmitResponse,
 )
@@ -20,6 +21,7 @@ from app.services.rate_limit_service import (
     runtime_rate_limit_service,
 )
 from app.services.testnet_http_client import create_testnet_signed_http_client
+from app.services.testnet_order_admission import build_testnet_order_admission_report
 from app.services.testnet_order_api import (
     TestnetOrderApiBlockedError,
     build_testnet_order_api_context,
@@ -47,6 +49,42 @@ def execute_signal(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/testnet/admission-check", response_model=TestnetOrderAdmissionResponse)
+def get_testnet_order_admission_check(
+    exchange_account_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        report = build_testnet_order_admission_report(
+            db,
+            user_id=current_user.id,
+            exchange_account_id=exchange_account_id,
+            testnet_adapters_enabled=settings.testnet_adapters_enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return TestnetOrderAdmissionResponse(
+        exchange_account_id=report.exchange_account_id,
+        exchange_name=report.exchange_name,
+        account_mode=report.account_mode.value,
+        overall_status=report.overall_status.value,
+        read_only=report.read_only,
+        order_submission_authorized=report.order_submission_authorized,
+        gate_reasons=list(report.gate_reasons),
+        checks=[
+            {
+                "name": check.name,
+                "status": check.status.value,
+                "required": check.required,
+                "detail": check.detail,
+            }
+            for check in report.checks
+        ],
+    )
 
 
 @router.post("/testnet/submit", response_model=TestnetOrderSubmitResponse)

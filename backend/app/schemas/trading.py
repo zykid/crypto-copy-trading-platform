@@ -73,6 +73,24 @@ class TestnetOrderSubmitResponse(BaseModel):
     exchange_response: dict[str, object]
 
 
+class TestnetOrderAdmissionCheckResponse(BaseModel):
+    name: str
+    status: str
+    required: bool
+    detail: str
+
+
+class TestnetOrderAdmissionResponse(BaseModel):
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    account_mode: str
+    overall_status: str
+    read_only: bool
+    order_submission_authorized: bool
+    gate_reasons: list[str]
+    checks: list[TestnetOrderAdmissionCheckResponse]
+
+
 class OrderExecutionResponse(BaseModel):
     execution_id: str
     signal_id: str

@@ -38,6 +38,7 @@ Before any TESTNET order window:
 5. Confirm frontend and backend are reachable on the approved test network.
 6. Confirm the database backup path is configured and writable.
 7. Confirm audit logs and system events can be written.
+8. Confirm `GET /api/v1/orders/testnet/admission-check` returns only read-only status data.
 
 ## Required Account State
 
@@ -63,6 +64,7 @@ These gates must be verified before the temporary order window:
 - Risk setting `trading_enabled=false`.
 - Copy trading, strategy trading, webhook trading, and AI trading remain disabled.
 - Reconciliation repair execution remains disabled.
+- The read-only admission check returns `order_submission_authorized=false`.
 
 During the approved test window only:
 
