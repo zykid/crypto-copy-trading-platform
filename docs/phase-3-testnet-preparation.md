@@ -65,6 +65,7 @@ Implemented so far:
 - Guarded external notification delivery helpers for Telegram, email, and webhook alerts, disabled by default.
 - Reconciliation repair proposal planning, disabled by default and execution-blocked.
 - Read-only operator runbook for TESTNET and guarded REAL authentication validation.
+- Read-only validation result template for future exchange authentication records.
 
 Not implemented yet:
 
@@ -335,6 +336,7 @@ Runtime enforcement applies conservative testnet order throttling and concrete s
 21. Add guarded external operational alert delivery. Done with disabled-by-default Telegram, email, and webhook senders.
 22. Add reconciliation repair planning. Done as proposal-only, disabled by default, and execution-blocked.
 23. Add read-only operator runbook for TESTNET and guarded REAL authentication validation. Done.
+24. Add read-only validation result template. Done.
 
 ## Safety Rules Before Any Testnet Order
 
@@ -362,5 +364,7 @@ Both must stay green after this preparation step.
 The bounded OKX production read-only authentication validation and subsequent credential cleanup are recorded in `docs/phase-3-read-only-validation-20260623.md`. That record does not authorize REAL order execution.
 
 Operator steps for future read-only validation are recorded in `docs/phase-3-read-only-operator-runbook.md`.
+
+Future read-only exchange validation records must use `docs/phase-3-read-only-validation-template.md`.
 
 The credential-free live public endpoint results and the restored adapter-disable safety state are recorded in `docs/phase-3-public-connectivity-validation-20260623.md`. OKX requires a proxy or DNS-layer correction before another authenticated test; exchange CDN addresses must not be hard-coded in the application.

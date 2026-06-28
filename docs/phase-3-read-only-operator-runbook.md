@@ -93,6 +93,8 @@ Use this sequence for each exchange read-only validation:
 11. Remove or deactivate the temporary platform account credential.
 12. Record the result in a dated validation document if the test used real exchange authentication.
 
+Use `docs/phase-3-read-only-validation-template.md` as the required template for every new TESTNET, demo, or guarded REAL read-only exchange validation.
+
 ## Failure Handling
 
 If a read-only check fails:
