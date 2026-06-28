@@ -63,10 +63,11 @@ Implemented so far:
 - Persistent reconciliation audit, system event, and internal notification storage.
 - Reconciliation worker orchestration with tenant-scoped database snapshots and injected exchange/target providers.
 - Guarded external notification delivery helpers for Telegram, email, and webhook alerts, disabled by default.
+- Reconciliation repair proposal planning, disabled by default and execution-blocked.
 
 Not implemented yet:
 
-- Automatic reconciliation repair.
+- Automatic reconciliation repair execution.
 
 ## Endpoint Preparation
 
@@ -234,6 +235,18 @@ The reconciliation worker composes snapshot collection, comparison, hook plannin
 - The worker does not place orders, update positions, or repair drift.
 - External reconciliation drift alerts are optional, disabled by default, and receive only status, severity, difference count, and auto-fix-disabled metadata.
 
+## Reconciliation Repair Planning
+
+The reconciliation repair planner converts drift reports into proposal-only repair plans.
+
+- Proposal generation is disabled by default.
+- Plans always set `auto_fix_allowed=False` and `execution_allowed=False`.
+- Enabling proposal generation can create `BUY_TO_TARGET`, `SELL_TO_TARGET`, or `REVIEW_DATABASE_POSITION` proposals.
+- Requested execution is explicitly blocked with `EXECUTION_BLOCKED`.
+- The planner does not call exchanges, submit orders, update database positions, enable trading, or commit transactions.
+- Proposals include symbol, quantities, severity, and reconciliation reasons only.
+- Proposals do not include API keys, API secrets, passphrases, signatures, request headers, or exchange responses.
+
 ## Testnet Order Execution Service
 
 The testnet order execution service sends a prepared request only after the order preflight gate and runtime rate-limit checks approve the request.
@@ -319,6 +332,7 @@ Runtime enforcement applies conservative testnet order throttling and concrete s
 19. Add controlled WebSocket event consumption and reconnect orchestration. Done with injected transports.
 20. Add safe testnet balance and position event synchronization. Done with tenant/account/exchange gates, atomic validation, and caller-owned transactions.
 21. Add guarded external operational alert delivery. Done with disabled-by-default Telegram, email, and webhook senders.
+22. Add reconciliation repair planning. Done as proposal-only, disabled by default, and execution-blocked.
 
 ## Safety Rules Before Any Testnet Order
 
