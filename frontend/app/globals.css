@@ -405,6 +405,37 @@ select:focus {
   padding-left: 20px;
 }
 
+.testnet-window-approval {
+  border-top: 1px solid var(--soft);
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.testnet-window-approval strong {
+  font-size: 12px;
+}
+
+.testnet-window-approval p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.testnet-window-approval-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(110px, 1fr));
+}
+
+.testnet-window-approval-grid label {
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  font-weight: 650;
+  gap: 6px;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(180px, 1fr)) 120px;
@@ -498,6 +529,10 @@ select:focus {
   }
 
   .testnet-window-state {
+    grid-template-columns: 1fr;
+  }
+
+  .testnet-window-approval-grid {
     grid-template-columns: 1fr;
   }
 

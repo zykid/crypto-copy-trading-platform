@@ -111,6 +111,29 @@ class TestnetOrderWindowPlanResponse(BaseModel):
     order_submission_authorized: bool
 
 
+class TestnetOrderWindowApprovalRequest(BaseModel):
+    exchange_account_id: str
+    symbol: str = Field(min_length=1, max_length=40)
+    side: OrderSide
+    max_quantity: Decimal = Field(gt=0)
+    max_notional: Decimal = Field(gt=0)
+    duration_minutes: int = Field(ge=1, le=10)
+    acknowledgement: str
+
+
+class TestnetOrderWindowApprovalResponse(BaseModel):
+    audit_log_id: str
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    symbol: str
+    side: OrderSide
+    max_quantity: Decimal
+    max_notional: Decimal
+    duration_minutes: int
+    order_submission_authorized: bool
+    trading_flags_changed: bool
+
+
 class OrderExecutionResponse(BaseModel):
     execution_id: str
     signal_id: str

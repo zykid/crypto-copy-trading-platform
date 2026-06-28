@@ -11,6 +11,8 @@ from app.schemas.trading import (
     TestnetOrderAdmissionResponse,
     TestnetOrderSubmitRequest,
     TestnetOrderSubmitResponse,
+    TestnetOrderWindowApprovalRequest,
+    TestnetOrderWindowApprovalResponse,
     TestnetOrderWindowPlanResponse,
 )
 from app.services.external_alerts import ExternalAlertConfig
@@ -29,6 +31,10 @@ from app.services.testnet_order_api import (
 )
 from app.services.testnet_order_execution import execute_testnet_order
 from app.services.testnet_order_window import build_testnet_order_window_plan
+from app.services.testnet_order_window_approval import (
+    TestnetOrderWindowApprovalBlockedError,
+    record_testnet_order_window_approval,
+)
 
 router = APIRouter()
 _operational_alert_dispatch_state: dict[str, int] = {}
@@ -121,6 +127,48 @@ def get_testnet_order_window_plan(
         required_operator_steps=list(plan.required_operator_steps),
         mutations_allowed=plan.mutations_allowed,
         order_submission_authorized=plan.order_submission_authorized,
+    )
+
+
+@router.post("/testnet/window-approval", response_model=TestnetOrderWindowApprovalResponse)
+def approve_testnet_order_window(
+    payload: TestnetOrderWindowApprovalRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        approval = record_testnet_order_window_approval(
+            db,
+            user_id=current_user.id,
+            user_role=current_user.role,
+            exchange_account_id=payload.exchange_account_id,
+            symbol=payload.symbol,
+            side=payload.side,
+            max_quantity=payload.max_quantity,
+            max_notional=payload.max_notional,
+            duration_minutes=payload.duration_minutes,
+            acknowledgement=payload.acknowledgement,
+            testnet_adapters_enabled=settings.testnet_adapters_enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except TestnetOrderWindowApprovalBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"reasons": list(exc.reasons)},
+        ) from exc
+
+    return TestnetOrderWindowApprovalResponse(
+        audit_log_id=approval.audit_log_id,
+        exchange_account_id=approval.exchange_account_id,
+        exchange_name=approval.exchange_name,
+        symbol=approval.symbol,
+        side=approval.side,
+        max_quantity=approval.max_quantity,
+        max_notional=approval.max_notional,
+        duration_minutes=approval.duration_minutes,
+        order_submission_authorized=approval.order_submission_authorized,
+        trading_flags_changed=approval.trading_flags_changed,
     )
 
 

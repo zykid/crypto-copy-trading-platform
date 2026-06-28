@@ -78,6 +78,19 @@ type TestnetOrderWindowPlan = {
   order_submission_authorized: boolean;
 };
 
+type TestnetOrderWindowApproval = {
+  audit_log_id: string;
+  exchange_account_id: string;
+  exchange_name: ExchangeAccount["exchange_name"];
+  symbol: string;
+  side: "BUY" | "SELL";
+  max_quantity: string;
+  max_notional: string;
+  duration_minutes: number;
+  order_submission_authorized: boolean;
+  trading_flags_changed: boolean;
+};
+
 const emptySession: SessionState = {
   token: "",
   userId: "",
@@ -152,6 +165,13 @@ export default function Home() {
     apiSecret: "",
     passphrase: "",
     password: "",
+  });
+  const [testnetWindowApprovalForm, setTestnetWindowApprovalForm] = useState({
+    symbol: "BTCUSDT",
+    side: "BUY" as "BUY" | "SELL",
+    maxQuantity: "0.001",
+    maxNotional: "100",
+    durationMinutes: "5",
   });
   const [testnetKeyConfigured, setTestnetKeyConfigured] = useState(false);
 
@@ -764,6 +784,46 @@ export default function Home() {
     });
   }
 
+  async function recordTestnetOrderWindowApproval() {
+    if (!testnetAccountId) {
+      appendLog("TESTNET order window approval", false, "Select a TESTNET account first");
+      return;
+    }
+    if (selectedTestnetAccount?.account_mode !== "TESTNET") {
+      appendLog(
+        "TESTNET order window approval",
+        false,
+        "Only TESTNET accounts can record an order window approval",
+      );
+      return;
+    }
+    await runStep("TESTNET order window approval", async () => {
+      const approval = requireObject(
+        await apiRequest("POST", "/orders/testnet/window-approval", {
+          exchange_account_id: testnetAccountId,
+          symbol: testnetWindowApprovalForm.symbol.trim().toUpperCase(),
+          side: testnetWindowApprovalForm.side,
+          max_quantity: testnetWindowApprovalForm.maxQuantity,
+          max_notional: testnetWindowApprovalForm.maxNotional,
+          duration_minutes: Number(testnetWindowApprovalForm.durationMinutes),
+          acknowledgement: "APPROVE_TESTNET_ORDER_WINDOW_ONLY",
+        }),
+        "TESTNET order window approval",
+      ) as unknown as TestnetOrderWindowApproval;
+      return {
+        audit_log_id: approval.audit_log_id,
+        exchange_account_id: approval.exchange_account_id,
+        symbol: approval.symbol,
+        side: approval.side,
+        max_quantity: approval.max_quantity,
+        max_notional: approval.max_notional,
+        duration_minutes: approval.duration_minutes,
+        order_submission_authorized: approval.order_submission_authorized,
+        trading_flags_changed: approval.trading_flags_changed,
+      };
+    });
+  }
+
   async function createMockAccount() {
     await runStep("创建 Mock 模拟账户", async () => {
       const account = requireObject(
@@ -1336,6 +1396,78 @@ export default function Home() {
                         <li key={step}>{step}</li>
                       ))}
                     </ol>
+                  </div>
+                  <div className="testnet-window-approval">
+                    <strong>Approval record only</strong>
+                    <p>
+                      Writes an append-only audit record. It does not enable trading
+                      flags, enable adapters, or submit orders.
+                    </p>
+                    <div className="testnet-window-approval-grid">
+                      <label>
+                        Symbol
+                        <input
+                          value={testnetWindowApprovalForm.symbol}
+                          onChange={(event) => setTestnetWindowApprovalForm({
+                            ...testnetWindowApprovalForm,
+                            symbol: event.target.value,
+                          })}
+                        />
+                      </label>
+                      <label>
+                        Side
+                        <select
+                          value={testnetWindowApprovalForm.side}
+                          onChange={(event) => setTestnetWindowApprovalForm({
+                            ...testnetWindowApprovalForm,
+                            side: event.target.value as "BUY" | "SELL",
+                          })}
+                        >
+                          <option value="BUY">BUY</option>
+                          <option value="SELL">SELL</option>
+                        </select>
+                      </label>
+                      <label>
+                        Max quantity
+                        <input
+                          value={testnetWindowApprovalForm.maxQuantity}
+                          onChange={(event) => setTestnetWindowApprovalForm({
+                            ...testnetWindowApprovalForm,
+                            maxQuantity: event.target.value,
+                          })}
+                        />
+                      </label>
+                      <label>
+                        Max notional
+                        <input
+                          value={testnetWindowApprovalForm.maxNotional}
+                          onChange={(event) => setTestnetWindowApprovalForm({
+                            ...testnetWindowApprovalForm,
+                            maxNotional: event.target.value,
+                          })}
+                        />
+                      </label>
+                      <label>
+                        Duration minutes
+                        <input
+                          value={testnetWindowApprovalForm.durationMinutes}
+                          onChange={(event) => setTestnetWindowApprovalForm({
+                            ...testnetWindowApprovalForm,
+                            durationMinutes: event.target.value,
+                          })}
+                        />
+                      </label>
+                    </div>
+                    <button
+                      onClick={recordTestnetOrderWindowApproval}
+                      disabled={
+                        busy ||
+                        !["super_admin", "admin"].includes(session.role) ||
+                        testnetOrderWindowPlan.status !== "READY_FOR_SEPARATE_APPROVAL"
+                      }
+                    >
+                      Record approval audit
+                    </button>
                   </div>
                 </>
               ) : (
