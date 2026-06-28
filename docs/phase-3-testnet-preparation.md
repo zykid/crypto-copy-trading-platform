@@ -343,6 +343,7 @@ Runtime enforcement applies conservative testnet order throttling and concrete s
 28. Wire read-only TESTNET order admission self-check into the Ubuntu test UI. Done.
 29. Record Ubuntu deployment validation for the TESTNET admission UI. Done.
 30. Add read-only TESTNET order window planning endpoint. Done without enabling adapters, changing database trading flags, writing audit rows, or submitting orders.
+31. Wire read-only TESTNET order window planning into the Ubuntu test UI. Done without enabling adapters, changing database trading flags, writing audit rows, or submitting orders.
 
 ## Safety Rules Before Any Testnet Order
 
@@ -385,5 +386,7 @@ The Ubuntu test UI exposes the admission self-check as a read-only status panel.
 The Ubuntu deployment validation for this read-only admission UI is recorded in `docs/phase-3-testnet-admission-ui-validation-20260628.md`.
 
 The TESTNET order window plan endpoint is preparation-only. It reports current account/risk/secret prerequisites and required operator steps for a future separately approved bounded window, but it must not mutate runtime flags or authorize order submission.
+
+The Ubuntu deployment validation for the read-only TESTNET order window plan UI is recorded in `docs/phase-3-testnet-window-plan-ui-validation-20260628.md`.
 
 The credential-free live public endpoint results and the restored adapter-disable safety state are recorded in `docs/phase-3-public-connectivity-validation-20260623.md`. OKX requires a proxy or DNS-layer correction before another authenticated test; exchange CDN addresses must not be hard-coded in the application.
