@@ -62,10 +62,10 @@ Implemented so far:
 - Reconciliation audit, system-event, and notification hook plan generation.
 - Persistent reconciliation audit, system event, and internal notification storage.
 - Reconciliation worker orchestration with tenant-scoped database snapshots and injected exchange/target providers.
+- Guarded external notification delivery helpers for Telegram, email, and webhook alerts, disabled by default.
 
 Not implemented yet:
 
-- External notification delivery.
 - Automatic reconciliation repair.
 
 ## Endpoint Preparation
@@ -201,7 +201,8 @@ The reconciliation hook service converts reconciliation reports into side-effect
 - Matched reports produce no system event and no notification plan.
 - Drifted reports produce a system event plan and one notification plan per requested channel.
 - Supported notification channels are `INTERNAL`, `TELEGRAM`, `EMAIL`, and `WEBHOOK`.
-- External channels are reserved plans only; no external message is sent in this phase.
+- External channels are sent only through explicitly configured operational alert runtimes.
+- External alert channels are disabled by default and use safe coarse metadata only.
 - Payload quantities are serialized as strings to avoid Decimal precision loss.
 - Payloads include user and exchange account identifiers, status, severity, and differences only.
 - Payloads do not include API keys, API secrets, passphrases, signatures, or request headers.
@@ -231,6 +232,7 @@ The reconciliation worker composes snapshot collection, comparison, hook plannin
 - The worker flushes observability records but does not commit the caller's transaction.
 - Worker, report, and hook plan all keep `auto_fix_allowed=False`.
 - The worker does not place orders, update positions, or repair drift.
+- External reconciliation drift alerts are optional, disabled by default, and receive only status, severity, difference count, and auto-fix-disabled metadata.
 
 ## Testnet Order Execution Service
 
@@ -269,6 +271,7 @@ Current adapter skeletons behave as follows:
 - User stream support includes connection plans, testnet-only transport, bounded consumption/reconnect orchestration, and explicit tenant-scoped balance/position synchronization.
 - No default background user-stream worker, order synchronization, or automatic repair is enabled.
 - Position reconciliation support is limited to snapshot comparison reports, hook plans, and persistence.
+- External alert delivery is guarded, disabled by default, and limited to safe operational metadata.
 - MockExchange remains the only adapter that can execute SIMULATION orders in the current codebase.
 
 ## Required API Key Rules
@@ -315,6 +318,7 @@ Runtime enforcement applies conservative testnet order throttling and concrete s
 18. Add reconciliation worker orchestration around snapshot providers and persistence. Done with tenant-scoped database snapshots and injected providers.
 19. Add controlled WebSocket event consumption and reconnect orchestration. Done with injected transports.
 20. Add safe testnet balance and position event synchronization. Done with tenant/account/exchange gates, atomic validation, and caller-owned transactions.
+21. Add guarded external operational alert delivery. Done with disabled-by-default Telegram, email, and webhook senders.
 
 ## Safety Rules Before Any Testnet Order
 
@@ -340,3 +344,5 @@ Run on latest commit:
 Both must stay green after this preparation step.
 
 The bounded OKX production read-only authentication validation and subsequent credential cleanup are recorded in `docs/phase-3-read-only-validation-20260623.md`. That record does not authorize REAL order execution.
+
+The credential-free live public endpoint results and the restored adapter-disable safety state are recorded in `docs/phase-3-public-connectivity-validation-20260623.md`. OKX requires a proxy or DNS-layer correction before another authenticated test; exchange CDN addresses must not be hard-coded in the application.
