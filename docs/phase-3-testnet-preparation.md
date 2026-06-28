@@ -393,4 +393,6 @@ The Ubuntu deployment validation for the read-only TESTNET order window plan UI 
 
 The TESTNET order window approval endpoint records operator intent only. It requires an admin or super admin, a TESTNET account, encrypted API key metadata, risk settings, disabled global testnet adapters, disabled account trading, disabled risk trading, a 1-10 minute duration, and the exact acknowledgement `APPROVE_TESTNET_ORDER_WINDOW_ONLY`. The approval audit record contains order bounds but no API secret material and does not authorize order submission.
 
+The Ubuntu deployment validation for the protected TESTNET order window approval audit UI is recorded in `docs/phase-3-testnet-window-approval-ui-validation-20260629.md`.
+
 The credential-free live public endpoint results and the restored adapter-disable safety state are recorded in `docs/phase-3-public-connectivity-validation-20260623.md`. OKX requires a proxy or DNS-layer correction before another authenticated test; exchange CDN addresses must not be hard-coded in the application.
