@@ -64,6 +64,7 @@ Implemented so far:
 - Reconciliation worker orchestration with tenant-scoped database snapshots and injected exchange/target providers.
 - Guarded external notification delivery helpers for Telegram, email, and webhook alerts, disabled by default.
 - Reconciliation repair proposal planning, disabled by default and execution-blocked.
+- Read-only operator runbook for TESTNET and guarded REAL authentication validation.
 
 Not implemented yet:
 
@@ -333,6 +334,7 @@ Runtime enforcement applies conservative testnet order throttling and concrete s
 20. Add safe testnet balance and position event synchronization. Done with tenant/account/exchange gates, atomic validation, and caller-owned transactions.
 21. Add guarded external operational alert delivery. Done with disabled-by-default Telegram, email, and webhook senders.
 22. Add reconciliation repair planning. Done as proposal-only, disabled by default, and execution-blocked.
+23. Add read-only operator runbook for TESTNET and guarded REAL authentication validation. Done.
 
 ## Safety Rules Before Any Testnet Order
 
@@ -358,5 +360,7 @@ Run on latest commit:
 Both must stay green after this preparation step.
 
 The bounded OKX production read-only authentication validation and subsequent credential cleanup are recorded in `docs/phase-3-read-only-validation-20260623.md`. That record does not authorize REAL order execution.
+
+Operator steps for future read-only validation are recorded in `docs/phase-3-read-only-operator-runbook.md`.
 
 The credential-free live public endpoint results and the restored adapter-disable safety state are recorded in `docs/phase-3-public-connectivity-validation-20260623.md`. OKX requires a proxy or DNS-layer correction before another authenticated test; exchange CDN addresses must not be hard-coded in the application.
