@@ -338,6 +338,7 @@ Runtime enforcement applies conservative testnet order throttling and concrete s
 23. Add read-only operator runbook for TESTNET and guarded REAL authentication validation. Done.
 24. Add read-only validation result template. Done.
 25. Add TESTNET order admission checklist. Done.
+26. Add TESTNET order validation result template. Done.
 
 ## Safety Rules Before Any Testnet Order
 
@@ -370,5 +371,7 @@ Operator steps for future read-only validation are recorded in `docs/phase-3-rea
 Future read-only exchange validation records must use `docs/phase-3-read-only-validation-template.md`.
 
 Future TESTNET order validation must pass `docs/phase-3-testnet-order-admission-checklist.md` and still requires separate explicit approval before any order submission is enabled.
+
+Future TESTNET order result records must use `docs/phase-3-testnet-order-validation-template.md`.
 
 The credential-free live public endpoint results and the restored adapter-disable safety state are recorded in `docs/phase-3-public-connectivity-validation-20260623.md`. OKX requires a proxy or DNS-layer correction before another authenticated test; exchange CDN addresses must not be hard-coded in the application.

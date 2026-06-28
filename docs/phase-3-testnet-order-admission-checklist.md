@@ -152,7 +152,7 @@ After the test window:
 5. Delete or deactivate the temporary exchange API key when the test is complete.
 6. Remove or deactivate the temporary platform credential if it is no longer needed.
 7. Run reconciliation in report-only mode.
-8. Record the result in a dated validation document.
+8. Record the result in a dated validation document based on `docs/phase-3-testnet-order-validation-template.md`.
 9. Confirm `CI` and `Docker Integration` remain green after any follow-up changes.
 
 ## Acceptance Criteria
