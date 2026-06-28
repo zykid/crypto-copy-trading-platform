@@ -60,6 +60,24 @@ type TestnetOrderAdmissionReport = {
   checks: TestnetOrderAdmissionCheck[];
 };
 
+type TestnetOrderWindowPlan = {
+  exchange_account_id: string;
+  status: "READY_FOR_SEPARATE_APPROVAL" | "BLOCKED";
+  state: {
+    exchange_name: ExchangeAccount["exchange_name"];
+    account_mode: ExchangeAccount["account_mode"];
+    testnet_adapters_enabled: boolean;
+    exchange_account_trading_enabled: boolean;
+    risk_settings_exist: boolean;
+    risk_trading_enabled: boolean;
+    api_key_configured: boolean;
+  };
+  blocked_reasons: string[];
+  required_operator_steps: string[];
+  mutations_allowed: boolean;
+  order_submission_authorized: boolean;
+};
+
 const emptySession: SessionState = {
   token: "",
   userId: "",
@@ -124,6 +142,8 @@ export default function Home() {
   const [testnetAccountId, setTestnetAccountId] = useState("");
   const [testnetAdmissionReport, setTestnetAdmissionReport] =
     useState<TestnetOrderAdmissionReport | null>(null);
+  const [testnetOrderWindowPlan, setTestnetOrderWindowPlan] =
+    useState<TestnetOrderWindowPlan | null>(null);
   const [testnetForm, setTestnetForm] = useState({
     accountMode: "TESTNET" as "TESTNET" | "REAL",
     exchangeName: "binance" as "binance" | "bybit" | "okx",
@@ -283,6 +303,7 @@ export default function Home() {
     setExchangeAccounts(accounts);
     setTestnetAccountId(firstReadOnlyAccount?.id ?? "");
     setTestnetAdmissionReport(null);
+    setTestnetOrderWindowPlan(null);
     setTestnetKeyConfigured(firstReadOnlyKeyConfigured);
     if (firstReadOnlyAccount && firstReadOnlyAccount.exchange_name !== "mock") {
       setTestnetForm((current) => ({
@@ -399,6 +420,7 @@ export default function Home() {
     setExchangeAccounts([]);
     setTestnetAccountId("");
     setTestnetAdmissionReport(null);
+    setTestnetOrderWindowPlan(null);
     setTestnetKeyConfigured(false);
     setTestnetForm({
       accountMode: "TESTNET",
@@ -573,6 +595,7 @@ export default function Home() {
   async function selectTestnetAccount(accountId: string) {
     setTestnetAccountId(accountId);
     setTestnetAdmissionReport(null);
+    setTestnetOrderWindowPlan(null);
     setTestnetKeyConfigured(false);
     const selectedAccount = exchangeAccounts.find(
       (account) => account.id === accountId,
@@ -635,6 +658,7 @@ export default function Home() {
         );
         setTestnetKeyConfigured(true);
         setTestnetAdmissionReport(null);
+        setTestnetOrderWindowPlan(null);
         return metadata;
       });
     } finally {
@@ -705,6 +729,37 @@ export default function Home() {
         blocked_checks: report.checks
           .filter((check) => check.status === "BLOCKED")
           .map((check) => check.name),
+      };
+    });
+  }
+
+  async function runTestnetOrderWindowPlan() {
+    if (!testnetAccountId) {
+      appendLog("TESTNET order window plan", false, "Select a TESTNET account first");
+      return;
+    }
+    if (selectedTestnetAccount?.account_mode !== "TESTNET") {
+      appendLog(
+        "TESTNET order window plan",
+        false,
+        "Only TESTNET accounts can run the window plan",
+      );
+      return;
+    }
+    await runStep("TESTNET order window plan", async () => {
+      const query = new URLSearchParams({
+        exchange_account_id: testnetAccountId,
+      });
+      const plan = requireObject(
+        await apiRequest("GET", `/orders/testnet/window-plan?${query.toString()}`),
+        "TESTNET order window plan",
+      ) as unknown as TestnetOrderWindowPlan;
+      setTestnetOrderWindowPlan(plan);
+      return {
+        status: plan.status,
+        mutations_allowed: plan.mutations_allowed,
+        order_submission_authorized: plan.order_submission_authorized,
+        blocked_reasons: plan.blocked_reasons,
       };
     });
   }
@@ -1210,6 +1265,83 @@ export default function Home() {
               ) : (
                 <p className="empty-admission">
                   选择 TESTNET 账户后运行自检，结果只用于进入下单窗口前的人工确认。
+                </p>
+              )}
+            </div>
+
+            <div className="testnet-window-plan-panel">
+              <div className="testnet-admission-heading">
+                <div>
+                  <h3>TESTNET Order Window Plan</h3>
+                  <p>
+                    Read-only preparation view. This page does not enable adapters,
+                    change trading flags, write audit approvals, or submit orders.
+                  </p>
+                </div>
+                <button
+                  onClick={runTestnetOrderWindowPlan}
+                  disabled={
+                    busy ||
+                    !testnetAccountId ||
+                    selectedTestnetAccount?.account_mode !== "TESTNET"
+                  }
+                >
+                  Load window plan
+                </button>
+              </div>
+
+              {testnetOrderWindowPlan ? (
+                <>
+                  <div className="testnet-admission-summary">
+                    <span
+                      className={
+                        testnetOrderWindowPlan.status === "READY_FOR_SEPARATE_APPROVAL"
+                          ? "mfa-enabled"
+                          : "mfa-disabled"
+                      }
+                    >
+                      {testnetOrderWindowPlan.status}
+                    </span>
+                    <span>
+                      mutations_allowed=
+                      {String(testnetOrderWindowPlan.mutations_allowed)}
+                    </span>
+                    <span>
+                      order_submission_authorized=
+                      {String(testnetOrderWindowPlan.order_submission_authorized)}
+                    </span>
+                  </div>
+                  <div className="testnet-window-state">
+                    {Object.entries(testnetOrderWindowPlan.state).map(([key, value]) => (
+                      <div key={key}>
+                        <strong>{key}</strong>
+                        <span>{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {testnetOrderWindowPlan.blocked_reasons.length > 0 && (
+                    <div className="testnet-window-list">
+                      <strong>Blocked reasons</strong>
+                      <ol>
+                        {testnetOrderWindowPlan.blocked_reasons.map((reason) => (
+                          <li key={reason}>{reason}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                  <div className="testnet-window-list">
+                    <strong>Required operator steps</strong>
+                    <ol>
+                      {testnetOrderWindowPlan.required_operator_steps.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                </>
+              ) : (
+                <p className="empty-admission">
+                  Select a TESTNET account and load the plan before any separately
+                  approved order window.
                 </p>
               )}
             </div>
