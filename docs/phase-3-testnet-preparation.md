@@ -342,6 +342,7 @@ Runtime enforcement applies conservative testnet order throttling and concrete s
 27. Add read-only TESTNET order admission self-check. Done.
 28. Wire read-only TESTNET order admission self-check into the Ubuntu test UI. Done.
 29. Record Ubuntu deployment validation for the TESTNET admission UI. Done.
+30. Add read-only TESTNET order window planning endpoint. Done without enabling adapters, changing database trading flags, writing audit rows, or submitting orders.
 
 ## Safety Rules Before Any Testnet Order
 
@@ -358,6 +359,7 @@ Before real testnet order submission can pass, the platform must enforce:
 - The adapter must never run when account mode is `REAL`.
 - `docs/phase-3-testnet-order-admission-checklist.md` must be completed before a separately approved order window.
 - `GET /api/v1/orders/testnet/admission-check` must remain read-only and return `order_submission_authorized=false` outside an approved order window.
+- `GET /api/v1/orders/testnet/window-plan` must remain read-only and return operator steps with `mutations_allowed=false` and `order_submission_authorized=false`.
 
 ## Current Validation
 
@@ -381,5 +383,7 @@ Future TESTNET order result records must use `docs/phase-3-testnet-order-validat
 The Ubuntu test UI exposes the admission self-check as a read-only status panel. It must not expose controls that enable adapters, enable account trading, enable risk trading, or submit orders.
 
 The Ubuntu deployment validation for this read-only admission UI is recorded in `docs/phase-3-testnet-admission-ui-validation-20260628.md`.
+
+The TESTNET order window plan endpoint is preparation-only. It reports current account/risk/secret prerequisites and required operator steps for a future separately approved bounded window, but it must not mutate runtime flags or authorize order submission.
 
 The credential-free live public endpoint results and the restored adapter-disable safety state are recorded in `docs/phase-3-public-connectivity-validation-20260623.md`. OKX requires a proxy or DNS-layer correction before another authenticated test; exchange CDN addresses must not be hard-coded in the application.

@@ -11,6 +11,7 @@ from app.schemas.trading import (
     TestnetOrderAdmissionResponse,
     TestnetOrderSubmitRequest,
     TestnetOrderSubmitResponse,
+    TestnetOrderWindowPlanResponse,
 )
 from app.services.external_alerts import ExternalAlertConfig
 from app.services.operational_alert_runtime import OperationalAlertRuntime
@@ -27,6 +28,7 @@ from app.services.testnet_order_api import (
     build_testnet_order_api_context,
 )
 from app.services.testnet_order_execution import execute_testnet_order
+from app.services.testnet_order_window import build_testnet_order_window_plan
 
 router = APIRouter()
 _operational_alert_dispatch_state: dict[str, int] = {}
@@ -84,6 +86,41 @@ def get_testnet_order_admission_check(
             }
             for check in report.checks
         ],
+    )
+
+
+@router.get("/testnet/window-plan", response_model=TestnetOrderWindowPlanResponse)
+def get_testnet_order_window_plan(
+    exchange_account_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        plan = build_testnet_order_window_plan(
+            db,
+            user_id=current_user.id,
+            exchange_account_id=exchange_account_id,
+            testnet_adapters_enabled=settings.testnet_adapters_enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return TestnetOrderWindowPlanResponse(
+        exchange_account_id=plan.exchange_account_id,
+        status=plan.status.value,
+        state={
+            "exchange_name": plan.state.exchange_name,
+            "account_mode": plan.state.account_mode.value,
+            "testnet_adapters_enabled": plan.state.testnet_adapters_enabled,
+            "exchange_account_trading_enabled": plan.state.exchange_account_trading_enabled,
+            "risk_settings_exist": plan.state.risk_settings_exist,
+            "risk_trading_enabled": plan.state.risk_trading_enabled,
+            "api_key_configured": plan.state.api_key_configured,
+        },
+        blocked_reasons=list(plan.blocked_reasons),
+        required_operator_steps=list(plan.required_operator_steps),
+        mutations_allowed=plan.mutations_allowed,
+        order_submission_authorized=plan.order_submission_authorized,
     )
 
 

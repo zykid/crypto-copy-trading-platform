@@ -91,6 +91,26 @@ class TestnetOrderAdmissionResponse(BaseModel):
     checks: list[TestnetOrderAdmissionCheckResponse]
 
 
+class TestnetOrderWindowStateResponse(BaseModel):
+    exchange_name: ExchangeName
+    account_mode: str
+    testnet_adapters_enabled: bool
+    exchange_account_trading_enabled: bool
+    risk_settings_exist: bool
+    risk_trading_enabled: bool
+    api_key_configured: bool
+
+
+class TestnetOrderWindowPlanResponse(BaseModel):
+    exchange_account_id: str
+    status: str
+    state: TestnetOrderWindowStateResponse
+    blocked_reasons: list[str]
+    required_operator_steps: list[str]
+    mutations_allowed: bool
+    order_submission_authorized: bool
+
+
 class OrderExecutionResponse(BaseModel):
     execution_id: str
     signal_id: str
