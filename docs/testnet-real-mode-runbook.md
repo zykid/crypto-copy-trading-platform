@@ -22,6 +22,8 @@ Before any testnet phase:
 4. Confirm `.env.prod` is not used for testnet experiments unless the deployment is a dedicated staging environment.
 5. Confirm `TESTNET_ADAPTERS_ENABLED=true` is a deliberate, temporary change.
 
+Before any TESTNET order submission, complete `docs/phase-3-testnet-order-admission-checklist.md` and obtain separate explicit approval for the order window.
+
 ## Disable TESTNET Adapters
 
 To return to the safe default:
