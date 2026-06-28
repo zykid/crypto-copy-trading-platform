@@ -42,6 +42,24 @@ type ExchangeAccount = {
   is_active: boolean;
 };
 
+type TestnetOrderAdmissionCheck = {
+  name: string;
+  status: "PASS" | "BLOCKED";
+  required: boolean;
+  detail: string;
+};
+
+type TestnetOrderAdmissionReport = {
+  exchange_account_id: string;
+  exchange_name: ExchangeAccount["exchange_name"];
+  account_mode: ExchangeAccount["account_mode"];
+  overall_status: "PASS" | "BLOCKED";
+  read_only: boolean;
+  order_submission_authorized: boolean;
+  gate_reasons: string[];
+  checks: TestnetOrderAdmissionCheck[];
+};
+
 const emptySession: SessionState = {
   token: "",
   userId: "",
@@ -104,6 +122,8 @@ export default function Home() {
   });
   const [exchangeAccounts, setExchangeAccounts] = useState<ExchangeAccount[]>([]);
   const [testnetAccountId, setTestnetAccountId] = useState("");
+  const [testnetAdmissionReport, setTestnetAdmissionReport] =
+    useState<TestnetOrderAdmissionReport | null>(null);
   const [testnetForm, setTestnetForm] = useState({
     accountMode: "TESTNET" as "TESTNET" | "REAL",
     exchangeName: "binance" as "binance" | "bybit" | "okx",
@@ -262,6 +282,7 @@ export default function Home() {
     setMfaStatus(nextMfaStatus);
     setExchangeAccounts(accounts);
     setTestnetAccountId(firstReadOnlyAccount?.id ?? "");
+    setTestnetAdmissionReport(null);
     setTestnetKeyConfigured(firstReadOnlyKeyConfigured);
     if (firstReadOnlyAccount && firstReadOnlyAccount.exchange_name !== "mock") {
       setTestnetForm((current) => ({
@@ -377,6 +398,7 @@ export default function Home() {
     });
     setExchangeAccounts([]);
     setTestnetAccountId("");
+    setTestnetAdmissionReport(null);
     setTestnetKeyConfigured(false);
     setTestnetForm({
       accountMode: "TESTNET",
@@ -537,6 +559,7 @@ export default function Home() {
       ) as ExchangeAccount;
       setExchangeAccounts((current) => [...current, account]);
       setTestnetAccountId(account.id);
+      setTestnetAdmissionReport(null);
       setTestnetKeyConfigured(false);
       return {
         account_id: account.id,
@@ -549,6 +572,7 @@ export default function Home() {
 
   async function selectTestnetAccount(accountId: string) {
     setTestnetAccountId(accountId);
+    setTestnetAdmissionReport(null);
     setTestnetKeyConfigured(false);
     const selectedAccount = exchangeAccounts.find(
       (account) => account.id === accountId,
@@ -610,6 +634,7 @@ export default function Home() {
           { "X-Reauthentication-Token": reauthenticationToken },
         );
         setTestnetKeyConfigured(true);
+        setTestnetAdmissionReport(null);
         return metadata;
       });
     } finally {
@@ -653,6 +678,35 @@ export default function Home() {
     } finally {
       setTestnetForm((current) => ({ ...current, password: "" }));
     }
+  }
+
+  async function runTestnetOrderAdmissionCheck() {
+    if (!testnetAccountId) {
+      appendLog("TESTNET 下单准入自检", false, "请先创建或选择 TESTNET 账户");
+      return;
+    }
+    if (selectedTestnetAccount?.account_mode !== "TESTNET") {
+      appendLog("TESTNET 下单准入自检", false, "只允许 TESTNET 账户运行下单准入自检");
+      return;
+    }
+    await runStep("TESTNET 下单准入自检", async () => {
+      const query = new URLSearchParams({
+        exchange_account_id: testnetAccountId,
+      });
+      const report = requireObject(
+        await apiRequest("GET", `/orders/testnet/admission-check?${query.toString()}`),
+        "TESTNET 下单准入自检",
+      ) as unknown as TestnetOrderAdmissionReport;
+      setTestnetAdmissionReport(report);
+      return {
+        overall_status: report.overall_status,
+        read_only: report.read_only,
+        order_submission_authorized: report.order_submission_authorized,
+        blocked_checks: report.checks
+          .filter((check) => check.status === "BLOCKED")
+          .map((check) => check.name),
+      };
+    });
   }
 
   async function createMockAccount() {
@@ -1099,6 +1153,65 @@ export default function Home() {
               >
                 执行只读认证
               </button>
+            </div>
+
+            <div className="testnet-admission-panel">
+              <div className="testnet-admission-heading">
+                <div>
+                  <h3>TESTNET 下单准入自检</h3>
+                  <p>仅读取账户、风控和运行开关状态；不启用交易，不提交订单。</p>
+                </div>
+                <button
+                  onClick={runTestnetOrderAdmissionCheck}
+                  disabled={
+                    busy ||
+                    !testnetAccountId ||
+                    selectedTestnetAccount?.account_mode !== "TESTNET"
+                  }
+                >
+                  只读自检
+                </button>
+              </div>
+
+              {testnetAdmissionReport ? (
+                <>
+                  <div className="testnet-admission-summary">
+                    <span
+                      className={
+                        testnetAdmissionReport.overall_status === "PASS"
+                          ? "mfa-enabled"
+                          : "mfa-disabled"
+                      }
+                    >
+                      {testnetAdmissionReport.overall_status}
+                    </span>
+                    <span>read_only={String(testnetAdmissionReport.read_only)}</span>
+                    <span>
+                      order_submission_authorized=
+                      {String(testnetAdmissionReport.order_submission_authorized)}
+                    </span>
+                  </div>
+                  <div className="testnet-admission-checks">
+                    {testnetAdmissionReport.checks.map((check) => (
+                      <div key={check.name} className="testnet-admission-check">
+                        <strong>{check.name}</strong>
+                        <span
+                          className={
+                            check.status === "PASS" ? "mfa-enabled" : "mfa-disabled"
+                          }
+                        >
+                          {check.status}
+                        </span>
+                        <p>{check.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="empty-admission">
+                  选择 TESTNET 账户后运行自检，结果只用于进入下单窗口前的人工确认。
+                </p>
+              )}
             </div>
           </section>
         )}

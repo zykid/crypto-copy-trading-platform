@@ -298,6 +298,69 @@ select:focus {
   width: auto;
 }
 
+.testnet-admission-panel {
+  border-top: 1px solid var(--soft);
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.testnet-admission-heading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.testnet-admission-heading h3 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.testnet-admission-heading p,
+.empty-admission {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.testnet-admission-summary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.testnet-admission-checks {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.testnet-admission-check {
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  padding: 10px;
+}
+
+.testnet-admission-check strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.testnet-admission-check p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(180px, 1fr)) 120px;
@@ -379,6 +442,15 @@ select:focus {
   .console-layout,
   .form-row {
     grid-template-columns: 1fr;
+  }
+
+  .testnet-admission-checks {
+    grid-template-columns: 1fr;
+  }
+
+  .testnet-admission-heading {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .state-panel,
