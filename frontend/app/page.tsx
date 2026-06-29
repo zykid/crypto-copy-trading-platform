@@ -101,6 +101,8 @@ const emptySession: SessionState = {
   executionId: "",
 };
 
+const SESSION_TOKEN_STORAGE_KEY = "trading_platform_token";
+
 function resolveApiBase() {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
   if (typeof window === "undefined") {
@@ -174,12 +176,27 @@ export default function Home() {
     durationMinutes: "5",
   });
   const [testnetKeyConfigured, setTestnetKeyConfigured] = useState(false);
+  const [restoredStoredSession, setRestoredStoredSession] = useState(false);
 
   useEffect(() => {
     setApiBase(resolveApiBase());
   }, []);
 
   const apiRoot = useMemo(() => `${apiBase}/api/v1`, [apiBase]);
+
+  useEffect(() => {
+    if (restoredStoredSession || session.token || typeof window === "undefined") {
+      return;
+    }
+    const token = window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
+    setRestoredStoredSession(true);
+    if (!token) {
+      return;
+    }
+    void loadAuthenticatedSession(token).catch(() => {
+      window.localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+    });
+  }, [apiRoot, restoredStoredSession, session.token]);
 
   function appendLog(label: string, ok: boolean, detail: unknown) {
     setLogs((current) => [
@@ -318,6 +335,9 @@ export default function Home() {
       username: String(profile.username),
       role,
     }));
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, token);
+    }
     setStorageLocations(locations);
     setMfaStatus(nextMfaStatus);
     setExchangeAccounts(accounts);
@@ -418,6 +438,9 @@ export default function Home() {
   }
 
   function clearSession() {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+    }
     setSession(emptySession);
     setStorageLocations([]);
     setManualLogin((current) => ({
@@ -1039,46 +1062,19 @@ export default function Home() {
           </dl>
         </section>
 
-        <section className="panel login-panel">
-          <div className="panel-heading">
-            <h2>已有用户登录</h2>
-            <span>可选</span>
-          </div>
-          <div className="form-row">
-            <label>
-              用户名或邮箱
-              <input
-                value={manualLogin.usernameOrEmail}
-                onChange={(event) => setManualLogin({ ...manualLogin, usernameOrEmail: event.target.value })}
-                placeholder="username@example.com"
-              />
-            </label>
-            <label>
-              密码
-              <input
-                type="password"
-                value={manualLogin.password}
-                onChange={(event) => setManualLogin({ ...manualLogin, password: event.target.value })}
-                placeholder="password"
-              />
-            </label>
-            <label>
-              MFA 验证码或恢复码
-              <input
-                value={manualLogin.mfaCode}
-                onChange={(event) => setManualLogin({
-                  ...manualLogin,
-                  mfaCode: event.target.value,
-                })}
-                placeholder="启用 MFA 后填写"
-                autoComplete="one-time-code"
-              />
-            </label>
-            <button onClick={loginExisting} disabled={busy || !manualLogin.usernameOrEmail || !manualLogin.password}>
-              登录
-            </button>
-          </div>
-        </section>
+        {!session.token && (
+          <section className="panel login-panel auth-entry-panel">
+            <div>
+              <h2>登录或注册后继续测试</h2>
+              <p>
+                认证页面已独立拆分。注册时可选择账户用途，但不会自助授予管理员权限。
+              </p>
+            </div>
+            <a className="auth-entry-action" href="/login">
+              进入登录 / 注册
+            </a>
+          </section>
+        )}
 
         {session.token && (
           <section className="panel password-panel">
