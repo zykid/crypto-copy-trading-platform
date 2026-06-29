@@ -944,6 +944,11 @@ export default function Home() {
   const selectedTestnetAccount = testnetAccounts.find(
     (account) => account.id === testnetAccountId,
   );
+  const sessionStatus = session.token ? "已登录" : "未登录";
+  const selectedAccountMode = selectedTestnetAccount?.account_mode ?? "未选择";
+  const selectedExchange = selectedTestnetAccount?.exchange_name?.toUpperCase() ?? "-";
+  const latestLog = logs[0];
+  const latestLogStatus = latestLog ? (latestLog.ok ? "PASS" : "FAIL") : "待执行";
 
   return (
     <main className="shell">
@@ -964,6 +969,39 @@ export default function Home() {
             </p>
           </div>
           <div className="api-chip">API {apiRoot}</div>
+        </section>
+
+        <section className="overview-strip" aria-label="测试状态总览">
+          <div>
+            <span>会话</span>
+            <strong>{sessionStatus}</strong>
+          </div>
+          <div>
+            <span>角色</span>
+            <strong>{session.role || "-"}</strong>
+          </div>
+          <div>
+            <span>账户模式</span>
+            <strong>{selectedAccountMode}</strong>
+          </div>
+          <div>
+            <span>交易所</span>
+            <strong>{selectedExchange}</strong>
+          </div>
+          <div>
+            <span>最新结果</span>
+            <strong className={latestLog?.ok === false ? "overview-fail" : "overview-pass"}>
+              {latestLogStatus}
+            </strong>
+          </div>
+        </section>
+
+        <section className="safety-strip" aria-label="安全边界">
+          <div>
+            <strong>当前测试边界</strong>
+            <span>Mock 可执行；TESTNET/REAL 只读验证；测试网订单窗口只记录审批审计，不提交订单。</span>
+          </div>
+          <span className="safety-badge">NO LIVE ORDER</span>
         </section>
 
         <section className="panel controls-panel">
@@ -1332,10 +1370,9 @@ export default function Home() {
             <div className="testnet-window-plan-panel">
               <div className="testnet-admission-heading">
                 <div>
-                  <h3>TESTNET Order Window Plan</h3>
+                  <h3>TESTNET 下单窗口计划</h3>
                   <p>
-                    Read-only preparation view. This page does not enable adapters,
-                    change trading flags, write audit approvals, or submit orders.
+                    只读准备视图。加载计划不会启用 adapter、不会修改交易开关、不会写入审批、不会提交订单。
                   </p>
                 </div>
                 <button
@@ -1346,7 +1383,7 @@ export default function Home() {
                     selectedTestnetAccount?.account_mode !== "TESTNET"
                   }
                 >
-                  Load window plan
+                  加载窗口计划
                 </button>
               </div>
 
@@ -1381,7 +1418,7 @@ export default function Home() {
                   </div>
                   {testnetOrderWindowPlan.blocked_reasons.length > 0 && (
                     <div className="testnet-window-list">
-                      <strong>Blocked reasons</strong>
+                      <strong>阻断原因</strong>
                       <ol>
                         {testnetOrderWindowPlan.blocked_reasons.map((reason) => (
                           <li key={reason}>{reason}</li>
@@ -1390,7 +1427,7 @@ export default function Home() {
                     </div>
                   )}
                   <div className="testnet-window-list">
-                    <strong>Required operator steps</strong>
+                    <strong>人工操作前置步骤</strong>
                     <ol>
                       {testnetOrderWindowPlan.required_operator_steps.map((step) => (
                         <li key={step}>{step}</li>
@@ -1398,10 +1435,9 @@ export default function Home() {
                     </ol>
                   </div>
                   <div className="testnet-window-approval">
-                    <strong>Approval record only</strong>
+                    <strong>仅记录审批审计</strong>
                     <p>
-                      Writes an append-only audit record. It does not enable trading
-                      flags, enable adapters, or submit orders.
+                      写入 append-only 审计记录；不会开启交易开关、不会启用 adapter、不会提交订单。
                     </p>
                     <div className="testnet-window-approval-grid">
                       <label>
@@ -1466,14 +1502,13 @@ export default function Home() {
                         testnetOrderWindowPlan.status !== "READY_FOR_SEPARATE_APPROVAL"
                       }
                     >
-                      Record approval audit
+                      记录审批审计
                     </button>
                   </div>
                 </>
               ) : (
                 <p className="empty-admission">
-                  Select a TESTNET account and load the plan before any separately
-                  approved order window.
+                  选择 TESTNET 账户并加载窗口计划后，才能进入单独批准的测试网下单窗口。
                 </p>
               )}
             </div>
