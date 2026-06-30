@@ -972,21 +972,53 @@ export default function Home() {
   const selectedExchange = selectedTestnetAccount?.exchange_name?.toUpperCase() ?? "-";
   const latestLog = logs[0];
   const latestLogStatus = latestLog ? (latestLog.ok ? "PASS" : "FAIL") : "待执行";
+  const mockAccountReady = Boolean(session.accountId);
+  const exchangeAccountCount = exchangeAccounts.length;
+  const failedLogCount = logs.filter((entry) => !entry.ok).length;
 
   return (
-    <main className="shell">
-      <header className="topbar">
-        <div>
-          <div className="brand">多租户加密货币交易执行与跟单平台</div>
-          <div className="subtle">Ubuntu 集成测试控制台</div>
+    <main className="terminal-shell">
+      <aside className="console-sidebar" aria-label="控制台导航">
+        <a className="sidebar-brand" href="#overview">
+          <span>CT</span>
+          <strong>Copy Trading</strong>
+        </a>
+        <nav className="sidebar-nav">
+          <a href="#overview">总览</a>
+          <a href="#mock-flow">Mock 交易</a>
+          <a href="#session">会话</a>
+          <a href="#security">安全</a>
+          <a href="#exchange-accounts">交易所账户</a>
+          <a href="#testnet-window">测试网窗口</a>
+          {session.role === "super_admin" && <a href="#storage">存储</a>}
+          <a href="#audit-log">执行日志</a>
+        </nav>
+        <div className="sidebar-safety">
+          <span>运行边界</span>
+          <strong>NO LIVE ORDER</strong>
+          <p>测试期仅允许 Mock 执行，真实 API 只读验证。</p>
         </div>
-        <div className="status">SIMULATION / TESTNET / REAL READ ONLY</div>
-      </header>
+      </aside>
 
-      <div className="main console-layout">
+      <div className="terminal-main">
+        <header className="topbar">
+          <div>
+            <div className="brand">多租户加密货币交易执行与跟单平台</div>
+            <div className="subtle">Ubuntu 集成测试控制台</div>
+          </div>
+          <div className="topbar-actions">
+            <span className="status">SIMULATION / TESTNET / REAL READ ONLY</span>
+            <a className="topbar-login-link" href="/login">
+              登录页
+            </a>
+          </div>
+        </header>
+
+      <div className="main console-layout" id="overview">
         <section className="panel hero-panel">
           <div>
-            <h1>开发环境操作台</h1>
+            <span className="hero-kicker">V1.0 Integration Console</span>
+            <h1>交易执行测试工作台</h1>
             <p>
               当前页面支持 MockExchange 模拟执行与 TESTNET 只读认证。测试网账户始终关闭交易，不提供下单操作。
             </p>
@@ -1027,7 +1059,32 @@ export default function Home() {
           <span className="safety-badge">NO LIVE ORDER</span>
         </section>
 
-        <section className="panel controls-panel">
+        <section className="market-metrics" aria-label="测试模块状态">
+          <article>
+            <span>Mock 执行账户</span>
+            <strong>{mockAccountReady ? "READY" : "WAITING"}</strong>
+            <em>{session.accountId || "未创建"}</em>
+          </article>
+          <article>
+            <span>交易所账户</span>
+            <strong>{exchangeAccountCount}</strong>
+            <em>TESTNET / REAL read-only</em>
+          </article>
+          <article>
+            <span>密钥状态</span>
+            <strong>{testnetKeyConfigured ? "CONFIGURED" : "NOT SET"}</strong>
+            <em>Secret 不返回前端</em>
+          </article>
+          <article>
+            <span>日志风险</span>
+            <strong className={failedLogCount > 0 ? "overview-fail" : "overview-pass"}>
+              {failedLogCount}
+            </strong>
+            <em>失败记录</em>
+          </article>
+        </section>
+
+        <section className="panel controls-panel" id="mock-flow">
           <div className="panel-heading">
             <h2>快速流程</h2>
             <span>不会发送真实交易所订单</span>
@@ -1047,7 +1104,7 @@ export default function Home() {
           </button>
         </section>
 
-        <section className="panel state-panel">
+        <section className="panel state-panel" id="session">
           <div className="panel-heading">
             <h2>会话状态</h2>
             <span>{busy ? "运行中" : "待命"}</span>
@@ -1077,7 +1134,7 @@ export default function Home() {
         )}
 
         {session.token && (
-          <section className="panel password-panel">
+          <section className="panel password-panel" id="security">
             <div className="panel-heading">
               <div>
                 <h2>账户安全</h2>
@@ -1141,7 +1198,7 @@ export default function Home() {
         )}
 
         {session.token && (
-          <section className="panel testnet-panel">
+          <section className="panel testnet-panel" id="exchange-accounts">
             <div className="panel-heading">
               <div>
                 <h2>交易所只读账户</h2>
@@ -1363,7 +1420,7 @@ export default function Home() {
               )}
             </div>
 
-            <div className="testnet-window-plan-panel">
+            <div className="testnet-window-plan-panel" id="testnet-window">
               <div className="testnet-admission-heading">
                 <div>
                   <h3>TESTNET 下单窗口计划</h3>
@@ -1652,7 +1709,7 @@ export default function Home() {
         )}
 
         {session.role === "super_admin" && (
-          <section className="panel storage-panel">
+          <section className="panel storage-panel" id="storage">
             <div className="panel-heading">
               <div>
                 <h2>存储位置</h2>
@@ -1682,7 +1739,7 @@ export default function Home() {
           </section>
         )}
 
-        <section className="panel log-panel">
+        <section className="panel log-panel" id="audit-log">
           <div className="panel-heading">
             <h2>执行日志</h2>
             <span>{logs.length} 条</span>
@@ -1703,6 +1760,7 @@ export default function Home() {
             )}
           </div>
         </section>
+      </div>
       </div>
     </main>
   );
