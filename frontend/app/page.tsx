@@ -91,6 +91,10 @@ type TestnetOrderWindowApproval = {
   trading_flags_changed: boolean;
 };
 
+type TimedTestnetOrderWindowApproval = TestnetOrderWindowApproval & {
+  approvedAtMs: number;
+};
+
 const emptySession: SessionState = {
   token: "",
   userId: "",
@@ -175,11 +179,20 @@ export default function Home() {
     maxNotional: "100",
     durationMinutes: "5",
   });
+  const [lastTestnetApproval, setLastTestnetApproval] =
+    useState<TimedTestnetOrderWindowApproval | null>(null);
+  const [nowMs, setNowMs] = useState(0);
   const [testnetKeyConfigured, setTestnetKeyConfigured] = useState(false);
   const [restoredStoredSession, setRestoredStoredSession] = useState(false);
 
   useEffect(() => {
     setApiBase(resolveApiBase());
+  }, []);
+
+  useEffect(() => {
+    setNowMs(Date.now());
+    const timerId = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timerId);
   }, []);
 
   const apiRoot = useMemo(() => `${apiBase}/api/v1`, [apiBase]);
@@ -344,6 +357,7 @@ export default function Home() {
     setTestnetAccountId(firstReadOnlyAccount?.id ?? "");
     setTestnetAdmissionReport(null);
     setTestnetOrderWindowPlan(null);
+    setLastTestnetApproval(null);
     setTestnetKeyConfigured(firstReadOnlyKeyConfigured);
     if (firstReadOnlyAccount && firstReadOnlyAccount.exchange_name !== "mock") {
       setTestnetForm((current) => ({
@@ -464,6 +478,7 @@ export default function Home() {
     setTestnetAccountId("");
     setTestnetAdmissionReport(null);
     setTestnetOrderWindowPlan(null);
+    setLastTestnetApproval(null);
     setTestnetKeyConfigured(false);
     setTestnetForm({
       accountMode: "TESTNET",
@@ -625,6 +640,8 @@ export default function Home() {
       setExchangeAccounts((current) => [...current, account]);
       setTestnetAccountId(account.id);
       setTestnetAdmissionReport(null);
+      setTestnetOrderWindowPlan(null);
+      setLastTestnetApproval(null);
       setTestnetKeyConfigured(false);
       return {
         account_id: account.id,
@@ -639,6 +656,7 @@ export default function Home() {
     setTestnetAccountId(accountId);
     setTestnetAdmissionReport(null);
     setTestnetOrderWindowPlan(null);
+    setLastTestnetApproval(null);
     setTestnetKeyConfigured(false);
     const selectedAccount = exchangeAccounts.find(
       (account) => account.id === accountId,
@@ -702,6 +720,7 @@ export default function Home() {
         setTestnetKeyConfigured(true);
         setTestnetAdmissionReport(null);
         setTestnetOrderWindowPlan(null);
+        setLastTestnetApproval(null);
         return metadata;
       });
     } finally {
@@ -833,6 +852,10 @@ export default function Home() {
         }),
         "TESTNET order window approval",
       ) as unknown as TestnetOrderWindowApproval;
+      setLastTestnetApproval({
+        ...approval,
+        approvedAtMs: Date.now(),
+      });
       return {
         audit_log_id: approval.audit_log_id,
         exchange_account_id: approval.exchange_account_id,
@@ -975,6 +998,59 @@ export default function Home() {
   const mockAccountReady = Boolean(session.accountId);
   const exchangeAccountCount = exchangeAccounts.length;
   const failedLogCount = logs.filter((entry) => !entry.ok).length;
+  const admissionPassedCount =
+    testnetAdmissionReport?.checks.filter((check) => check.status === "PASS")
+      .length ?? 0;
+  const admissionBlockedCount =
+    testnetAdmissionReport?.checks.filter((check) => check.status === "BLOCKED")
+      .length ?? 0;
+  const testnetWindowReady =
+    testnetAdmissionReport?.overall_status === "PASS" &&
+    testnetOrderWindowPlan?.status === "READY_FOR_SEPARATE_APPROVAL";
+  const testnetApprovalExpiresAtMs = lastTestnetApproval
+    ? lastTestnetApproval.approvedAtMs +
+      lastTestnetApproval.duration_minutes * 60 * 1000
+    : null;
+  const testnetApprovalRemainingSeconds =
+    testnetApprovalExpiresAtMs && nowMs
+      ? Math.max(0, Math.ceil((testnetApprovalExpiresAtMs - nowMs) / 1000))
+      : null;
+  const testnetApprovalRemainingLabel =
+    testnetApprovalRemainingSeconds === null
+      ? "-"
+      : `${Math.floor(testnetApprovalRemainingSeconds / 60)}m ${
+          testnetApprovalRemainingSeconds % 60
+        }s`;
+  const testnetApprovalExpiresAtLabel =
+    testnetApprovalExpiresAtMs === null
+      ? "-"
+      : new Date(testnetApprovalExpiresAtMs).toLocaleTimeString();
+  const testnetOrderWindowPreview = [
+    {
+      label: "账户",
+      value: selectedTestnetAccount?.account_label ?? "未选择",
+    },
+    {
+      label: "交易所",
+      value: selectedExchange,
+    },
+    {
+      label: "交易对",
+      value: testnetWindowApprovalForm.symbol.trim().toUpperCase() || "-",
+    },
+    {
+      label: "方向",
+      value: testnetWindowApprovalForm.side,
+    },
+    {
+      label: "最大数量",
+      value: testnetWindowApprovalForm.maxQuantity || "-",
+    },
+    {
+      label: "最大名义价值",
+      value: testnetWindowApprovalForm.maxNotional || "-",
+    },
+  ];
 
   return (
     <main className="terminal-shell">
@@ -1442,6 +1518,84 @@ export default function Home() {
 
               {testnetOrderWindowPlan ? (
                 <>
+                  <div className="testnet-window-dashboard">
+                    <div className="testnet-window-ticket">
+                      <div className="testnet-window-ticket-header">
+                        <div>
+                          <span>Order Window</span>
+                          <strong>
+                            {testnetWindowApprovalForm.symbol.trim().toUpperCase() || "-"}
+                          </strong>
+                        </div>
+                        <span
+                          className={
+                            testnetWindowReady ? "mfa-enabled" : "mfa-disabled"
+                          }
+                        >
+                          {testnetWindowReady ? "READY" : "BLOCKED"}
+                        </span>
+                      </div>
+                      <div className="testnet-window-ticket-grid">
+                        {testnetOrderWindowPreview.map((item) => (
+                          <div key={item.label}>
+                            <span>{item.label}</span>
+                            <strong>{item.value}</strong>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="testnet-window-ticket-note">
+                        此窗口只记录审批审计，当前版本不会发送测试网或真实订单。
+                      </div>
+                    </div>
+
+                    <div className="testnet-window-status-rail">
+                      <div>
+                        <span>只读认证</span>
+                        <strong>
+                          {testnetKeyConfigured ? "已配置密钥" : "未配置密钥"}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>准入检查</span>
+                        <strong>
+                          {testnetAdmissionReport
+                            ? `${admissionPassedCount} PASS / ` +
+                              `${admissionBlockedCount} BLOCKED`
+                            : "未执行"}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>窗口计划</span>
+                        <strong>{testnetOrderWindowPlan.status}</strong>
+                      </div>
+                      <div>
+                        <span>最近审批</span>
+                        <strong>
+                          {lastTestnetApproval
+                            ? testnetApprovalRemainingLabel
+                            : "未记录"}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {testnetAdmissionReport && (
+                    <div className="risk-visual-grid">
+                      {testnetAdmissionReport.checks.map((check) => (
+                        <div
+                          key={check.name}
+                          className={`risk-visual-card ${
+                            check.status === "PASS" ? "risk-pass" : "risk-blocked"
+                          }`}
+                        >
+                          <span>{check.required ? "必需" : "可选"}</span>
+                          <strong>{check.name}</strong>
+                          <p>{check.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="testnet-admission-summary">
                     <span
                       className={
@@ -1492,6 +1646,12 @@ export default function Home() {
                     <p>
                       写入 append-only 审计记录；不会开启交易开关、不会启用 adapter、不会提交订单。
                     </p>
+                    <div className="testnet-window-guardrail">
+                      <strong>安全边界</strong>
+                      <span>
+                        按钮只调用审批审计接口，不调用 place_order，不改变 trading_enabled。
+                      </span>
+                    </div>
                     <div className="testnet-window-approval-grid">
                       <label>
                         Symbol
@@ -1557,6 +1717,28 @@ export default function Home() {
                     >
                       记录审批审计
                     </button>
+                    {lastTestnetApproval && (
+                      <div className="testnet-approval-record">
+                        <div>
+                          <span>Audit Log ID</span>
+                          <strong>{lastTestnetApproval.audit_log_id}</strong>
+                        </div>
+                        <div>
+                          <span>窗口剩余</span>
+                          <strong>{testnetApprovalRemainingLabel}</strong>
+                        </div>
+                        <div>
+                          <span>预计结束</span>
+                          <strong>{testnetApprovalExpiresAtLabel}</strong>
+                        </div>
+                        <div>
+                          <span>提交授权</span>
+                          <strong>
+                            {String(lastTestnetApproval.order_submission_authorized)}
+                          </strong>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (

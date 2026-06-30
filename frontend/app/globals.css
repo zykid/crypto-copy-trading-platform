@@ -369,6 +369,130 @@ select:focus {
   padding-top: 16px;
 }
 
+.testnet-window-dashboard {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(280px, 1.15fr) minmax(240px, 0.85fr);
+}
+
+.testnet-window-ticket {
+  background: #0f172a;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  color: #e5eefc;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.testnet-window-ticket-header,
+.testnet-window-status-rail > div,
+.testnet-approval-record > div {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.testnet-window-ticket-header span,
+.testnet-window-ticket-grid span,
+.testnet-window-status-rail span,
+.testnet-approval-record span {
+  color: #8da2c0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.testnet-window-ticket-header strong {
+  display: block;
+  font-size: 24px;
+  margin-top: 4px;
+}
+
+.testnet-window-ticket-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.testnet-window-ticket-grid div {
+  background: #131f35;
+  border: 1px solid #233451;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  padding: 10px;
+}
+
+.testnet-window-ticket-grid strong,
+.testnet-window-status-rail strong,
+.testnet-approval-record strong {
+  overflow-wrap: anywhere;
+}
+
+.testnet-window-ticket-note {
+  color: #a7b8d4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.testnet-window-status-rail {
+  display: grid;
+  gap: 10px;
+}
+
+.testnet-window-status-rail > div,
+.testnet-approval-record > div {
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  min-height: 58px;
+  padding: 10px;
+}
+
+.risk-visual-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.risk-visual-card {
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-height: 118px;
+  padding: 10px;
+}
+
+.risk-visual-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.risk-visual-card strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.risk-visual-card p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.risk-pass {
+  border-color: #9bd7bd;
+  background: #f2fbf7;
+}
+
+.risk-blocked {
+  border-color: #ffc4c4;
+  background: #fff6f6;
+}
+
 .testnet-window-state {
   display: grid;
   gap: 8px;
@@ -422,6 +546,22 @@ select:focus {
   margin: 0;
 }
 
+.testnet-window-guardrail {
+  align-items: center;
+  background: #fff8e6;
+  border: 1px solid #f2d596;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.testnet-window-guardrail span {
+  color: #725b18;
+  font-size: 12px;
+}
+
 .testnet-window-approval-grid {
   display: grid;
   gap: 10px;
@@ -434,6 +574,12 @@ select:focus {
   font-size: 12px;
   font-weight: 650;
   gap: 6px;
+}
+
+.testnet-approval-record {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .form-row {
@@ -532,8 +678,17 @@ select:focus {
     grid-template-columns: 1fr;
   }
 
-  .testnet-window-approval-grid {
+  .risk-visual-grid,
+  .testnet-approval-record,
+  .testnet-window-approval-grid,
+  .testnet-window-dashboard,
+  .testnet-window-ticket-grid {
     grid-template-columns: 1fr;
+  }
+
+  .testnet-window-guardrail {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .state-panel,
