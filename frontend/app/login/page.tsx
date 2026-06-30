@@ -79,6 +79,10 @@ export default function LoginPage() {
   const [apiBase] = useState(resolveApiBase);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<AuthLog | null>(null);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] =
+    useState(false);
   const [loginForm, setLoginForm] = useState({
     usernameOrEmail: "",
     password: "",
@@ -132,8 +136,12 @@ export default function LoginPage() {
     if (response.status !== 200 || !isObject(body)) {
       throw new Error("登录成功，但读取用户资料失败");
     }
+    const userId = body.id ?? body.user_id;
+    if (typeof userId !== "string" || userId.trim() === "") {
+      throw new Error("Login succeeded, but the user profile did not include an ID");
+    }
     return {
-      id: String(body.id),
+      id: userId,
       email: String(body.email),
       username: String(body.username),
       role: String(body.role),
@@ -288,14 +296,36 @@ export default function LoginPage() {
               </label>
               <label>
                 密码
-                <input
-                  autoComplete="current-password"
-                  type="password"
-                  value={loginForm.password}
-                  onChange={(event) =>
-                    setLoginForm({ ...loginForm, password: event.target.value })
-                  }
-                />
+                <span className="password-input-wrap">
+                  <input
+                    autoComplete="current-password"
+                    type={showLoginPassword ? "text" : "password"}
+                    value={loginForm.password}
+                    onChange={(event) =>
+                      setLoginForm({
+                        ...loginForm,
+                        password: event.target.value,
+                      })
+                    }
+                  />
+                  <button
+                    aria-label={
+                      showLoginPassword ? "Hide password" : "Show password"
+                    }
+                    className="password-visibility-button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    type="button"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={
+                        showLoginPassword
+                          ? "password-eye-icon visible"
+                          : "password-eye-icon"
+                      }
+                    />
+                  </button>
+                </span>
               </label>
               <label>
                 MFA 验证码或恢复码
@@ -350,31 +380,77 @@ export default function LoginPage() {
               <div className="auth-two-column">
                 <label>
                   密码
-                  <input
-                    autoComplete="new-password"
-                    type="password"
-                    value={registerForm.password}
-                    onChange={(event) =>
-                      setRegisterForm({
-                        ...registerForm,
-                        password: event.target.value,
-                      })
-                    }
-                  />
+                  <span className="password-input-wrap">
+                    <input
+                      autoComplete="new-password"
+                      type={showRegisterPassword ? "text" : "password"}
+                      value={registerForm.password}
+                      onChange={(event) =>
+                        setRegisterForm({
+                          ...registerForm,
+                          password: event.target.value,
+                        })
+                      }
+                    />
+                    <button
+                      aria-label={
+                        showRegisterPassword ? "Hide password" : "Show password"
+                      }
+                      className="password-visibility-button"
+                      onClick={() =>
+                        setShowRegisterPassword(!showRegisterPassword)
+                      }
+                      type="button"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={
+                          showRegisterPassword
+                            ? "password-eye-icon visible"
+                            : "password-eye-icon"
+                        }
+                      />
+                    </button>
+                  </span>
                 </label>
                 <label>
                   确认密码
-                  <input
-                    autoComplete="new-password"
-                    type="password"
-                    value={registerForm.confirmPassword}
-                    onChange={(event) =>
-                      setRegisterForm({
-                        ...registerForm,
-                        confirmPassword: event.target.value,
-                      })
-                    }
-                  />
+                  <span className="password-input-wrap">
+                    <input
+                      autoComplete="new-password"
+                      type={showRegisterConfirmPassword ? "text" : "password"}
+                      value={registerForm.confirmPassword}
+                      onChange={(event) =>
+                        setRegisterForm({
+                          ...registerForm,
+                          confirmPassword: event.target.value,
+                        })
+                      }
+                    />
+                    <button
+                      aria-label={
+                        showRegisterConfirmPassword
+                          ? "Hide password"
+                          : "Show password"
+                      }
+                      className="password-visibility-button"
+                      onClick={() =>
+                        setShowRegisterConfirmPassword(
+                          !showRegisterConfirmPassword,
+                        )
+                      }
+                      type="button"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={
+                          showRegisterConfirmPassword
+                            ? "password-eye-icon visible"
+                            : "password-eye-icon"
+                        }
+                      />
+                    </button>
+                  </span>
                 </label>
               </div>
 
