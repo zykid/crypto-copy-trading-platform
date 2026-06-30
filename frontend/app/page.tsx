@@ -158,7 +158,7 @@ function formatDetail(value: unknown) {
 }
 
 export default function Home() {
-  const [apiBase, setApiBase] = useState("http://localhost:8000");
+  const [apiBase] = useState(resolveApiBase);
   const [session, setSession] = useState<SessionState>(emptySession);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([]);
@@ -222,10 +222,6 @@ export default function Home() {
   const [nowMs, setNowMs] = useState(0);
   const [testnetKeyConfigured, setTestnetKeyConfigured] = useState(false);
   const [restoredStoredSession, setRestoredStoredSession] = useState(false);
-
-  useEffect(() => {
-    setApiBase(resolveApiBase());
-  }, []);
 
   useEffect(() => {
     setNowMs(Date.now());
