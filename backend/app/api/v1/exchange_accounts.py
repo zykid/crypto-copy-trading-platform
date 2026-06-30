@@ -11,6 +11,7 @@ from app.schemas.exchange_account import (
     ExchangeAccountCreate,
     ExchangeAccountResponse,
     ExchangeAccountUpdate,
+    Phase4ReadinessReportResponse,
     RealReadOnlyCheckResponse,
     TestnetReadOnlyCheckResponse,
 )
@@ -24,6 +25,7 @@ from app.services.exchange_accounts import (
     update_account,
     upsert_api_key_secret,
 )
+from app.services.phase4_readiness import build_phase4_readiness_report
 from app.services.real_read_only_check import (
     RealReadOnlyAccountNotFoundError,
     RealReadOnlyAuthenticationError,
@@ -237,4 +239,44 @@ def check_real_read_only_credentials(
         exchange_name=result.exchange_name,
         authenticated=result.authenticated,
         balance_asset_count=result.balance_asset_count,
+    )
+
+
+@router.get(
+    "/{account_id}/phase4-readiness",
+    response_model=Phase4ReadinessReportResponse,
+)
+def read_phase4_readiness(
+    account_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Phase4ReadinessReportResponse:
+    try:
+        report = build_phase4_readiness_report(
+            db,
+            user=current_user,
+            exchange_account_id=account_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="account not found",
+        ) from exc
+    return Phase4ReadinessReportResponse(
+        exchange_account_id=report.exchange_account_id,
+        exchange_name=report.exchange_name,
+        account_mode=report.account_mode,
+        overall_status=report.overall_status.value,
+        read_only=report.read_only,
+        order_submission_authorized=report.order_submission_authorized,
+        checks=[
+            {
+                "name": check.name,
+                "status": check.status.value,
+                "required": check.required,
+                "detail": check.detail,
+            }
+            for check in report.checks
+        ],
+        gate_reasons=list(report.gate_reasons),
     )

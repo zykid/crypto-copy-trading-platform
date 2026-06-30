@@ -60,6 +60,24 @@ type TestnetOrderAdmissionReport = {
   checks: TestnetOrderAdmissionCheck[];
 };
 
+type Phase4ReadinessCheck = {
+  name: string;
+  status: "PASS" | "BLOCKED";
+  required: boolean;
+  detail: string;
+};
+
+type Phase4ReadinessReport = {
+  exchange_account_id: string;
+  exchange_name: ExchangeAccount["exchange_name"];
+  account_mode: ExchangeAccount["account_mode"];
+  overall_status: "PASS" | "BLOCKED";
+  read_only: boolean;
+  order_submission_authorized: boolean;
+  checks: Phase4ReadinessCheck[];
+  gate_reasons: string[];
+};
+
 type TestnetOrderWindowPlan = {
   exchange_account_id: string;
   status: "READY_FOR_SEPARATE_APPROVAL" | "BLOCKED";
@@ -172,6 +190,8 @@ export default function Home() {
   const [testnetAccountId, setTestnetAccountId] = useState("");
   const [testnetAdmissionReport, setTestnetAdmissionReport] =
     useState<TestnetOrderAdmissionReport | null>(null);
+  const [phase4ReadinessReport, setPhase4ReadinessReport] =
+    useState<Phase4ReadinessReport | null>(null);
   const [testnetOrderWindowPlan, setTestnetOrderWindowPlan] =
     useState<TestnetOrderWindowPlan | null>(null);
   const [testnetForm, setTestnetForm] = useState({
@@ -374,6 +394,7 @@ export default function Home() {
     setExchangeAccounts(accounts);
     setTestnetAccountId(firstReadOnlyAccount?.id ?? "");
     setTestnetAdmissionReport(null);
+    setPhase4ReadinessReport(null);
     setTestnetOrderWindowPlan(null);
     setLastTestnetApproval(null);
     setTestnetKeyConfigured(firstReadOnlyKeyConfigured);
@@ -495,6 +516,7 @@ export default function Home() {
     setExchangeAccounts([]);
     setTestnetAccountId("");
     setTestnetAdmissionReport(null);
+    setPhase4ReadinessReport(null);
     setTestnetOrderWindowPlan(null);
     setLastTestnetApproval(null);
     setTestnetKeyConfigured(false);
@@ -658,6 +680,7 @@ export default function Home() {
       setExchangeAccounts((current) => [...current, account]);
       setTestnetAccountId(account.id);
       setTestnetAdmissionReport(null);
+      setPhase4ReadinessReport(null);
       setTestnetOrderWindowPlan(null);
       setLastTestnetApproval(null);
       setTestnetKeyConfigured(false);
@@ -673,6 +696,7 @@ export default function Home() {
   async function selectTestnetAccount(accountId: string) {
     setTestnetAccountId(accountId);
     setTestnetAdmissionReport(null);
+    setPhase4ReadinessReport(null);
     setTestnetOrderWindowPlan(null);
     setLastTestnetApproval(null);
     setTestnetKeyConfigured(false);
@@ -737,6 +761,7 @@ export default function Home() {
         );
         setTestnetKeyConfigured(true);
         setTestnetAdmissionReport(null);
+        setPhase4ReadinessReport(null);
         setTestnetOrderWindowPlan(null);
         setLastTestnetApproval(null);
         return metadata;
@@ -809,6 +834,37 @@ export default function Home() {
         blocked_checks: report.checks
           .filter((check) => check.status === "BLOCKED")
           .map((check) => check.name),
+      };
+    });
+  }
+
+  async function runPhase4ReadinessCheck() {
+    if (!testnetAccountId) {
+      appendLog("Phase 4 REAL readiness", false, "Select a REAL account first");
+      return;
+    }
+    if (selectedTestnetAccount?.account_mode !== "REAL") {
+      appendLog(
+        "Phase 4 REAL readiness",
+        false,
+        "Phase 4 readiness is only available for REAL accounts",
+      );
+      return;
+    }
+    await runStep("Phase 4 REAL readiness", async () => {
+      const report = requireObject(
+        await apiRequest(
+          "GET",
+          `/exchange-accounts/${testnetAccountId}/phase4-readiness`,
+        ),
+        "Phase 4 REAL readiness",
+      ) as unknown as Phase4ReadinessReport;
+      setPhase4ReadinessReport(report);
+      return {
+        overall_status: report.overall_status,
+        read_only: report.read_only,
+        order_submission_authorized: report.order_submission_authorized,
+        blocked_checks: report.gate_reasons,
       };
     });
   }
@@ -1071,6 +1127,12 @@ export default function Home() {
       .length ?? 0;
   const admissionBlockedCount =
     testnetAdmissionReport?.checks.filter((check) => check.status === "BLOCKED")
+      .length ?? 0;
+  const phase4PassedCount =
+    phase4ReadinessReport?.checks.filter((check) => check.status === "PASS")
+      .length ?? 0;
+  const phase4BlockedCount =
+    phase4ReadinessReport?.checks.filter((check) => check.status === "BLOCKED")
       .length ?? 0;
   const testnetWindowReady =
     testnetAdmissionReport?.overall_status === "PASS" &&
@@ -1513,6 +1575,71 @@ export default function Home() {
                 执行只读认证
               </button>
             </div>
+
+            {selectedTestnetAccount?.account_mode === "REAL" && (
+              <div className="testnet-admission-panel">
+                <div className="testnet-admission-heading">
+                  <div>
+                    <h3>Phase 4 REAL readiness</h3>
+                    <p>
+                      Read-only internal gate. Checks super admin, MFA, REAL OKX,
+                      disabled trading flags, risk settings, and encrypted key
+                      metadata. It does not call the exchange or submit orders.
+                    </p>
+                  </div>
+                  <button
+                    onClick={runPhase4ReadinessCheck}
+                    disabled={busy || !testnetAccountId}
+                  >
+                    Read-only check
+                  </button>
+                </div>
+
+                {phase4ReadinessReport ? (
+                  <>
+                    <div className="testnet-admission-summary">
+                      <span
+                        className={
+                          phase4ReadinessReport.overall_status === "PASS"
+                            ? "mfa-enabled"
+                            : "mfa-disabled"
+                        }
+                      >
+                        {phase4ReadinessReport.overall_status}
+                      </span>
+                      <span>{phase4PassedCount} PASS</span>
+                      <span>{phase4BlockedCount} BLOCKED</span>
+                      <span>
+                        order_submission_authorized=
+                        {String(phase4ReadinessReport.order_submission_authorized)}
+                      </span>
+                    </div>
+                    <div className="testnet-admission-checks">
+                      {phase4ReadinessReport.checks.map((check) => (
+                        <div key={check.name} className="testnet-admission-check">
+                          <strong>{check.name}</strong>
+                          <span
+                            className={
+                              check.status === "PASS"
+                                ? "mfa-enabled"
+                                : "mfa-disabled"
+                            }
+                          >
+                            {check.status}
+                          </span>
+                          <p>{check.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="empty-admission">
+                    Select a REAL OKX account and run the read-only readiness
+                    gate before any Phase 4 proposal.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="testnet-admission-panel">
               <div className="testnet-admission-heading">

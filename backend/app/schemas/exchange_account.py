@@ -54,3 +54,21 @@ class RealReadOnlyCheckResponse(BaseModel):
     exchange_name: ExchangeName
     authenticated: bool
     balance_asset_count: int
+
+
+class Phase4ReadinessCheckResponse(BaseModel):
+    name: str
+    status: str
+    required: bool
+    detail: str
+
+
+class Phase4ReadinessReportResponse(BaseModel):
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    account_mode: AccountMode
+    overall_status: str
+    read_only: bool
+    order_submission_authorized: bool
+    checks: list[Phase4ReadinessCheckResponse]
+    gate_reasons: list[str]
