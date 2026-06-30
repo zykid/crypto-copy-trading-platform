@@ -38,6 +38,7 @@ Before moving beyond this GitHub and mock-integration phase, complete a separate
 - Restore drill execution on an isolated database.
 - TESTNET adapter enablement only in the approved testnet phase.
 - REAL trading approval only in the later small-funds validation phase.
+- Phase 4 small-capital validation planning in `docs/phase-4-small-capital-readiness-plan.md`.
 
 ## Safety Notes
 

@@ -400,3 +400,7 @@ The Ubuntu deployment validation for the protected TESTNET order window approval
 The Ubuntu deployment validation for the guarded TESTNET submit UI and backend approval-audit authorization is recorded in `docs/phase-3-testnet-submit-ui-validation-20260630.md`.
 
 The credential-free live public endpoint results and the restored adapter-disable safety state are recorded in `docs/phase-3-public-connectivity-validation-20260623.md`. OKX requires a proxy or DNS-layer correction before another authenticated test; exchange CDN addresses must not be hard-coded in the application.
+
+The Phase 3 closeout record is `docs/phase-3-closeout-20260630.md`.
+
+Phase 4 planning starts in `docs/phase-4-small-capital-readiness-plan.md`. That plan does not authorize REAL trading.
