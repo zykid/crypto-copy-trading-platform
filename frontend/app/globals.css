@@ -582,6 +582,57 @@ select:focus {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.testnet-submit-box {
+  background: #0f172a;
+  border: 1px solid #233451;
+  border-radius: 8px;
+  color: #e5edf7;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.testnet-submit-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.testnet-submit-heading strong {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.testnet-submit-heading p {
+  color: #9fb0c7;
+  margin-top: 4px;
+}
+
+.testnet-submit-box .testnet-window-guardrail {
+  background: #172033;
+  border-color: #344762;
+}
+
+.testnet-submit-box .testnet-window-guardrail span {
+  color: #cbd7e7;
+}
+
+.testnet-submit-box label {
+  color: #b8c5d8;
+}
+
+.testnet-submit-box input,
+.testnet-submit-box select {
+  background: #111827;
+  border-color: #344762;
+  color: #f8fafc;
+}
+
+.testnet-submit-action {
+  justify-self: start;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(180px, 1fr)) 120px;

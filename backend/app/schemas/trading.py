@@ -70,6 +70,8 @@ class TestnetOrderSubmitResponse(BaseModel):
     client_order_id: str
     request_method: str
     request_path: str
+    approval_audit_log_id: str
+    approval_expires_at: str
     exchange_response: dict[str, object]
 
 

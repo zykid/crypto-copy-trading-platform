@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -5,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.encryption import encrypt_secret
 from app.db.models.exchange_account import AccountMode, ApiKeySecret, ExchangeAccount, ExchangeName
+from app.db.models.observability import AuditLog
 from app.db.models.trading import OrderSide, OrderType, RiskSetting
 from app.db.models.user import User
 from app.schemas.trading import TestnetOrderSubmitRequest
@@ -24,8 +26,9 @@ def payload(account_id: str, *, confirmed: bool = True) -> TestnetOrderSubmitReq
         exchange_account_id=account_id,
         symbol="BTCUSDT",
         side=OrderSide.BUY,
-        order_type=OrderType.MARKET,
-        quantity=Decimal("0.01"),
+        order_type=OrderType.LIMIT,
+        quantity=Decimal("0.001"),
+        price=Decimal("100"),
         client_order_id="testnet-client-1",
         manual_testnet_order_enable_confirmed=confirmed,
     )
@@ -74,6 +77,45 @@ def add_api_key_metadata(db_session: Session, *, owner: User, account: ExchangeA
         )
     )
     db_session.commit()
+
+
+def add_order_window_audit(
+    db_session: Session,
+    *,
+    owner: User,
+    account: ExchangeAccount,
+    symbol: str = "BTCUSDT",
+    side: OrderSide = OrderSide.BUY,
+    max_quantity: str = "0.001",
+    max_notional: str = "100",
+    created_at: datetime | None = None,
+) -> AuditLog:
+    audit_kwargs: dict[str, datetime] = {}
+    if created_at is not None:
+        audit_kwargs["created_at"] = created_at
+    audit = AuditLog(
+        user_id=owner.id,
+        exchange_account_id=account.id,
+        action="testnet.order_window.approval_recorded",
+        severity="WARNING",
+        payload={
+            "exchange_name": account.exchange_name.value,
+            "account_mode": account.account_mode.value,
+            "symbol": symbol,
+            "side": side.value,
+            "max_quantity": max_quantity,
+            "max_notional": max_notional,
+            "duration_minutes": 5,
+            "acknowledgement": "APPROVE_TESTNET_ORDER_WINDOW_ONLY",
+            "order_submission_authorized": False,
+            "trading_flags_changed": False,
+        },
+        **audit_kwargs,
+    )
+    db_session.add(audit)
+    db_session.commit()
+    db_session.refresh(audit)
+    return audit
 
 
 def test_exchange_credentials_are_loaded_only_for_the_owning_user(db_session: Session) -> None:
@@ -157,6 +199,7 @@ def test_testnet_order_api_context_builds_order_after_all_gate_conditions_pass(
     account = add_account(db_session, owner=owner)
     add_risk_settings(db_session, owner=owner, account=account)
     add_api_key_metadata(db_session, owner=owner, account=account)
+    audit = add_order_window_audit(db_session, owner=owner, account=account)
 
     context = build_testnet_order_api_context(
         db_session,
@@ -171,4 +214,83 @@ def test_testnet_order_api_context_builds_order_after_all_gate_conditions_pass(
     assert context.order.client_order_id == "testnet-client-1"
     assert context.credentials.api_key == "testnet-api-key"
     assert context.credentials.api_secret == "testnet-api-secret"
+    assert context.authorization.audit_log_id == audit.id
     assert not hasattr(context.order, "api_secret")
+
+
+def test_testnet_order_api_context_requires_approval_audit(
+    db_session: Session,
+) -> None:
+    owner = user("owner@example.com", "owner")
+    db_session.add(owner)
+    db_session.commit()
+    account = add_account(db_session, owner=owner)
+    add_risk_settings(db_session, owner=owner, account=account)
+    add_api_key_metadata(db_session, owner=owner, account=account)
+
+    with pytest.raises(TestnetOrderApiBlockedError) as exc_info:
+        build_testnet_order_api_context(
+            db_session,
+            user_id=owner.id,
+            payload=payload(account.id),
+            testnet_adapters_enabled=True,
+        )
+
+    assert (
+        "valid testnet order window approval audit log is required"
+        in exc_info.value.reasons
+    )
+
+
+def test_testnet_order_api_context_rejects_expired_approval(
+    db_session: Session,
+) -> None:
+    owner = user("owner@example.com", "owner")
+    db_session.add(owner)
+    db_session.commit()
+    account = add_account(db_session, owner=owner)
+    add_risk_settings(db_session, owner=owner, account=account)
+    add_api_key_metadata(db_session, owner=owner, account=account)
+    add_order_window_audit(
+        db_session,
+        owner=owner,
+        account=account,
+        created_at=datetime.now(UTC) - timedelta(minutes=10),
+    )
+
+    with pytest.raises(TestnetOrderApiBlockedError) as exc_info:
+        build_testnet_order_api_context(
+            db_session,
+            user_id=owner.id,
+            payload=payload(account.id),
+            testnet_adapters_enabled=True,
+        )
+
+    assert "testnet order window approval has expired" in exc_info.value.reasons
+
+
+def test_testnet_order_api_context_enforces_approval_limits(
+    db_session: Session,
+) -> None:
+    owner = user("owner@example.com", "owner")
+    db_session.add(owner)
+    db_session.commit()
+    account = add_account(db_session, owner=owner)
+    add_risk_settings(db_session, owner=owner, account=account)
+    add_api_key_metadata(db_session, owner=owner, account=account)
+    add_order_window_audit(
+        db_session,
+        owner=owner,
+        account=account,
+        max_quantity="0.0001",
+    )
+
+    with pytest.raises(TestnetOrderApiBlockedError) as exc_info:
+        build_testnet_order_api_context(
+            db_session,
+            user_id=owner.id,
+            payload=payload(account.id),
+            testnet_adapters_enabled=True,
+        )
+
+    assert "testnet order quantity exceeds the approved window" in exc_info.value.reasons

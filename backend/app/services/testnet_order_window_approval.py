@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -20,6 +21,12 @@ class TestnetOrderWindowApprovalBlockedError(RuntimeError):
         self.reasons = reasons
 
 
+class TestnetOrderWindowAuthorizationError(RuntimeError):
+    def __init__(self, reasons: tuple[str, ...]) -> None:
+        super().__init__("testnet order window authorization is invalid")
+        self.reasons = reasons
+
+
 @dataclass(frozen=True)
 class TestnetOrderWindowApproval:
     audit_log_id: str
@@ -32,6 +39,12 @@ class TestnetOrderWindowApproval:
     duration_minutes: int
     order_submission_authorized: bool = False
     trading_flags_changed: bool = False
+
+
+@dataclass(frozen=True)
+class TestnetOrderWindowAuthorization:
+    audit_log_id: str
+    expires_at: datetime
 
 
 def record_testnet_order_window_approval(
@@ -117,6 +130,71 @@ def record_testnet_order_window_approval(
     )
 
 
+def require_valid_testnet_order_window_authorization(
+    db: Session,
+    *,
+    user_id: str,
+    exchange_account_id: str,
+    symbol: str,
+    side: OrderSide,
+    quantity: Decimal,
+    price: Decimal | None,
+    now: datetime | None = None,
+) -> TestnetOrderWindowAuthorization:
+    reasons: list[str] = []
+    normalized_symbol = symbol.strip().upper()
+    if price is None:
+        reasons.append("limit price is required for approved testnet order windows")
+
+    audit_log = db.scalar(
+        select(AuditLog)
+        .where(
+            AuditLog.user_id == user_id,
+            AuditLog.exchange_account_id == exchange_account_id,
+            AuditLog.action == "testnet.order_window.approval_recorded",
+        )
+        .order_by(AuditLog.created_at.desc())
+    )
+    if audit_log is None:
+        reasons.append("valid testnet order window approval audit log is required")
+        raise TestnetOrderWindowAuthorizationError(tuple(reasons))
+
+    payload = audit_log.payload
+    approved_symbol = str(payload.get("symbol", "")).strip().upper()
+    approved_side = str(payload.get("side", ""))
+    max_quantity = _decimal_from_payload(payload.get("max_quantity"), "max_quantity", reasons)
+    max_notional = _decimal_from_payload(payload.get("max_notional"), "max_notional", reasons)
+    duration_minutes = _int_from_payload(
+        payload.get("duration_minutes"),
+        "duration_minutes",
+        reasons,
+    )
+
+    if approved_symbol != normalized_symbol:
+        reasons.append("testnet order symbol must match the approved window")
+    if approved_side != side.value:
+        reasons.append("testnet order side must match the approved window")
+    if max_quantity is not None and quantity > max_quantity:
+        reasons.append("testnet order quantity exceeds the approved window")
+    if price is not None and max_notional is not None and quantity * price > max_notional:
+        reasons.append("testnet order notional exceeds the approved window")
+
+    created_at = _as_utc(audit_log.created_at)
+    now_utc = _as_utc(now or datetime.now(UTC))
+    expires_at = created_at + timedelta(minutes=duration_minutes or 0)
+    if duration_minutes is None or duration_minutes < 1 or duration_minutes > 10:
+        reasons.append("testnet order window audit duration is invalid")
+    elif now_utc > expires_at:
+        reasons.append("testnet order window approval has expired")
+
+    if reasons:
+        raise TestnetOrderWindowAuthorizationError(tuple(reasons))
+    return TestnetOrderWindowAuthorization(
+        audit_log_id=audit_log.id,
+        expires_at=expires_at,
+    )
+
+
 def _approval_blocked_reasons(
     *,
     user_role: UserRole,
@@ -154,3 +232,33 @@ def _approval_blocked_reasons(
     if acknowledgement != TESTNET_ORDER_WINDOW_APPROVAL_ACK:
         reasons.append("explicit testnet order window acknowledgement is required")
     return tuple(reasons)
+
+
+def _decimal_from_payload(
+    value: object,
+    field_name: str,
+    reasons: list[str],
+) -> Decimal | None:
+    try:
+        return Decimal(str(value))
+    except Exception:
+        reasons.append(f"testnet order window audit {field_name} is invalid")
+        return None
+
+
+def _int_from_payload(
+    value: object,
+    field_name: str,
+    reasons: list[str],
+) -> int | None:
+    try:
+        return int(str(value))
+    except Exception:
+        reasons.append(f"testnet order window audit {field_name} is invalid")
+        return None
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)

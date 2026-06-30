@@ -13,6 +13,11 @@ from app.services.exchange_accounts import (
 from app.services.risk_engine import get_or_create_risk_settings
 from app.services.testnet_order_gate import TestnetOrderGateResult, check_testnet_order_gate
 from app.services.testnet_order_request import TestnetOrderRequestInput
+from app.services.testnet_order_window_approval import (
+    TestnetOrderWindowAuthorization,
+    TestnetOrderWindowAuthorizationError,
+    require_valid_testnet_order_window_authorization,
+)
 
 
 class TestnetOrderApiBlockedError(RuntimeError):
@@ -27,6 +32,7 @@ class TestnetOrderApiContext:
     order: TestnetOrderRequestInput
     gate_result: TestnetOrderGateResult
     credentials: ExchangeCredentials
+    authorization: TestnetOrderWindowAuthorization
 
 
 def build_testnet_order_api_context(
@@ -66,6 +72,19 @@ def build_testnet_order_api_context(
     if not gate_result.approved:
         raise TestnetOrderApiBlockedError(gate_result.reasons)
 
+    try:
+        authorization = require_valid_testnet_order_window_authorization(
+            db,
+            user_id=user_id,
+            exchange_account_id=account.id,
+            symbol=payload.symbol,
+            side=payload.side,
+            quantity=payload.quantity,
+            price=payload.price,
+        )
+    except TestnetOrderWindowAuthorizationError as exc:
+        raise TestnetOrderApiBlockedError(exc.reasons) from exc
+
     credentials = get_exchange_credentials(
         db,
         user_id=user_id,
@@ -88,4 +107,5 @@ def build_testnet_order_api_context(
         order=order,
         gate_result=gate_result,
         credentials=credentials,
+        authorization=authorization,
     )

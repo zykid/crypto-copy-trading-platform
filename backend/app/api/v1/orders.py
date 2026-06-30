@@ -226,6 +226,8 @@ def submit_testnet_order(
         client_order_id=result.client_order_id,
         request_method=result.request_method,
         request_path=result.request_path,
+        approval_audit_log_id=context.authorization.audit_log_id,
+        approval_expires_at=context.authorization.expires_at.isoformat(),
         exchange_response=result.exchange_response,
     )
 

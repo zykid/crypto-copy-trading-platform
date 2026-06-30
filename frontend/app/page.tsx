@@ -95,6 +95,17 @@ type TimedTestnetOrderWindowApproval = TestnetOrderWindowApproval & {
   approvedAtMs: number;
 };
 
+type TestnetOrderSubmitResponse = {
+  exchange_account_id: string;
+  exchange_name: ExchangeAccount["exchange_name"];
+  client_order_id: string;
+  request_method: string;
+  request_path: string;
+  approval_audit_log_id: string;
+  approval_expires_at: string;
+  exchange_response: Record<string, unknown>;
+};
+
 const emptySession: SessionState = {
   token: "",
   userId: "",
@@ -178,6 +189,13 @@ export default function Home() {
     maxQuantity: "0.001",
     maxNotional: "100",
     durationMinutes: "5",
+  });
+  const [testnetOrderSubmitForm, setTestnetOrderSubmitForm] = useState({
+    symbol: "BTCUSDT",
+    side: "BUY" as "BUY" | "SELL",
+    quantity: "0.0001",
+    price: "10000",
+    clientOrderId: "",
   });
   const [lastTestnetApproval, setLastTestnetApproval] =
     useState<TimedTestnetOrderWindowApproval | null>(null);
@@ -870,6 +888,56 @@ export default function Home() {
     });
   }
 
+  async function submitTestnetOrder() {
+    if (!testnetAccountId) {
+      appendLog("TESTNET order submit", false, "Select a TESTNET account first");
+      return;
+    }
+    if (selectedTestnetAccount?.account_mode !== "TESTNET") {
+      appendLog(
+        "TESTNET order submit",
+        false,
+        "Only TESTNET accounts can submit testnet orders",
+      );
+      return;
+    }
+    if (!lastTestnetApproval || !testnetApprovalRemainingSeconds) {
+      appendLog(
+        "TESTNET order submit",
+        false,
+        "A non-expired order window approval is required",
+      );
+      return;
+    }
+    await runStep("TESTNET order submit", async () => {
+      const result = requireObject(
+        await apiRequest("POST", "/orders/testnet/submit", {
+          exchange_account_id: testnetAccountId,
+          symbol: testnetOrderSubmitForm.symbol.trim().toUpperCase(),
+          side: testnetOrderSubmitForm.side,
+          order_type: "LIMIT",
+          quantity: testnetOrderSubmitForm.quantity,
+          price: testnetOrderSubmitForm.price,
+          client_order_id:
+            testnetOrderSubmitForm.clientOrderId.trim() ||
+            `ui-testnet-${Date.now()}`,
+          manual_testnet_order_enable_confirmed: true,
+        }),
+        "TESTNET order submit",
+      ) as unknown as TestnetOrderSubmitResponse;
+      return {
+        exchange_account_id: result.exchange_account_id,
+        exchange_name: result.exchange_name,
+        client_order_id: result.client_order_id,
+        request_method: result.request_method,
+        request_path: result.request_path,
+        approval_audit_log_id: result.approval_audit_log_id,
+        approval_expires_at: result.approval_expires_at,
+        exchange_response: result.exchange_response,
+      };
+    });
+  }
+
   async function createMockAccount() {
     await runStep("创建 Mock 模拟账户", async () => {
       const account = requireObject(
@@ -1015,6 +1083,15 @@ export default function Home() {
     testnetApprovalExpiresAtMs && nowMs
       ? Math.max(0, Math.ceil((testnetApprovalExpiresAtMs - nowMs) / 1000))
       : null;
+  const testnetApprovalActive =
+    testnetApprovalRemainingSeconds !== null && testnetApprovalRemainingSeconds > 0;
+  const canSubmitTestnetOrder =
+    Boolean(session.token) &&
+    selectedTestnetAccount?.account_mode === "TESTNET" &&
+    testnetApprovalActive &&
+    Boolean(testnetOrderSubmitForm.symbol.trim()) &&
+    Boolean(testnetOrderSubmitForm.quantity.trim()) &&
+    Boolean(testnetOrderSubmitForm.price.trim());
   const testnetApprovalRemainingLabel =
     testnetApprovalRemainingSeconds === null
       ? "-"
@@ -1739,6 +1816,92 @@ export default function Home() {
                         </div>
                       </div>
                     )}
+                    <div className="testnet-submit-box">
+                      <div className="testnet-submit-heading">
+                        <div>
+                          <strong>TESTNET LIMIT order submit</strong>
+                          <p>
+                            Uses the backend testnet gate, recent audit approval,
+                            rate limit service, and signed exchange adapter. REAL
+                            accounts are not accepted here.
+                          </p>
+                        </div>
+                        <span className={canSubmitTestnetOrder ? "mfa-enabled" : "mfa-disabled"}>
+                          {canSubmitTestnetOrder ? "WINDOW ACTIVE" : "LOCKED"}
+                        </span>
+                      </div>
+                      <div className="testnet-window-guardrail">
+                        <strong>Submit guard</strong>
+                        <span>
+                          Backend must find a matching non-expired approval audit
+                          log for symbol, side, quantity, and notional before any
+                          exchange request is sent.
+                        </span>
+                      </div>
+                      <div className="testnet-window-approval-grid">
+                        <label>
+                          Symbol
+                          <input
+                            value={testnetOrderSubmitForm.symbol}
+                            onChange={(event) => setTestnetOrderSubmitForm({
+                              ...testnetOrderSubmitForm,
+                              symbol: event.target.value,
+                            })}
+                          />
+                        </label>
+                        <label>
+                          Side
+                          <select
+                            value={testnetOrderSubmitForm.side}
+                            onChange={(event) => setTestnetOrderSubmitForm({
+                              ...testnetOrderSubmitForm,
+                              side: event.target.value as "BUY" | "SELL",
+                            })}
+                          >
+                            <option value="BUY">BUY</option>
+                            <option value="SELL">SELL</option>
+                          </select>
+                        </label>
+                        <label>
+                          Quantity
+                          <input
+                            value={testnetOrderSubmitForm.quantity}
+                            onChange={(event) => setTestnetOrderSubmitForm({
+                              ...testnetOrderSubmitForm,
+                              quantity: event.target.value,
+                            })}
+                          />
+                        </label>
+                        <label>
+                          Limit price
+                          <input
+                            value={testnetOrderSubmitForm.price}
+                            onChange={(event) => setTestnetOrderSubmitForm({
+                              ...testnetOrderSubmitForm,
+                              price: event.target.value,
+                            })}
+                          />
+                        </label>
+                        <label>
+                          Client order ID
+                          <input
+                            value={testnetOrderSubmitForm.clientOrderId}
+                            onChange={(event) => setTestnetOrderSubmitForm({
+                              ...testnetOrderSubmitForm,
+                              clientOrderId: event.target.value,
+                            })}
+                            placeholder="auto if empty"
+                          />
+                        </label>
+                      </div>
+                      <button
+                        className="testnet-submit-action"
+                        onClick={submitTestnetOrder}
+                        disabled={busy || !canSubmitTestnetOrder}
+                      >
+                        Submit TESTNET LIMIT order
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (
