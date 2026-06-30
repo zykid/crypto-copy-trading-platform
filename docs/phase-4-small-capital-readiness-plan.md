@@ -83,3 +83,7 @@ Every Phase 4 validation must produce a dated record containing:
 - Ubuntu container status.
 
 Do not include API keys, API secrets, passphrases, JWTs, raw exchange secrets, or database dumps.
+
+## Current Validation Records
+
+- `docs/phase-4-real-readiness-gate-validation-20260630.md` records the first deployed readiness-gate validation on the temporary Ubuntu host. The result was `BLOCKED`, `read_only=true`, and `order_submission_authorized=false`.
