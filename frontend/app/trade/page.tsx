@@ -38,6 +38,18 @@ type ApiActionLog = {
   detail: unknown;
 };
 
+type AuditLogRecord = {
+  id: string;
+  user_id: string;
+  exchange_account_id: string | null;
+  action: string;
+  severity: string;
+  payload: Record<string, unknown>;
+  created_at: string | null;
+};
+
+type BottomTab = "positions" | "orders" | "history" | "audit";
+
 const emptySession: SessionState = {
   token: "",
   userId: "",
@@ -125,6 +137,16 @@ export default function TradeWorkspace() {
   const [apiKeyMetadata, setApiKeyMetadata] = useState<ApiKeyMetadata>(emptyMetadata);
   const [apiBusy, setApiBusy] = useState(false);
   const [apiLogs, setApiLogs] = useState<ApiActionLog[]>([]);
+  const [bottomTab, setBottomTab] = useState<BottomTab>("positions");
+  const [auditBusy, setAuditBusy] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
+  const [auditFilters, setAuditFilters] = useState({
+    userId: "",
+    exchangeAccountId: "",
+    action: "",
+    severity: "",
+    limit: "50",
+  });
   const [createForm, setCreateForm] = useState({
     exchangeName: "okx" as ExchangeName,
     accountMode: "TESTNET" as AccountMode,
@@ -259,6 +281,7 @@ export default function TradeWorkspace() {
 
   const activeAccount = allSelectedAccount;
   const accountMode = activeAccount?.account_mode ?? "UNSELECTED";
+  const canViewAuditLogs = session.role === "super_admin" || session.role === "admin";
   const orderLocked =
     !session.token ||
     accountMode === "REAL" ||
@@ -379,6 +402,45 @@ export default function TradeWorkspace() {
       appendApiLog("Run read-only authentication", false, String(error));
     } finally {
       setApiBusy(false);
+    }
+  }
+
+  async function loadAuditLogs() {
+    if (!canViewAuditLogs) {
+      appendApiLog("Load audit logs", false, "Admin role required");
+      return;
+    }
+    setAuditBusy(true);
+    try {
+      const params = new URLSearchParams();
+      if (auditFilters.userId.trim()) {
+        params.set("user_id", auditFilters.userId.trim());
+      }
+      if (auditFilters.exchangeAccountId.trim()) {
+        params.set("exchange_account_id", auditFilters.exchangeAccountId.trim());
+      }
+      if (auditFilters.action.trim()) {
+        params.set("action", auditFilters.action.trim());
+      }
+      if (auditFilters.severity.trim()) {
+        params.set("severity", auditFilters.severity.trim());
+      }
+      params.set("limit", auditFilters.limit || "50");
+
+      const payload = await apiRequest("GET", `/admin/observability/audit-logs?${params}`);
+      if (!Array.isArray(payload)) {
+        throw new Error("audit log response is not an array");
+      }
+      setAuditLogs(payload as AuditLogRecord[]);
+      appendApiLog("Load audit logs", true, {
+        count: payload.length,
+        action: auditFilters.action || "*",
+        severity: auditFilters.severity || "*",
+      });
+    } catch (error) {
+      appendApiLog("Load audit logs", false, String(error));
+    } finally {
+      setAuditBusy(false);
     }
   }
 
@@ -736,14 +798,177 @@ export default function TradeWorkspace() {
         <section className="trade-bottom-grid">
           <div className="trade-card">
             <div className="trade-tabs">
-              <button className="active">Positions</button>
-              <button>Open Orders</button>
-              <button>History</button>
-              <button>Audit</button>
+              <button
+                className={bottomTab === "positions" ? "active" : ""}
+                onClick={() => setBottomTab("positions")}
+              >
+                Positions
+              </button>
+              <button
+                className={bottomTab === "orders" ? "active" : ""}
+                onClick={() => setBottomTab("orders")}
+              >
+                Open Orders
+              </button>
+              <button
+                className={bottomTab === "history" ? "active" : ""}
+                onClick={() => setBottomTab("history")}
+              >
+                History
+              </button>
+              <button
+                className={bottomTab === "audit" ? "active" : ""}
+                onClick={() => setBottomTab("audit")}
+              >
+                Audit
+              </button>
             </div>
-            <div className="trade-empty-table">
-              No live position data loaded. Use Console for Mock chain validation.
-            </div>
+            {bottomTab === "positions" && (
+              <div className="trade-empty-table">
+                No live position data loaded. Use Console for Mock chain validation.
+              </div>
+            )}
+            {bottomTab === "orders" && (
+              <div className="trade-empty-table">
+                No exchange open orders loaded. REAL and TESTNET order submission stays locked in this view.
+              </div>
+            )}
+            {bottomTab === "history" && (
+              <div className="trade-empty-table">
+                Execution history will show accepted Mock orders and read-only exchange probes.
+              </div>
+            )}
+            {bottomTab === "audit" && (
+              <div className="trade-audit-panel">
+                <div className="trade-audit-heading">
+                  <div>
+                    <strong>Audit Log</strong>
+                    <span>Append-only records, admin read-only query</span>
+                  </div>
+                  <span>{auditLogs.length} loaded</span>
+                </div>
+                {canViewAuditLogs ? (
+                  <>
+                    <div className="trade-audit-filters">
+                      <label>
+                        User ID
+                        <input
+                          value={auditFilters.userId}
+                          onChange={(event) =>
+                            setAuditFilters((current) => ({
+                              ...current,
+                              userId: event.target.value,
+                            }))
+                          }
+                          placeholder="optional"
+                        />
+                      </label>
+                      <label>
+                        Account ID
+                        <input
+                          value={auditFilters.exchangeAccountId}
+                          onChange={(event) =>
+                            setAuditFilters((current) => ({
+                              ...current,
+                              exchangeAccountId: event.target.value,
+                            }))
+                          }
+                          placeholder="optional"
+                        />
+                      </label>
+                      <label>
+                        Action
+                        <input
+                          value={auditFilters.action}
+                          onChange={(event) =>
+                            setAuditFilters((current) => ({
+                              ...current,
+                              action: event.target.value,
+                            }))
+                          }
+                          placeholder="exact action"
+                        />
+                      </label>
+                      <label>
+                        Severity
+                        <select
+                          value={auditFilters.severity}
+                          onChange={(event) =>
+                            setAuditFilters((current) => ({
+                              ...current,
+                              severity: event.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">All</option>
+                          <option value="INFO">INFO</option>
+                          <option value="OK">OK</option>
+                          <option value="WARNING">WARNING</option>
+                          <option value="ERROR">ERROR</option>
+                        </select>
+                      </label>
+                      <label>
+                        Limit
+                        <select
+                          value={auditFilters.limit}
+                          onChange={(event) =>
+                            setAuditFilters((current) => ({
+                              ...current,
+                              limit: event.target.value,
+                            }))
+                          }
+                        >
+                          <option value="25">25</option>
+                          <option value="50">50</option>
+                          <option value="100">100</option>
+                        </select>
+                      </label>
+                      <button
+                        className="trade-secondary-button"
+                        onClick={() => void loadAuditLogs()}
+                        disabled={auditBusy || !session.token}
+                      >
+                        {auditBusy ? "Loading" : "Load"}
+                      </button>
+                    </div>
+                    <div className="trade-audit-list">
+                      {auditLogs.length === 0 ? (
+                        <div className="trade-empty-table">
+                          No audit records loaded. Use filters and Load to query.
+                        </div>
+                      ) : (
+                        auditLogs.map((record) => (
+                          <article className="trade-audit-record" key={record.id}>
+                            <header>
+                              <div>
+                                <strong>{record.action}</strong>
+                                <span>{record.created_at ?? "-"}</span>
+                              </div>
+                              <em>{record.severity}</em>
+                            </header>
+                            <dl>
+                              <div>
+                                <dt>User</dt>
+                                <dd>{record.user_id}</dd>
+                              </div>
+                              <div>
+                                <dt>Account</dt>
+                                <dd>{record.exchange_account_id ?? "-"}</dd>
+                              </div>
+                            </dl>
+                            <pre>{prettyJson(record.payload)}</pre>
+                          </article>
+                        ))
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="trade-empty-table">
+                    Admin-only audit view. Log in as admin or super_admin to query records.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="trade-card">
             <div className="trade-card-head">

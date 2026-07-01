@@ -2316,6 +2316,138 @@ body {
   padding: 26px;
 }
 
+.trade-audit-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.trade-audit-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trade-audit-heading div {
+  display: grid;
+  gap: 4px;
+}
+
+.trade-audit-heading strong {
+  font-size: 16px;
+}
+
+.trade-audit-heading span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.trade-audit-filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  background: #0b1220;
+  padding: 12px;
+}
+
+.trade-audit-filters label {
+  display: grid;
+  gap: 6px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.trade-audit-filters input,
+.trade-audit-filters select {
+  min-width: 0;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #111827;
+  color: #e5e7eb;
+  font: inherit;
+  padding: 10px;
+}
+
+.trade-audit-list {
+  display: grid;
+  gap: 10px;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.trade-audit-record {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  background: #0b1220;
+  padding: 12px;
+}
+
+.trade-audit-record header,
+.trade-audit-record dl {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trade-audit-record header div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.trade-audit-record header strong {
+  overflow-wrap: anywhere;
+}
+
+.trade-audit-record header span,
+.trade-audit-record dt {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.trade-audit-record header em {
+  align-self: start;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  color: #f5bd42;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 950;
+  padding: 4px 8px;
+}
+
+.trade-audit-record dl {
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.trade-audit-record dd {
+  margin: 0;
+  color: #e5e7eb;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.trade-audit-record pre {
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  background: #020617;
+  color: #dbeafe;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
 .trade-risk-list {
   display: grid;
   gap: 10px;
@@ -2353,6 +2485,7 @@ body {
   }
 
   .trade-form-grid,
+  .trade-audit-filters,
   .trade-action-row {
     grid-template-columns: 1fr;
   }
