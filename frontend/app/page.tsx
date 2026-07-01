@@ -42,6 +42,16 @@ type ExchangeAccount = {
   is_active: boolean;
 };
 
+type AuditLogRecord = {
+  id: string;
+  user_id: string;
+  exchange_account_id: string | null;
+  action: string;
+  severity: string;
+  payload: Record<string, unknown>;
+  created_at: string | null;
+};
+
 type TestnetOrderAdmissionCheck = {
   name: string;
   status: "PASS" | "BLOCKED";
@@ -192,6 +202,14 @@ export default function Home() {
   const [apiBase] = useState(resolveApiBase);
   const [session, setSession] = useState<SessionState>(emptySession);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
+  const [auditFilters, setAuditFilters] = useState({
+    userId: "",
+    exchangeAccountId: "",
+    action: "",
+    severity: "",
+    limit: "50",
+  });
   const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([]);
   const [busy, setBusy] = useState(false);
   const [manualLogin, setManualLogin] = useState({
@@ -546,6 +564,7 @@ export default function Home() {
       recoveryCodes: [],
     });
     setExchangeAccounts([]);
+    setAuditLogs([]);
     setTestnetAccountId("");
     setTestnetAdmissionReport(null);
     setPhase4ReadinessReport(null);
@@ -839,6 +858,42 @@ export default function Home() {
     } finally {
       setTestnetForm((current) => ({ ...current, password: "" }));
     }
+  }
+
+  async function loadAuditLogs() {
+    await runStep("读取审计日志", async () => {
+      const params = new URLSearchParams();
+      if (auditFilters.userId.trim()) {
+        params.set("user_id", auditFilters.userId.trim());
+      }
+      if (auditFilters.exchangeAccountId.trim()) {
+        params.set("exchange_account_id", auditFilters.exchangeAccountId.trim());
+      }
+      if (auditFilters.action.trim()) {
+        params.set("action", auditFilters.action.trim());
+      }
+      if (auditFilters.severity.trim()) {
+        params.set("severity", auditFilters.severity.trim());
+      }
+      params.set("limit", auditFilters.limit || "50");
+      const result = await apiRequest(
+        "GET",
+        `/admin/observability/audit-logs?${params.toString()}`,
+      );
+      if (!Array.isArray(result)) {
+        throw new Error("审计日志返回格式异常");
+      }
+      const records = result as AuditLogRecord[];
+      setAuditLogs(records);
+      return {
+        count: records.length,
+        filters: {
+          action: auditFilters.action || "*",
+          severity: auditFilters.severity || "*",
+          limit: auditFilters.limit || "50",
+        },
+      };
+    });
   }
 
   async function runTestnetOrderAdmissionCheck() {
@@ -1220,6 +1275,8 @@ export default function Home() {
     Boolean(testnetOrderSubmitForm.symbol.trim()) &&
     Boolean(testnetOrderSubmitForm.quantity.trim()) &&
     Boolean(testnetOrderSubmitForm.price.trim());
+  const canViewAuditLogs =
+    session.role === "super_admin" || session.role === "admin";
   const testnetApprovalRemainingLabel =
     testnetApprovalRemainingSeconds === null
       ? "-"
@@ -1265,6 +1322,7 @@ export default function Home() {
           <strong>Copy Trading</strong>
         </a>
         <nav className="sidebar-nav">
+          <a href="/trade">Trade Workspace</a>
           <a href="#overview">总览</a>
           <a href="#mock-flow">Mock 交易</a>
           <a href="#session">会话</a>
@@ -1289,6 +1347,9 @@ export default function Home() {
           </div>
           <div className="topbar-actions">
             <span className="status">SIMULATION / TESTNET / REAL READ ONLY</span>
+            <a className="topbar-login-link" href="/trade">
+              Trade
+            </a>
             <a className="topbar-login-link" href="/login">
               登录页
             </a>
@@ -2506,6 +2567,134 @@ export default function Home() {
             </div>
           </section>
         )}
+
+        <section className="panel audit-panel" id="db-audit-log">
+          <div className="panel-heading">
+            <div>
+              <h2>Audit Log</h2>
+              <p>Append-only database audit records. Admin role required.</p>
+            </div>
+            <span>{auditLogs.length} records</span>
+          </div>
+          {canViewAuditLogs ? (
+            <>
+              <div className="audit-filter-grid">
+                <label>
+                  User ID
+                  <input
+                    value={auditFilters.userId}
+                    onChange={(event) =>
+                      setAuditFilters((current) => ({
+                        ...current,
+                        userId: event.target.value,
+                      }))
+                    }
+                    placeholder="optional user_id"
+                  />
+                </label>
+                <label>
+                  Exchange Account ID
+                  <input
+                    value={auditFilters.exchangeAccountId}
+                    onChange={(event) =>
+                      setAuditFilters((current) => ({
+                        ...current,
+                        exchangeAccountId: event.target.value,
+                      }))
+                    }
+                    placeholder="optional account id"
+                  />
+                </label>
+                <label>
+                  Action
+                  <input
+                    value={auditFilters.action}
+                    onChange={(event) =>
+                      setAuditFilters((current) => ({
+                        ...current,
+                        action: event.target.value,
+                      }))
+                    }
+                    placeholder="optional action"
+                  />
+                </label>
+                <label>
+                  Severity
+                  <select
+                    value={auditFilters.severity}
+                    onChange={(event) =>
+                      setAuditFilters((current) => ({
+                        ...current,
+                        severity: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">All</option>
+                    <option value="INFO">INFO</option>
+                    <option value="OK">OK</option>
+                    <option value="WARNING">WARNING</option>
+                    <option value="ERROR">ERROR</option>
+                    <option value="CRITICAL">CRITICAL</option>
+                  </select>
+                </label>
+                <label>
+                  Limit
+                  <select
+                    value={auditFilters.limit}
+                    onChange={(event) =>
+                      setAuditFilters((current) => ({
+                        ...current,
+                        limit: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                  </select>
+                </label>
+                <button onClick={() => void loadAuditLogs()} disabled={busy || !session.token}>
+                  Load Audit Logs
+                </button>
+              </div>
+              <div className="audit-records">
+                {auditLogs.length === 0 ? (
+                  <div className="empty-log">No audit records loaded</div>
+                ) : (
+                  auditLogs.map((record) => (
+                    <article className="audit-record" key={record.id}>
+                      <header>
+                        <div>
+                          <strong>{record.action}</strong>
+                          <span>{record.created_at ?? "-"}</span>
+                        </div>
+                        <span className={`audit-severity ${record.severity.toLowerCase()}`}>
+                          {record.severity}
+                        </span>
+                      </header>
+                      <dl>
+                        <div>
+                          <dt>User</dt>
+                          <dd>{record.user_id}</dd>
+                        </div>
+                        <div>
+                          <dt>Account</dt>
+                          <dd>{record.exchange_account_id ?? "-"}</dd>
+                        </div>
+                      </dl>
+                      <pre>{formatDetail(record.payload)}</pre>
+                    </article>
+                  ))
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="audit-locked">
+              Admin-only view. Log in as super_admin or admin to query audit records.
+            </div>
+          )}
+        </section>
 
         <section className="panel log-panel" id="audit-log">
           <div className="panel-heading">
