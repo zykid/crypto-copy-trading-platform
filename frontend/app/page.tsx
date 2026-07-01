@@ -147,6 +147,37 @@ function resolveApiBase() {
   return configured;
 }
 
+const SENSITIVE_DETAIL_KEYS = [
+  "api_key",
+  "api_secret",
+  "access_token",
+  "refresh_token",
+  "reauthentication_token",
+  "token",
+  "password",
+  "passphrase",
+  "secret",
+];
+
+function sanitizeLogDetail(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeLogDetail(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        SENSITIVE_DETAIL_KEYS.some((sensitiveKey) =>
+          key.toLowerCase().includes(sensitiveKey),
+        )
+          ? "[REDACTED]"
+          : sanitizeLogDetail(item),
+      ]),
+    );
+  }
+  return value;
+}
+
 function formatDetail(value: unknown) {
   if (value === null || value === undefined || value === "") {
     return "完成";
@@ -154,7 +185,7 @@ function formatDetail(value: unknown) {
   if (typeof value === "string") {
     return value;
   }
-  return JSON.stringify(value, null, 2);
+  return JSON.stringify(sanitizeLogDetail(value), null, 2);
 }
 
 export default function Home() {
@@ -420,7 +451,7 @@ export default function Home() {
   }
 
   async function registerAndLogin() {
-    await runStep("注册并登录测试用户", async () => {
+    return runStep("注册并登录测试用户", async () => {
       const suffix = Date.now().toString();
       const username = `ui_user_${suffix}`;
       const password = "ChangeMe12345!";
@@ -450,7 +481,12 @@ export default function Home() {
       const profile = await loadAuthenticatedSession(
         String(tokenResponse.access_token),
       );
-      return { user_id: profile.id, username: profile.username };
+      return {
+        user_id: profile.id,
+        username: profile.username,
+        token: String(tokenResponse.access_token),
+        password,
+      };
     });
   }
 
@@ -650,9 +686,9 @@ export default function Home() {
     });
   }
 
-  async function createReauthenticationToken(password: string) {
+  async function createReauthenticationToken(password: string, token = session.token) {
     const result = requireObject(
-      await apiRequest("POST", "/auth/reauthenticate", { password }),
+      await apiRequest("POST", "/auth/reauthenticate", { password }, token),
       "密码再认证",
     );
     return String(result.reauthentication_token);
@@ -990,15 +1026,15 @@ export default function Home() {
     });
   }
 
-  async function createMockAccount() {
-    await runStep("创建 Mock 模拟账户", async () => {
+  async function createMockAccount(token = session.token) {
+    return runStep("创建 Mock 模拟账户", async () => {
       const account = requireObject(
         await apiRequest("POST", "/exchange-accounts", {
           exchange_name: "mock",
           account_label: "UI Mock Simulation",
           account_mode: "SIMULATION",
           trading_enabled: true,
-        }),
+        }, token, 201),
         "创建账户",
       );
       const accountId = String(account.id);
@@ -1007,57 +1043,68 @@ export default function Home() {
     });
   }
 
-  async function configureMockKey() {
+  async function configureMockKey(
+    accountId = session.accountId,
+    token = session.token,
+    reauthenticationToken = "",
+  ) {
     await runStep("写入模拟 API Key 元数据", async () => {
       const metadata = await apiRequest(
         "POST",
-        `/exchange-accounts/${session.accountId}/api-key`,
+        `/exchange-accounts/${accountId}/api-key`,
         {
           api_key: "mock-key-ui",
           api_secret: "mock-secret-never-display",
           passphrase: "mock-passphrase",
         },
+        token,
+        200,
+        reauthenticationToken
+          ? { "X-Reauthentication-Token": reauthenticationToken }
+          : {},
       );
       return metadata;
     });
   }
 
-  async function enableRisk() {
+  async function enableRisk(accountId = session.accountId, token = session.token) {
     await runStep("开启模拟风控交易", async () => {
-      return apiRequest("PATCH", `/risk-settings/${session.accountId}`, {
+      return apiRequest("PATCH", `/risk-settings/${accountId}`, {
         trading_enabled: true,
         min_order_quantity: "0.01",
         max_order_quantity: "1",
         max_single_order_notional: "1000",
-      });
+      }, token);
     });
   }
 
-  async function previewTarget() {
+  async function previewTarget(accountId = session.accountId, token = session.token) {
     await runStep("仓位差额预览", async () => {
       return apiRequest(
         "POST",
-        `/positions/${session.accountId}/target-preview?symbol=BTCUSDT&target_quantity=0.5`,
+        `/positions/${accountId}/target-preview?symbol=BTCUSDT&target_quantity=0.5`,
+        undefined,
+        token,
       );
     });
   }
 
-  async function executeManualOrder() {
-    await runStep("执行手工 Mock 订单", async () => {
+  async function executeManualOrder(accountId = session.accountId, token = session.token) {
+    return runStep("执行手工 Mock 订单", async () => {
       const signal = requireObject(
         await apiRequest(
           "POST",
           "/signals/manual",
           { symbol: "BTCUSDT", side: "BUY", order_type: "MARKET", quantity: "0.2" },
-          session.token,
+          token,
           201,
         ),
         "创建信号",
       );
       const execution = requireObject(
         await apiRequest("POST", `/orders/execute-signal/${signal.id}`, {
-          exchange_account_id: session.accountId,
-        }),
+          exchange_account_id: accountId,
+        }, token),
         "执行订单",
       );
       setSession((current) => ({
@@ -1069,18 +1116,23 @@ export default function Home() {
     });
   }
 
-  async function verifyIdempotency() {
+  async function verifyIdempotency(
+    signalId = session.signalId,
+    accountId = session.accountId,
+    executionId = session.executionId,
+    token = session.token,
+  ) {
     await runStep("幂等重复执行校验", async () => {
       const duplicate = requireObject(
-        await apiRequest("POST", `/orders/execute-signal/${session.signalId}`, {
-          exchange_account_id: session.accountId,
-        }),
+        await apiRequest("POST", `/orders/execute-signal/${signalId}`, {
+          exchange_account_id: accountId,
+        }, token),
         "重复执行",
       );
       return {
-        original_execution_id: session.executionId,
+        original_execution_id: executionId,
         duplicate_execution_id: duplicate.execution_id,
-        same_execution: duplicate.execution_id === session.executionId,
+        same_execution: duplicate.execution_id === executionId,
       };
     });
   }
@@ -1089,13 +1141,31 @@ export default function Home() {
     setBusy(true);
     try {
       await checkHealth();
-      await registerAndLogin();
-      await createMockAccount();
-      await configureMockKey();
-      await enableRisk();
-      await previewTarget();
-      await executeManualOrder();
-      await verifyIdempotency();
+      const loginResult = requireObject(
+        (await registerAndLogin()) as ApiResult,
+        "注册并登录测试用户",
+      );
+      const token = String(loginResult.token);
+      const password = String(loginResult.password);
+      const accountResult = requireObject(
+        (await createMockAccount(token)) as ApiResult,
+        "创建 Mock 模拟账户",
+      );
+      const accountId = String(accountResult.account_id);
+      const reauthenticationToken = await createReauthenticationToken(password, token);
+      await configureMockKey(accountId, token, reauthenticationToken);
+      await enableRisk(accountId, token);
+      await previewTarget(accountId, token);
+      const execution = requireObject(
+        (await executeManualOrder(accountId, token)) as ApiResult,
+        "执行手工 Mock 订单",
+      );
+      await verifyIdempotency(
+        String(execution.signal_id),
+        accountId,
+        String(execution.execution_id),
+        token,
+      );
     } finally {
       setBusy(false);
     }
@@ -1303,12 +1373,12 @@ export default function Home() {
           <div className="button-grid">
             <button onClick={checkHealth} disabled={busy}>健康检查</button>
             <button onClick={registerAndLogin} disabled={busy}>注册测试用户</button>
-            <button onClick={createMockAccount} disabled={busy || !session.token}>创建 Mock 账户</button>
-            <button onClick={configureMockKey} disabled={busy || !canUseAccount}>配置模拟 Key</button>
-            <button onClick={enableRisk} disabled={busy || !canUseAccount}>开启风控交易</button>
-            <button onClick={previewTarget} disabled={busy || !canUseAccount}>仓位预览</button>
-            <button onClick={executeManualOrder} disabled={busy || !canUseAccount}>执行订单</button>
-            <button onClick={verifyIdempotency} disabled={busy || !canVerifyIdempotency}>幂等校验</button>
+            <button onClick={() => void createMockAccount()} disabled={busy || !session.token}>创建 Mock 账户</button>
+            <button onClick={() => void configureMockKey()} disabled={busy || !canUseAccount}>配置模拟 Key</button>
+            <button onClick={() => void enableRisk()} disabled={busy || !canUseAccount}>开启风控交易</button>
+            <button onClick={() => void previewTarget()} disabled={busy || !canUseAccount}>仓位预览</button>
+            <button onClick={() => void executeManualOrder()} disabled={busy || !canUseAccount}>执行订单</button>
+            <button onClick={() => void verifyIdempotency()} disabled={busy || !canVerifyIdempotency}>幂等校验</button>
           </div>
           <button className="primary-action" onClick={runFullMockFlow} disabled={busy}>
             一键运行 Mock 全链路
