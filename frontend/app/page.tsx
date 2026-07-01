@@ -1365,6 +1365,236 @@ export default function Home() {
           </article>
         </section>
 
+        <section className="exchange-workspace" aria-label="Exchange style trading workspace preview">
+          <div className="market-header">
+            <div>
+              <span className="workspace-kicker">Trading Workspace Preview</span>
+              <h2>BTC/USDT</h2>
+              <p>Mock market data · SIMULATION execution only</p>
+            </div>
+            <div className="market-header-stats">
+              <div>
+                <span>Last Price</span>
+                <strong>64,280.40</strong>
+              </div>
+              <div>
+                <span>24h Change</span>
+                <strong className="up">+1.84%</strong>
+              </div>
+              <div>
+                <span>24h High</span>
+                <strong>65,102.10</strong>
+              </div>
+              <div>
+                <span>24h Volume</span>
+                <strong>18.42K BTC</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="terminal-grid">
+            <section className="terminal-card chart-card">
+              <div className="terminal-card-heading">
+                <div>
+                  <span>Chart</span>
+                  <strong>BTC/USDT · 15m</strong>
+                </div>
+                <div className="chart-tabs" aria-label="Chart timeframe">
+                  <span>1m</span>
+                  <span className="active">15m</span>
+                  <span>1h</span>
+                  <span>1d</span>
+                </div>
+              </div>
+              <div className="chart-surface" aria-hidden="true">
+                <i style={{ height: "34%" }} />
+                <i className="red" style={{ height: "48%" }} />
+                <i style={{ height: "58%" }} />
+                <i style={{ height: "42%" }} />
+                <i className="red" style={{ height: "62%" }} />
+                <i style={{ height: "74%" }} />
+                <i style={{ height: "52%" }} />
+                <i className="red" style={{ height: "45%" }} />
+                <i style={{ height: "67%" }} />
+                <i style={{ height: "78%" }} />
+                <i className="red" style={{ height: "61%" }} />
+                <i style={{ height: "82%" }} />
+              </div>
+              <div className="market-depth-preview">
+                <span style={{ width: "72%" }} />
+                <span className="sell" style={{ width: "48%" }} />
+              </div>
+            </section>
+
+            <section className="terminal-card orderbook-card">
+              <div className="terminal-card-heading">
+                <div>
+                  <span>Order Book</span>
+                  <strong>Mock depth</strong>
+                </div>
+              </div>
+              <div className="book-table">
+                <div className="book-head">
+                  <span>Price</span>
+                  <span>Qty</span>
+                  <span>Total</span>
+                </div>
+                {[
+                  ["64,294.20", "0.184", "11,833"],
+                  ["64,291.80", "0.427", "27,445"],
+                  ["64,286.50", "0.093", "5,979"],
+                  ["64,281.10", "0.316", "20,313"],
+                ].map((row) => (
+                  <div className="book-row ask" key={row.join("-")}>
+                    <span>{row[0]}</span>
+                    <span>{row[1]}</span>
+                    <span>{row[2]}</span>
+                  </div>
+                ))}
+                <div className="book-mid">64,280.40</div>
+                {[
+                  ["64,279.90", "0.226", "14,531"],
+                  ["64,276.30", "0.512", "32,909"],
+                  ["64,270.80", "0.148", "9,512"],
+                  ["64,266.10", "0.384", "24,681"],
+                ].map((row) => (
+                  <div className="book-row bid" key={row.join("-")}>
+                    <span>{row[0]}</span>
+                    <span>{row[1]}</span>
+                    <span>{row[2]}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="terminal-card order-ticket-card">
+              <div className="terminal-card-heading">
+                <div>
+                  <span>Order Ticket</span>
+                  <strong>Execution guarded</strong>
+                </div>
+                <span className="locked-pill">NO LIVE ORDER</span>
+              </div>
+              <div className="ticket-mode">
+                <button type="button" className="active">Mock</button>
+                <button type="button" disabled>Testnet Read Only</button>
+                <button type="button" disabled>Real Read Only</button>
+              </div>
+              <div className="side-switch">
+                <button type="button" className="buy">Buy</button>
+                <button type="button" className="sell">Sell</button>
+              </div>
+              <div className="ticket-fields">
+                <label>
+                  Order Type
+                  <select value="limit" disabled>
+                    <option value="limit">Limit</option>
+                  </select>
+                </label>
+                <label>
+                  Price USDT
+                  <input value="64280.40" readOnly />
+                </label>
+                <label>
+                  Quantity BTC
+                  <input value="0.001" readOnly />
+                </label>
+              </div>
+              <button className="simulate-action" type="button" disabled={!canUseAccount || busy}>
+                Mock pre-check only
+              </button>
+              <p className="ticket-warning">
+                TESTNET and REAL panels are intentionally read-only until a separate approval
+                window is created and audited.
+              </p>
+            </section>
+
+            <section className="terminal-card account-card">
+              <div className="terminal-card-heading">
+                <div>
+                  <span>Portfolio</span>
+                  <strong>{session.username || "Guest"}</strong>
+                </div>
+              </div>
+              <div className="portfolio-grid">
+                <div>
+                  <span>Equity</span>
+                  <strong>Mock 10,000 USDT</strong>
+                </div>
+                <div>
+                  <span>Margin Used</span>
+                  <strong>0.00</strong>
+                </div>
+                <div>
+                  <span>Risk Gate</span>
+                  <strong className="up">Enabled</strong>
+                </div>
+                <div>
+                  <span>Kill Switch</span>
+                  <strong>Armed</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div className="terminal-bottom-grid">
+            <section className="terminal-card">
+              <div className="terminal-card-heading">
+                <div>
+                  <span>Positions</span>
+                  <strong>Target vs Current</strong>
+                </div>
+              </div>
+              <div className="terminal-table">
+                <div className="terminal-table-head">
+                  <span>Symbol</span>
+                  <span>Target</span>
+                  <span>Current</span>
+                  <span>Delta</span>
+                  <span>Status</span>
+                </div>
+                <div>
+                  <span>BTC/USDT</span>
+                  <span>0.001</span>
+                  <span>0.000</span>
+                  <span className="up">+0.001</span>
+                  <span>Mock only</span>
+                </div>
+                <div>
+                  <span>ETH/USDT</span>
+                  <span>0.000</span>
+                  <span>0.000</span>
+                  <span>0.000</span>
+                  <span>Flat</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="terminal-card">
+              <div className="terminal-card-heading">
+                <div>
+                  <span>Copy Trading</span>
+                  <strong>Rule preview</strong>
+                </div>
+              </div>
+              <div className="copy-rule-preview">
+                <div>
+                  <span>Mode</span>
+                  <strong>equity_ratio</strong>
+                </div>
+                <div>
+                  <span>Max Notional</span>
+                  <strong>Read-only config</strong>
+                </div>
+                <div>
+                  <span>Follower State</span>
+                  <strong>Paused by default</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
         <section className="panel controls-panel" id="mock-flow">
           <div className="panel-heading">
             <h2>快速流程</h2>
