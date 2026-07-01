@@ -30,6 +30,7 @@ type ApiKeyMetadata = {
 };
 
 type OrderSide = "BUY" | "SELL";
+type OrderType = "MARKET" | "LIMIT";
 
 type ApiActionLog = {
   id: string;
@@ -66,6 +67,45 @@ const emptyMetadata: ApiKeyMetadata = {
 const apiBaseFallback = "http://192.168.2.42:8000/api/v1";
 const exchanges: ExchangeName[] = ["okx", "binance", "bybit", "mock"];
 const symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"];
+const exchangeProfiles: Record<
+  ExchangeName,
+  {
+    label: string;
+    venue: string;
+    route: string;
+    window: string;
+  }
+> = {
+  okx: {
+    label: "OKX",
+    venue: "Unified Account",
+    route: "REAL / TESTNET read-only",
+    window: "Balances, positions, and order checks stay read-only.",
+  },
+  binance: {
+    label: "Binance",
+    venue: "Spot / Futures",
+    route: "TESTNET read-only",
+    window: "Adapter window is reserved for testnet validation.",
+  },
+  bybit: {
+    label: "Bybit",
+    venue: "Unified Trading",
+    route: "TESTNET read-only",
+    window: "Adapter window is reserved for testnet validation.",
+  },
+  mock: {
+    label: "Mock Exchange",
+    venue: "Simulation",
+    route: "Simulation executable",
+    window: "Mock route can execute only after account trading and risk checks pass.",
+  },
+};
+const marketSnapshots: Record<string, { last: number; bid: number; ask: number; change: string }> = {
+  "BTC/USDT": { last: 68420.5, bid: 68410, ask: 68428.2, change: "+1.42%" },
+  "ETH/USDT": { last: 3582.16, bid: 3581.4, ask: 3583.2, change: "+0.86%" },
+  "SOL/USDT": { last: 151.72, bid: 151.61, ask: 151.84, change: "-0.31%" },
+};
 const sensitiveKeys = new Set([
   "api_key",
   "apiKey",
@@ -136,6 +176,13 @@ function defaultAccountLabel(exchangeName: ExchangeName, mode: AccountMode) {
   return `${exchangeName.toUpperCase()} Testnet Read Only`;
 }
 
+function formatNumber(value: number, maximumFractionDigits = 2) {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(value);
+}
+
 export default function TradeWorkspace() {
   const [apiRoot] = useState(resolveApiBase);
   const [session, setSession] = useState<SessionState>(emptySession);
@@ -144,6 +191,11 @@ export default function TradeWorkspace() {
   const [activeSymbol, setActiveSymbol] = useState("BTC/USDT");
   const [activeAccountId, setActiveAccountId] = useState("");
   const [orderSide, setOrderSide] = useState<OrderSide>("BUY");
+  const [orderForm, setOrderForm] = useState({
+    orderType: "MARKET" as OrderType,
+    price: "",
+    quantity: "0.001",
+  });
   const [lastStatus, setLastStatus] = useState("READ ONLY");
   const [apiKeyMetadata, setApiKeyMetadata] = useState<ApiKeyMetadata>(emptyMetadata);
   const [apiBusy, setApiBusy] = useState(false);
@@ -294,23 +346,44 @@ export default function TradeWorkspace() {
 
   const activeAccount = allSelectedAccount;
   const accountMode = activeAccount?.account_mode ?? "UNSELECTED";
+  const activeExchangeProfile = exchangeProfiles[activeExchange];
+  const activeMarket = marketSnapshots[activeSymbol] ?? marketSnapshots["BTC/USDT"];
+  const parsedPrice = Number(orderForm.price);
+  const parsedQuantity = Number(orderForm.quantity);
+  const referencePrice =
+    orderForm.orderType === "LIMIT" && Number.isFinite(parsedPrice) && parsedPrice > 0
+      ? parsedPrice
+      : activeMarket.last;
+  const estimatedNotional =
+    Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity * referencePrice : 0;
+  const clientOrderIdPreview = activeAccount
+    ? `preview-${activeExchange}-${activeAccount.id.slice(0, 8)}-${activeSymbol.replace("/", "")}`
+    : "preview-unassigned";
+  const lockReasons = [
+    !session.token ? "Login required" : null,
+    !activeAccount ? "Select an exchange account" : null,
+    activeAccount && !activeAccount.is_active ? "Account is inactive" : null,
+    activeAccount?.account_mode === "REAL" ? "REAL account is read-only in this stage" : null,
+    activeExchange !== "mock" ? "Only Mock can be executable from this ticket" : null,
+    activeAccount && !activeAccount.trading_enabled ? "Account trading flag is disabled" : null,
+    !Number.isFinite(parsedQuantity) || parsedQuantity <= 0 ? "Quantity must be greater than 0" : null,
+    orderForm.orderType === "LIMIT" && (!Number.isFinite(parsedPrice) || parsedPrice <= 0)
+      ? "Limit price is required"
+      : null,
+  ].filter(Boolean) as string[];
   const canViewAuditLogs = session.role === "super_admin" || session.role === "admin";
   const selectedAuditLog = auditLogs.find((record) => record.id === selectedAuditLogId);
   const auditSeverityCounts = auditLogs.reduce<Record<string, number>>((counts, record) => {
     counts[record.severity] = (counts[record.severity] ?? 0) + 1;
     return counts;
   }, {});
-  const orderLocked =
-    !session.token ||
-    accountMode === "REAL" ||
-    !activeAccount?.trading_enabled ||
-    activeExchange !== "mock";
+  const orderLocked = lockReasons.length > 0;
 
   const marketRows = [
-    { price: "68,420.5", amount: "0.184", side: "ask" },
-    { price: "68,418.2", amount: "0.076", side: "ask" },
-    { price: "68,410.0", amount: "0.214", side: "bid" },
-    { price: "68,405.4", amount: "0.092", side: "bid" },
+    { price: formatNumber(activeMarket.ask), amount: "0.184", side: "ask" },
+    { price: formatNumber(activeMarket.ask - activeMarket.last * 0.0001), amount: "0.076", side: "ask" },
+    { price: formatNumber(activeMarket.bid), amount: "0.214", side: "bid" },
+    { price: formatNumber(activeMarket.bid - activeMarket.last * 0.00008), amount: "0.092", side: "bid" },
   ];
 
   async function createAccount() {
@@ -519,22 +592,26 @@ export default function TradeWorkspace() {
         </header>
 
         <section className="trade-market-strip">
-          {exchanges.map((exchange) => (
-            <button
-              className={exchange === activeExchange ? "active" : ""}
-              key={exchange}
-              onClick={() => {
-                setActiveExchange(exchange);
-                setCreateForm((current) => ({
-                  ...current,
-                  exchangeName: exchange,
-                  accountMode: exchange === "mock" ? "SIMULATION" : current.accountMode,
-                }));
-              }}
-            >
-              {exchange.toUpperCase()}
-            </button>
-          ))}
+          {exchanges.map((exchange) => {
+            const accountCount = accounts.filter((account) => account.exchange_name === exchange).length;
+            return (
+              <button
+                className={exchange === activeExchange ? "active" : ""}
+                key={exchange}
+                onClick={() => {
+                  setActiveExchange(exchange);
+                  setCreateForm((current) => ({
+                    ...current,
+                    exchangeName: exchange,
+                    accountMode: exchange === "mock" ? "SIMULATION" : current.accountMode,
+                  }));
+                }}
+              >
+                <strong>{exchangeProfiles[exchange].label}</strong>
+                <span>{accountCount} accounts</span>
+              </button>
+            );
+          })}
           {symbols.map((symbol) => (
             <button
               className={symbol === activeSymbol ? "symbol-active" : ""}
@@ -552,10 +629,12 @@ export default function TradeWorkspace() {
               <div>
                 <span>Chart</span>
                 <strong>
-                  {activeExchange.toUpperCase()} 路 {activeSymbol}
+                  {activeExchangeProfile.label} / {activeSymbol}
                 </strong>
               </div>
-              <em>{accountMode}</em>
+              <em>
+                {formatNumber(activeMarket.last)} USDT {activeMarket.change}
+              </em>
             </div>
             <div className="trade-chart-canvas" aria-label="market chart preview">
               {Array.from({ length: 34 }, (_, index) => (
@@ -565,6 +644,31 @@ export default function TradeWorkspace() {
                   style={{ height: `${28 + ((index * 13) % 112)}px` }}
                 />
               ))}
+            </div>
+            <div className="trade-exchange-window">
+              <div>
+                <span>Exchange Window</span>
+                <strong>{activeExchangeProfile.venue}</strong>
+              </div>
+              <dl>
+                <div>
+                  <dt>Account</dt>
+                  <dd>{activeAccount?.account_label ?? "Not selected"}</dd>
+                </div>
+                <div>
+                  <dt>Mode</dt>
+                  <dd>{accountMode}</dd>
+                </div>
+                <div>
+                  <dt>Route</dt>
+                  <dd>{activeExchangeProfile.route}</dd>
+                </div>
+                <div>
+                  <dt>Secret</dt>
+                  <dd>{apiKeyMetadata.configured ? "Configured" : "Not set"}</dd>
+                </div>
+              </dl>
+              <p>{activeExchangeProfile.window}</p>
             </div>
           </div>
 
@@ -586,6 +690,20 @@ export default function TradeWorkspace() {
               <strong>Order Ticket</strong>
               <span>{lastStatus}</span>
             </div>
+            <div className="trade-ticket-mode" aria-label="order type selector">
+              <button
+                className={orderForm.orderType === "MARKET" ? "active" : ""}
+                onClick={() => setOrderForm((current) => ({ ...current, orderType: "MARKET" }))}
+              >
+                Market
+              </button>
+              <button
+                className={orderForm.orderType === "LIMIT" ? "active" : ""}
+                onClick={() => setOrderForm((current) => ({ ...current, orderType: "LIMIT" }))}
+              >
+                Limit
+              </button>
+            </div>
             <div className="trade-side-switch" aria-label="order side selector">
               <button
                 className={orderSide === "BUY" ? "buy active" : "buy"}
@@ -602,22 +720,82 @@ export default function TradeWorkspace() {
             </div>
             <label>
               Price
-              <input readOnly value="Market / Mock preview" />
+              <input
+                inputMode="decimal"
+                readOnly={orderForm.orderType === "MARKET"}
+                value={
+                  orderForm.orderType === "MARKET"
+                    ? `Market / ${formatNumber(activeMarket.last)}`
+                    : orderForm.price
+                }
+                onChange={(event) =>
+                  setOrderForm((current) => ({ ...current, price: event.target.value }))
+                }
+              />
             </label>
             <label>
               Quantity
-              <input readOnly value="0.001" />
+              <input
+                inputMode="decimal"
+                value={orderForm.quantity}
+                onChange={(event) =>
+                  setOrderForm((current) => ({ ...current, quantity: event.target.value }))
+                }
+              />
             </label>
             <label>
               Account
-              <input readOnly value={activeAccount?.account_label ?? "No account selected"} />
+              <select
+                value={activeAccountId}
+                onChange={(event) => setActiveAccountId(event.target.value)}
+              >
+                {exchangeAccounts.length === 0 ? (
+                  <option value="">No {activeExchangeProfile.label} account</option>
+                ) : (
+                  exchangeAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.account_label} / {account.account_mode}
+                    </option>
+                  ))
+                )}
+              </select>
             </label>
+            <div className="trade-order-preview">
+              <div>
+                <span>Side</span>
+                <strong className={orderSide === "BUY" ? "preview-buy" : "preview-sell"}>
+                  {orderSide}
+                </strong>
+              </div>
+              <div>
+                <span>Type</span>
+                <strong>{orderForm.orderType}</strong>
+              </div>
+              <div>
+                <span>Estimated Price</span>
+                <strong>{formatNumber(referencePrice)} USDT</strong>
+              </div>
+              <div>
+                <span>Estimated Notional</span>
+                <strong>{formatNumber(estimatedNotional)} USDT</strong>
+              </div>
+            </div>
+            <div className="trade-route-panel">
+              <span>Client Order ID Preview</span>
+              <code>{clientOrderIdPreview}</code>
+            </div>
             <button className="trade-submit" disabled={orderLocked}>
-              {orderLocked ? "Order Locked" : `${orderSide} Mock Preview`}
+              {orderLocked ? "Preview Locked" : `${orderSide} Mock Preview Ready`}
             </button>
-            <p>
-              Locked until explicit risk, MFA, approval window, and exchange mode checks pass.
-            </p>
+            {lockReasons.length === 0 ? (
+              <p>Mock preview route is open. This view still does not submit orders.</p>
+            ) : (
+              <ul className="trade-lock-list">
+                {lockReasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            )}
           </div>
         </section>
 
