@@ -1,6 +1,9 @@
+from decimal import Decimal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.exchange_account import AccountMode, ExchangeName
+from app.db.models.trading import OrderSide
 
 
 class ExchangeAccountCreate(BaseModel):
@@ -54,6 +57,28 @@ class RealReadOnlyCheckResponse(BaseModel):
     exchange_name: ExchangeName
     authenticated: bool
     balance_asset_count: int
+
+
+class TestnetOrderWindowApprovalRequest(BaseModel):
+    symbol: str = Field(min_length=1, max_length=32)
+    side: OrderSide
+    max_quantity: Decimal = Field(gt=0)
+    max_notional: Decimal = Field(gt=0)
+    duration_minutes: int = Field(ge=1, le=10)
+    acknowledgement: str = Field(min_length=1, max_length=80)
+
+
+class TestnetOrderWindowApprovalResponse(BaseModel):
+    audit_log_id: str
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    symbol: str
+    side: OrderSide
+    max_quantity: Decimal
+    max_notional: Decimal
+    duration_minutes: int
+    order_submission_authorized: bool
+    trading_flags_changed: bool
 
 
 class Phase4ReadinessCheckResponse(BaseModel):

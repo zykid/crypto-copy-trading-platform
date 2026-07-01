@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.v1.exchange_accounts import approve_testnet_order_window
 from app.core.encryption import encrypt_secret
 from app.db.models.exchange_account import (
     AccountMode,
@@ -14,6 +15,9 @@ from app.db.models.exchange_account import (
 from app.db.models.observability import AuditLog
 from app.db.models.trading import OrderSide, RiskSetting
 from app.db.models.user import User, UserRole
+from app.schemas.exchange_account import (
+    TestnetOrderWindowApprovalRequest as OrderWindowApprovalRequest,
+)
 from app.services.testnet_order_window_approval import (
     TESTNET_ORDER_WINDOW_APPROVAL_ACK,
     TestnetOrderWindowApprovalBlockedError,
@@ -132,6 +136,42 @@ def test_testnet_order_window_approval_writes_audit_without_authorizing_orders(
     assert account.trading_enabled is False
     assert risk is not None
     assert risk.trading_enabled is False
+
+
+def test_testnet_order_window_approval_api_records_audit(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner = user("owner@example.com", "owner")
+    db_session.add(owner)
+    db_session.commit()
+    account = add_account(db_session, owner=owner)
+    add_risk_settings(db_session, owner=owner, account=account)
+    add_api_key_metadata(db_session, owner=owner, account=account)
+    monkeypatch.setattr("app.api.v1.exchange_accounts.settings.testnet_adapters_enabled", False)
+
+    response = approve_testnet_order_window(
+        account.id,
+        OrderWindowApprovalRequest(
+            symbol="BTCUSDT",
+            side=OrderSide.BUY,
+            max_quantity=Decimal("0.001"),
+            max_notional=Decimal("100"),
+            duration_minutes=5,
+            acknowledgement=TESTNET_ORDER_WINDOW_APPROVAL_ACK,
+        ),
+        current_user=owner,
+        db=db_session,
+    )
+
+    assert response.exchange_account_id == account.id
+    assert response.order_submission_authorized is False
+    assert response.trading_flags_changed is False
+    assert db_session.scalar(
+        select(func.count())
+        .select_from(AuditLog)
+        .where(AuditLog.action == "testnet.order_window.approval_recorded")
+    ) == 1
 
 
 def test_testnet_order_window_approval_requires_admin_role(

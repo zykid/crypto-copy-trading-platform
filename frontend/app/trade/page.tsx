@@ -130,6 +130,7 @@ const sensitiveKeys = new Set([
   "token",
   "reauthentication_token",
 ]);
+const testnetOrderWindowApprovalAck = "APPROVE_TESTNET_ORDER_WINDOW_ONLY";
 
 function resolveApiBase() {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -214,6 +215,7 @@ export default function TradeWorkspace() {
   const [apiBusy, setApiBusy] = useState(false);
   const [apiLogs, setApiLogs] = useState<ApiActionLog[]>([]);
   const [isOrderPreviewOpen, setIsOrderPreviewOpen] = useState(false);
+  const [orderApprovalPassword, setOrderApprovalPassword] = useState("");
   const [bottomTab, setBottomTab] = useState<BottomTab>("positions");
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
@@ -382,6 +384,7 @@ export default function TradeWorkspace() {
       : activeMarket.last;
   const estimatedNotional =
     Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity * referencePrice : 0;
+  const normalizedPreviewSymbol = activeSymbol.replace("/", "");
   const clientOrderIdPreview = activeAccount
     ? `preview-${activeExchange}-${activeAccount.id.slice(0, 8)}-${activeSymbol.replace("/", "")}`
     : "preview-unassigned";
@@ -392,7 +395,8 @@ export default function TradeWorkspace() {
     exchange_account_id: activeAccount?.id ?? null,
     account_label: activeAccount?.account_label ?? null,
     account_mode: activeAccount?.account_mode ?? null,
-    symbol: activeSymbol,
+    symbol: normalizedPreviewSymbol,
+    display_symbol: activeSymbol,
     side: orderSide,
     order_type: orderForm.orderType,
     reference_price: referencePrice,
@@ -414,6 +418,17 @@ export default function TradeWorkspace() {
       ? "Limit price is required"
       : null,
   ].filter(Boolean) as string[];
+  const testnetWindowReasons = [
+    !session.token ? "Login required" : null,
+    !activeAccount ? "Select an exchange account" : null,
+    activeAccount && !activeAccount.is_active ? "Account is inactive" : null,
+    activeAccount?.account_mode !== "TESTNET" ? "Account mode must be TESTNET" : null,
+    activeExchange === "mock" ? "Mock uses simulation flow instead of a testnet window" : null,
+    activeAccount?.trading_enabled ? "Account trading flag must stay disabled before approval" : null,
+    !apiKeyMetadata.configured ? "Encrypted API key metadata is required" : null,
+    !Number.isFinite(parsedQuantity) || parsedQuantity <= 0 ? "Quantity must be greater than 0" : null,
+    estimatedNotional <= 0 ? "Estimated notional must be greater than 0" : null,
+  ].filter(Boolean) as string[];
   const canViewAuditLogs = session.role === "super_admin" || session.role === "admin";
   const selectedAuditLog = auditLogs.find((record) => record.id === selectedAuditLogId);
   const auditSeverityCounts = auditLogs.reduce<Record<string, number>>((counts, record) => {
@@ -421,6 +436,7 @@ export default function TradeWorkspace() {
     return counts;
   }, {});
   const orderLocked = lockReasons.length > 0;
+  const canRecordTestnetOrderWindow = testnetWindowReasons.length === 0;
 
   const marketRows = [
     { price: formatNumber(activeMarket.ask), amount: "0.184", side: "ask" },
@@ -633,6 +649,47 @@ export default function TradeWorkspace() {
     appendApiLog("Order preview confirmed", true, orderPreviewPayload);
     setBottomTab("history");
     setIsOrderPreviewOpen(false);
+  }
+
+  async function recordTestnetOrderWindowApproval() {
+    if (!activeAccount || !canRecordTestnetOrderWindow) {
+      return;
+    }
+    if (!orderApprovalPassword) {
+      appendApiLog("Record testnet order window", false, "Current password is required");
+      return;
+    }
+    setApiBusy(true);
+    try {
+      const reauthToken = await createReauthenticationToken(orderApprovalPassword);
+      const result = await apiRequest(
+        "POST",
+        `/exchange-accounts/${activeAccount.id}/testnet-order-window-approvals`,
+        {
+          symbol: normalizedPreviewSymbol,
+          side: orderSide,
+          max_quantity: parsedQuantity,
+          max_notional: estimatedNotional,
+          duration_minutes: 5,
+          acknowledgement: testnetOrderWindowApprovalAck,
+        },
+        200,
+        { "X-Reauthentication-Token": reauthToken },
+      );
+      setOrderApprovalPassword("");
+      appendApiLog("Record testnet order window", true, result);
+      setAuditFilters((current) => ({
+        ...current,
+        exchangeAccountId: activeAccount.id,
+        action: "testnet.order_window.approval_recorded",
+      }));
+      setBottomTab("audit");
+      setIsOrderPreviewOpen(false);
+    } catch (error) {
+      appendApiLog("Record testnet order window", false, String(error));
+    } finally {
+      setApiBusy(false);
+    }
   }
 
   function focusAuditForCurrentAccount() {
@@ -1435,10 +1492,10 @@ export default function TradeWorkspace() {
               </button>
             </header>
             <div className="trade-preview-warning">
-              <strong>{orderLocked ? "Locked" : "Preview Only"}</strong>
+              <strong>{canRecordTestnetOrderWindow ? "Testnet Approval Window" : orderLocked ? "Locked" : "Preview Only"}</strong>
               <span>
-                {selectedAccountRoute} This confirmation records a local preview only. It does not submit an
-                order to any exchange.
+                {selectedAccountRoute} This screen never submits an exchange order. TESTNET approval records
+                an audit-only window after password reauthentication.
               </span>
             </div>
             <dl className="trade-preview-grid">
@@ -1490,6 +1547,29 @@ export default function TradeWorkspace() {
                 ))}
               </ul>
             )}
+            {activeAccount?.account_mode === "TESTNET" && activeExchange !== "mock" && (
+              <div className="trade-route-panel">
+                <span>Testnet Order Window</span>
+                <strong>Audit only / 5 minutes / no trading flags changed</strong>
+                {testnetWindowReasons.length > 0 ? (
+                  <ul className="trade-lock-list compact">
+                    {testnetWindowReasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <label className="trade-field">
+                    Current password
+                    <input
+                      type="password"
+                      value={orderApprovalPassword}
+                      onChange={(event) => setOrderApprovalPassword(event.target.value)}
+                      placeholder="Required for approval audit"
+                    />
+                  </label>
+                )}
+              </div>
+            )}
             <pre className="trade-preview-json">{prettyJson(orderPreviewPayload)}</pre>
             <footer>
               <button className="trade-secondary-button" onClick={focusAuditForCurrentAccount}>
@@ -1498,6 +1578,15 @@ export default function TradeWorkspace() {
               <button className="trade-secondary-button" onClick={() => setIsOrderPreviewOpen(false)}>
                 Cancel
               </button>
+              {activeAccount?.account_mode === "TESTNET" && activeExchange !== "mock" && (
+                <button
+                  className="trade-secondary-button"
+                  disabled={!canRecordTestnetOrderWindow || apiBusy}
+                  onClick={recordTestnetOrderWindowApproval}
+                >
+                  Record Testnet Window
+                </button>
+              )}
               <button className="trade-submit compact" disabled={orderLocked} onClick={confirmOrderPreview}>
                 Confirm Preview
               </button>
