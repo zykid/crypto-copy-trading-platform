@@ -361,6 +361,18 @@ export default function TradeWorkspace() {
   const activeAccount = allSelectedAccount;
   const accountMode = activeAccount?.account_mode ?? "UNSELECTED";
   const activeExchangeProfile = exchangeProfiles[activeExchange];
+  const activeAccountHealth = !activeAccount
+    ? "NO ACCOUNT"
+    : activeAccount.is_active
+      ? activeAccount.trading_enabled
+        ? "TRADING ENABLED"
+        : "READ ONLY"
+      : "INACTIVE";
+  const selectedAccountRoute = activeAccount
+    ? `${activeExchangeProfile.label} / ${activeAccount.account_mode} / ${
+        activeAccount.trading_enabled ? "trading flag on" : "read-only flag"
+      }`
+    : "Select an exchange account to bind this ticket.";
   const activeMarket = marketSnapshots[activeSymbol] ?? marketSnapshots["BTC/USDT"];
   const parsedPrice = Number(orderForm.price);
   const parsedQuantity = Number(orderForm.quantity);
@@ -594,6 +606,26 @@ export default function TradeWorkspace() {
     setLastStatus(orderLocked ? "PREVIEW LOCKED" : "PREVIEW READY");
   }
 
+  function selectAccountForTrading(account: ExchangeAccount) {
+    setActiveExchange(account.exchange_name);
+    setActiveAccountId(account.id);
+    setBottomTab("positions");
+    setLastStatus("ACCOUNT SELECTED");
+  }
+
+  function focusAuditForAccount(account: ExchangeAccount) {
+    setAuditFilters((current) => ({
+      ...current,
+      exchangeAccountId: account.id,
+      action:
+        account.account_mode === "REAL"
+          ? "real.read_only.authentication.checked"
+          : "testnet.read_only.authentication.checked",
+    }));
+    setBottomTab("audit");
+    setLastStatus("AUDIT FILTER READY");
+  }
+
   function confirmOrderPreview() {
     if (orderLocked) {
       return;
@@ -604,19 +636,11 @@ export default function TradeWorkspace() {
   }
 
   function focusAuditForCurrentAccount() {
-    if (!activeAccountId) {
+    if (!activeAccount) {
       appendApiLog("Focus audit logs", false, "Select an account first");
       return;
     }
-    setAuditFilters((current) => ({
-      ...current,
-      exchangeAccountId: activeAccountId,
-      action:
-        activeAccount?.account_mode === "REAL"
-          ? "real.read_only.authentication.checked"
-          : "testnet.read_only.authentication.checked",
-    }));
-    setBottomTab("audit");
+    focusAuditForAccount(activeAccount);
   }
 
   return (
@@ -711,6 +735,10 @@ export default function TradeWorkspace() {
                 <span>Exchange Window</span>
                 <strong>{activeExchangeProfile.venue}</strong>
               </div>
+              <div className="trade-window-status">
+                <span>{activeExchangeProfile.label}</span>
+                <strong>{activeAccountHealth}</strong>
+              </div>
               <dl>
                 <div>
                   <dt>Account</dt>
@@ -729,6 +757,10 @@ export default function TradeWorkspace() {
                   <dd>{apiKeyMetadata.configured ? "Configured" : "Not set"}</dd>
                 </div>
               </dl>
+              <div className="trade-window-route">
+                <span>Ticket Binding</span>
+                <strong>{selectedAccountRoute}</strong>
+              </div>
               <p>{activeExchangeProfile.window}</p>
             </div>
           </div>
@@ -821,6 +853,10 @@ export default function TradeWorkspace() {
                 )}
               </select>
             </label>
+            <div className="trade-ticket-account">
+              <span>Selected Route</span>
+              <strong>{selectedAccountRoute}</strong>
+            </div>
             <div className="trade-order-preview">
               <div>
                 <span>Side</span>
@@ -879,20 +915,40 @@ export default function TradeWorkspace() {
                   <p className="trade-muted">当前交易所还没有账户。</p>
                 ) : (
                   exchangeAccounts.map((account) => (
-                    <button
+                    <article
                       className={
                         account.id === activeAccountId
                           ? "trade-account-option selected"
                           : "trade-account-option"
                       }
                       key={account.id}
-                      onClick={() => setActiveAccountId(account.id)}
                     >
-                      <strong>{account.account_label}</strong>
-                      <span>
-                        {account.account_mode} / {account.trading_enabled ? "TRADING ON" : "READ ONLY"}
-                      </span>
-                    </button>
+                      <div>
+                        <strong>{account.account_label}</strong>
+                        <span>
+                          {account.account_mode} / {account.trading_enabled ? "TRADING ON" : "READ ONLY"}
+                        </span>
+                      </div>
+                      <div className="trade-account-actions">
+                        <button onClick={() => selectAccountForTrading(account)}>Use in Ticket</button>
+                        <button
+                          onClick={() => {
+                            selectAccountForTrading(account);
+                            setBottomTab("positions");
+                          }}
+                        >
+                          Exchange Window
+                        </button>
+                        <button
+                          onClick={() => {
+                            selectAccountForTrading(account);
+                            focusAuditForAccount(account);
+                          }}
+                        >
+                          Audit
+                        </button>
+                      </div>
+                    </article>
                   ))
                 )}
               </div>
@@ -1381,7 +1437,8 @@ export default function TradeWorkspace() {
             <div className="trade-preview-warning">
               <strong>{orderLocked ? "Locked" : "Preview Only"}</strong>
               <span>
-                This confirmation records a local preview only. It does not submit an order to any exchange.
+                {selectedAccountRoute} This confirmation records a local preview only. It does not submit an
+                order to any exchange.
               </span>
             </div>
             <dl className="trade-preview-grid">
@@ -1396,6 +1453,10 @@ export default function TradeWorkspace() {
               <div>
                 <dt>Mode</dt>
                 <dd>{activeAccount?.account_mode ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>Account Status</dt>
+                <dd>{activeAccountHealth}</dd>
               </div>
               <div>
                 <dt>Order Type</dt>

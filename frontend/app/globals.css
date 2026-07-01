@@ -2023,6 +2023,31 @@ body {
   gap: 12px;
 }
 
+.trade-exchange-window .trade-window-status,
+.trade-exchange-window .trade-window-route {
+  align-items: center;
+  border: 1px solid #243244;
+  border-radius: 8px;
+  background: #111827;
+  padding: 10px;
+}
+
+.trade-exchange-window .trade-window-status strong {
+  color: #f5bd42;
+  font-size: 12px;
+}
+
+.trade-exchange-window .trade-window-route {
+  display: grid;
+  gap: 4px;
+}
+
+.trade-exchange-window .trade-window-route strong {
+  overflow-wrap: anywhere;
+  color: #e5edf5;
+  font-size: 13px;
+}
+
 .trade-exchange-window span,
 .trade-exchange-window dt {
   color: #94a3b8;
@@ -2150,7 +2175,8 @@ body {
 }
 
 .trade-order-preview div,
-.trade-route-panel {
+.trade-route-panel,
+.trade-ticket-account {
   display: grid;
   gap: 4px;
   border: 1px solid #243244;
@@ -2160,14 +2186,16 @@ body {
 }
 
 .trade-order-preview span,
-.trade-route-panel span {
+.trade-route-panel span,
+.trade-ticket-account span {
   color: #94a3b8;
   font-size: 11px;
   font-weight: 850;
 }
 
 .trade-order-preview strong,
-.trade-route-panel code {
+.trade-route-panel code,
+.trade-ticket-account strong {
   overflow-wrap: anywhere;
   color: #e5edf5;
   font-family: inherit;
@@ -2425,6 +2453,11 @@ body {
   text-align: left;
 }
 
+.trade-account-option > div:first-child {
+  display: grid;
+  gap: 5px;
+}
+
 .trade-account-option.selected {
   border-color: #f5bd42;
   box-shadow: inset 3px 0 0 #f5bd42;
@@ -2434,6 +2467,28 @@ body {
 .trade-muted {
   color: #94a3b8;
   font-size: 12px;
+}
+
+.trade-account-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.trade-account-actions button {
+  min-height: 30px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0b1220;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.trade-account-actions button:first-child {
+  border-color: rgba(245, 189, 66, 0.6);
+  color: #f5bd42;
 }
 
 .trade-account-meta {
