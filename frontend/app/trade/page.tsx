@@ -67,6 +67,19 @@ const emptyMetadata: ApiKeyMetadata = {
 const apiBaseFallback = "http://192.168.2.42:8000/api/v1";
 const exchanges: ExchangeName[] = ["okx", "binance", "bybit", "mock"];
 const symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"];
+const auditActionOptions = [
+  "real.read_only.authentication.checked",
+  "testnet.read_only.authentication.checked",
+  "testnet.order_window.approval_recorded",
+  "position_reconciliation.drift_detected",
+  "position_reconciliation.matched",
+  "user.reauthentication.succeeded",
+  "user.reauthentication.failed",
+  "user.password.changed",
+  "user.mfa.enabled",
+  "user.mfa.disabled",
+  "super_admin.bootstrap.created",
+];
 const exchangeProfiles: Record<
   ExchangeName,
   {
@@ -200,6 +213,7 @@ export default function TradeWorkspace() {
   const [apiKeyMetadata, setApiKeyMetadata] = useState<ApiKeyMetadata>(emptyMetadata);
   const [apiBusy, setApiBusy] = useState(false);
   const [apiLogs, setApiLogs] = useState<ApiActionLog[]>([]);
+  const [isOrderPreviewOpen, setIsOrderPreviewOpen] = useState(false);
   const [bottomTab, setBottomTab] = useState<BottomTab>("positions");
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
@@ -359,6 +373,23 @@ export default function TradeWorkspace() {
   const clientOrderIdPreview = activeAccount
     ? `preview-${activeExchange}-${activeAccount.id.slice(0, 8)}-${activeSymbol.replace("/", "")}`
     : "preview-unassigned";
+  const orderPreviewPayload = {
+    route_status: "preview_only",
+    exchange_name: activeExchange,
+    exchange_label: activeExchangeProfile.label,
+    exchange_account_id: activeAccount?.id ?? null,
+    account_label: activeAccount?.account_label ?? null,
+    account_mode: activeAccount?.account_mode ?? null,
+    symbol: activeSymbol,
+    side: orderSide,
+    order_type: orderForm.orderType,
+    reference_price: referencePrice,
+    quantity: Number.isFinite(parsedQuantity) ? parsedQuantity : null,
+    estimated_notional: estimatedNotional,
+    client_order_id: clientOrderIdPreview,
+    secret_configured: apiKeyMetadata.configured,
+    trading_enabled: activeAccount?.trading_enabled ?? false,
+  };
   const lockReasons = [
     !session.token ? "Login required" : null,
     !activeAccount ? "Select an exchange account" : null,
@@ -556,6 +587,36 @@ export default function TradeWorkspace() {
     } finally {
       setAuditBusy(false);
     }
+  }
+
+  function openOrderPreview() {
+    setIsOrderPreviewOpen(true);
+    setLastStatus(orderLocked ? "PREVIEW LOCKED" : "PREVIEW READY");
+  }
+
+  function confirmOrderPreview() {
+    if (orderLocked) {
+      return;
+    }
+    appendApiLog("Order preview confirmed", true, orderPreviewPayload);
+    setBottomTab("history");
+    setIsOrderPreviewOpen(false);
+  }
+
+  function focusAuditForCurrentAccount() {
+    if (!activeAccountId) {
+      appendApiLog("Focus audit logs", false, "Select an account first");
+      return;
+    }
+    setAuditFilters((current) => ({
+      ...current,
+      exchangeAccountId: activeAccountId,
+      action:
+        activeAccount?.account_mode === "REAL"
+          ? "real.read_only.authentication.checked"
+          : "testnet.read_only.authentication.checked",
+    }));
+    setBottomTab("audit");
   }
 
   return (
@@ -784,8 +845,8 @@ export default function TradeWorkspace() {
               <span>Client Order ID Preview</span>
               <code>{clientOrderIdPreview}</code>
             </div>
-            <button className="trade-submit" disabled={orderLocked}>
-              {orderLocked ? "Preview Locked" : `${orderSide} Mock Preview Ready`}
+            <button className="trade-submit" onClick={openOrderPreview}>
+              Review Order Preview
             </button>
             {lockReasons.length === 0 ? (
               <p>Mock preview route is open. This view still does not submit orders.</p>
@@ -1091,6 +1152,13 @@ export default function TradeWorkspace() {
                       </button>
                       <button
                         className="trade-secondary-button"
+                        onClick={focusAuditForCurrentAccount}
+                        disabled={!activeAccountId}
+                      >
+                        Active Account Read-only
+                      </button>
+                      <button
+                        className="trade-secondary-button"
                         onClick={() => setAuditFilterPreset("clear")}
                       >
                         Clear Filters
@@ -1125,7 +1193,7 @@ export default function TradeWorkspace() {
                       </label>
                       <label>
                         Action
-                        <input
+                        <select
                           value={auditFilters.action}
                           onChange={(event) =>
                             setAuditFilters((current) => ({
@@ -1133,8 +1201,14 @@ export default function TradeWorkspace() {
                               action: event.target.value,
                             }))
                           }
-                          placeholder="exact action"
-                        />
+                        >
+                          <option value="">All</option>
+                          {auditActionOptions.map((action) => (
+                            <option key={action} value={action}>
+                              {action}
+                            </option>
+                          ))}
+                        </select>
                       </label>
                       <label>
                         Severity
@@ -1281,6 +1355,95 @@ export default function TradeWorkspace() {
           </div>
         </section>
       </section>
+      {isOrderPreviewOpen && (
+        <div className="trade-modal-backdrop" role="presentation">
+          <section
+            aria-labelledby="order-preview-title"
+            aria-modal="true"
+            className="trade-preview-modal"
+            role="dialog"
+          >
+            <header>
+              <div>
+                <span>Order Preview</span>
+                <h2 id="order-preview-title">
+                  {activeSymbol} {orderSide}
+                </h2>
+              </div>
+              <button
+                aria-label="Close order preview"
+                className="trade-icon-button"
+                onClick={() => setIsOrderPreviewOpen(false)}
+              >
+                X
+              </button>
+            </header>
+            <div className="trade-preview-warning">
+              <strong>{orderLocked ? "Locked" : "Preview Only"}</strong>
+              <span>
+                This confirmation records a local preview only. It does not submit an order to any exchange.
+              </span>
+            </div>
+            <dl className="trade-preview-grid">
+              <div>
+                <dt>Exchange</dt>
+                <dd>{activeExchangeProfile.label}</dd>
+              </div>
+              <div>
+                <dt>Account</dt>
+                <dd>{activeAccount?.account_label ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>Mode</dt>
+                <dd>{activeAccount?.account_mode ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>Order Type</dt>
+                <dd>{orderForm.orderType}</dd>
+              </div>
+              <div>
+                <dt>Side</dt>
+                <dd className={orderSide === "BUY" ? "preview-buy" : "preview-sell"}>{orderSide}</dd>
+              </div>
+              <div>
+                <dt>Reference Price</dt>
+                <dd>{formatNumber(referencePrice)} USDT</dd>
+              </div>
+              <div>
+                <dt>Quantity</dt>
+                <dd>{Number.isFinite(parsedQuantity) ? parsedQuantity : "-"}</dd>
+              </div>
+              <div>
+                <dt>Estimated Notional</dt>
+                <dd>{formatNumber(estimatedNotional)} USDT</dd>
+              </div>
+            </dl>
+            <div className="trade-route-panel">
+              <span>Client Order ID Preview</span>
+              <code>{clientOrderIdPreview}</code>
+            </div>
+            {lockReasons.length > 0 && (
+              <ul className="trade-lock-list">
+                {lockReasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            )}
+            <pre className="trade-preview-json">{prettyJson(orderPreviewPayload)}</pre>
+            <footer>
+              <button className="trade-secondary-button" onClick={focusAuditForCurrentAccount}>
+                Related Audit
+              </button>
+              <button className="trade-secondary-button" onClick={() => setIsOrderPreviewOpen(false)}>
+                Cancel
+              </button>
+              <button className="trade-submit compact" disabled={orderLocked} onClick={confirmOrderPreview}>
+                Confirm Preview
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
