@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type SessionState = {
   token: string;
@@ -9,16 +9,34 @@ type SessionState = {
   role: string;
 };
 
+type ExchangeName = "binance" | "bybit" | "okx" | "mock";
+type AccountMode = "SIMULATION" | "TESTNET" | "REAL";
+
 type ExchangeAccount = {
   id: string;
-  exchange_name: "binance" | "bybit" | "okx" | "mock";
+  user_id?: string;
+  exchange_name: ExchangeName;
   account_label: string;
-  account_mode: "SIMULATION" | "TESTNET" | "REAL";
+  account_mode: AccountMode;
   trading_enabled: boolean;
   is_active: boolean;
 };
 
+type ApiKeyMetadata = {
+  exchange_account_id: string;
+  configured: boolean;
+  has_passphrase: boolean;
+  warning?: string;
+};
+
 type OrderSide = "BUY" | "SELL";
+
+type ApiActionLog = {
+  id: string;
+  title: string;
+  ok: boolean;
+  detail: unknown;
+};
 
 const emptySession: SessionState = {
   token: "",
@@ -27,7 +45,26 @@ const emptySession: SessionState = {
   role: "",
 };
 
+const emptyMetadata: ApiKeyMetadata = {
+  exchange_account_id: "",
+  configured: false,
+  has_passphrase: false,
+};
+
 const apiBaseFallback = "http://192.168.2.42:8000/api/v1";
+const exchanges: ExchangeName[] = ["okx", "binance", "bybit", "mock"];
+const symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"];
+const sensitiveKeys = new Set([
+  "api_key",
+  "apiKey",
+  "api_secret",
+  "apiSecret",
+  "password",
+  "passphrase",
+  "secret",
+  "token",
+  "reauthentication_token",
+]);
 
 function resolveApiBase() {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -44,14 +81,101 @@ function readStoredToken() {
   return localStorage.getItem("trading_platform_token") ?? "";
 }
 
+function sanitizeDetail(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeDetail(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, detail]) => [
+        key,
+        sensitiveKeys.has(key) ? "[redacted]" : sanitizeDetail(detail),
+      ]),
+    );
+  }
+  return value;
+}
+
+function prettyJson(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+  return JSON.stringify(sanitizeDetail(value), null, 2);
+}
+
+function defaultAccountLabel(exchangeName: ExchangeName, mode: AccountMode) {
+  if (exchangeName === "mock") {
+    return "Mock Simulation";
+  }
+  if (mode === "REAL") {
+    return `${exchangeName.toUpperCase()} Production Read Only`;
+  }
+  return `${exchangeName.toUpperCase()} Testnet Read Only`;
+}
+
 export default function TradeWorkspace() {
   const [apiRoot] = useState(resolveApiBase);
   const [session, setSession] = useState<SessionState>(emptySession);
   const [accounts, setAccounts] = useState<ExchangeAccount[]>([]);
-  const [activeExchange, setActiveExchange] = useState<ExchangeAccount["exchange_name"]>("okx");
+  const [activeExchange, setActiveExchange] = useState<ExchangeName>("okx");
   const [activeSymbol, setActiveSymbol] = useState("BTC/USDT");
+  const [activeAccountId, setActiveAccountId] = useState("");
   const [orderSide, setOrderSide] = useState<OrderSide>("BUY");
   const [lastStatus, setLastStatus] = useState("READ ONLY");
+  const [apiKeyMetadata, setApiKeyMetadata] = useState<ApiKeyMetadata>(emptyMetadata);
+  const [apiBusy, setApiBusy] = useState(false);
+  const [apiLogs, setApiLogs] = useState<ApiActionLog[]>([]);
+  const [createForm, setCreateForm] = useState({
+    exchangeName: "okx" as ExchangeName,
+    accountMode: "TESTNET" as AccountMode,
+    accountLabel: "",
+  });
+  const [secretForm, setSecretForm] = useState({
+    apiKey: "",
+    apiSecret: "",
+    passphrase: "",
+    password: "",
+  });
+
+  const appendApiLog = useCallback((title: string, ok: boolean, detail: unknown) => {
+    setApiLogs((current) => [
+      { id: crypto.randomUUID(), title, ok, detail: sanitizeDetail(detail) },
+      ...current.slice(0, 5),
+    ]);
+    setLastStatus(ok ? "PASS" : "FAIL");
+  }, []);
+
+  const apiRequest = useCallback(
+    async (
+      method: "GET" | "POST" | "PATCH" | "DELETE",
+      path: string,
+      body?: unknown,
+      expectedStatus = 200,
+      extraHeaders: Record<string, string> = {},
+    ) => {
+      const token = readStoredToken();
+      const response = await fetch(`${apiRoot}${path}`, {
+        method,
+        headers: {
+          ...(body ? { "Content-Type": "application/json" } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...extraHeaders,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const payload = response.status === 204 ? null : await response.json().catch(() => null);
+      if (response.status !== expectedStatus) {
+        throw new Error(`${method} ${path} returned ${response.status}: ${prettyJson(payload)}`);
+      }
+      return payload;
+    },
+    [apiRoot],
+  );
+
+  const refreshAccounts = useCallback(async () => {
+    const payload = await apiRequest("GET", "/exchange-accounts");
+    setAccounts(Array.isArray(payload) ? (payload as ExchangeAccount[]) : []);
+  }, [apiRequest]);
 
   useEffect(() => {
     const token = readStoredToken();
@@ -93,19 +217,170 @@ export default function TradeWorkspace() {
     () => accounts.filter((account) => account.exchange_name === activeExchange),
     [accounts, activeExchange],
   );
-  const activeAccount = exchangeAccounts[0];
-  const marketRows = [
-    { price: "68,420.5", amount: "0.184", side: "ask" },
-    { price: "68,418.2", amount: "0.076", side: "ask" },
-    { price: "68,410.0", amount: "0.214", side: "bid" },
-    { price: "68,405.4", amount: "0.092", side: "bid" },
-  ];
+  const allSelectedAccount = accounts.find((account) => account.id === activeAccountId);
+
+  useEffect(() => {
+    if (exchangeAccounts.length === 0) {
+      setActiveAccountId("");
+      return;
+    }
+    if (!exchangeAccounts.some((account) => account.id === activeAccountId)) {
+      setActiveAccountId(exchangeAccounts[0].id);
+    }
+  }, [activeAccountId, exchangeAccounts]);
+
+  useEffect(() => {
+    if (!activeAccountId || !session.token) {
+      setApiKeyMetadata(emptyMetadata);
+      return;
+    }
+    let cancelled = false;
+    async function loadMetadata() {
+      try {
+        const metadata = (await apiRequest(
+          "GET",
+          `/exchange-accounts/${activeAccountId}/api-key`,
+        )) as ApiKeyMetadata;
+        if (!cancelled) {
+          setApiKeyMetadata(metadata);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setApiKeyMetadata(emptyMetadata);
+          appendApiLog("Read API key metadata", false, String(error));
+        }
+      }
+    }
+    void loadMetadata();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAccountId, apiRequest, appendApiLog, session.token]);
+
+  const activeAccount = allSelectedAccount;
   const accountMode = activeAccount?.account_mode ?? "UNSELECTED";
   const orderLocked =
     !session.token ||
     accountMode === "REAL" ||
     !activeAccount?.trading_enabled ||
     activeExchange !== "mock";
+
+  const marketRows = [
+    { price: "68,420.5", amount: "0.184", side: "ask" },
+    { price: "68,418.2", amount: "0.076", side: "ask" },
+    { price: "68,410.0", amount: "0.214", side: "bid" },
+    { price: "68,405.4", amount: "0.092", side: "bid" },
+  ];
+
+  async function createAccount() {
+    if (!session.token) {
+      appendApiLog("Create account", false, "Please log in first");
+      return;
+    }
+    setApiBusy(true);
+    try {
+      const account = (await apiRequest(
+        "POST",
+        "/exchange-accounts",
+        {
+          exchange_name: createForm.exchangeName,
+          account_label:
+            createForm.accountLabel.trim() ||
+            defaultAccountLabel(createForm.exchangeName, createForm.accountMode),
+          account_mode: createForm.accountMode,
+          trading_enabled: createForm.exchangeName === "mock",
+        },
+        201,
+      )) as ExchangeAccount;
+      await refreshAccounts();
+      setActiveExchange(account.exchange_name);
+      setActiveAccountId(account.id);
+      appendApiLog("Create exchange account", true, account);
+    } catch (error) {
+      appendApiLog("Create exchange account", false, String(error));
+    } finally {
+      setApiBusy(false);
+    }
+  }
+
+  async function createReauthenticationToken(password: string) {
+    const payload = (await apiRequest("POST", "/auth/reauthenticate", { password })) as {
+      reauthentication_token?: string;
+    };
+    if (!payload.reauthentication_token) {
+      throw new Error("reauthentication token missing");
+    }
+    return payload.reauthentication_token;
+  }
+
+  async function saveApiKey() {
+    if (!activeAccount) {
+      appendApiLog("Save encrypted API key", false, "Please select an account first");
+      return;
+    }
+    if (activeAccount.exchange_name === "okx" && !secretForm.passphrase) {
+      appendApiLog("Save encrypted API key", false, "OKX requires API passphrase");
+      return;
+    }
+    setApiBusy(true);
+    try {
+      const reauthToken = await createReauthenticationToken(secretForm.password);
+      const metadata = (await apiRequest(
+        "POST",
+        `/exchange-accounts/${activeAccount.id}/api-key`,
+        {
+          api_key: secretForm.apiKey,
+          api_secret: secretForm.apiSecret,
+          passphrase: secretForm.passphrase || null,
+        },
+        200,
+        { "X-Reauthentication-Token": reauthToken },
+      )) as ApiKeyMetadata;
+      setApiKeyMetadata(metadata);
+      setSecretForm({
+        apiKey: "",
+        apiSecret: "",
+        passphrase: "",
+        password: "",
+      });
+      appendApiLog("Save encrypted API key", true, metadata);
+    } catch (error) {
+      appendApiLog("Save encrypted API key", false, String(error));
+    } finally {
+      setApiBusy(false);
+    }
+  }
+
+  async function runReadOnlyCheck() {
+    if (!activeAccount) {
+      appendApiLog("Run read-only authentication", false, "Please select an account first");
+      return;
+    }
+    if (activeAccount.account_mode === "SIMULATION") {
+      appendApiLog("Run read-only authentication", false, "SIMULATION accounts do not use exchange API");
+      return;
+    }
+    setApiBusy(true);
+    try {
+      const reauthToken = await createReauthenticationToken(secretForm.password);
+      const checkPath =
+        activeAccount.account_mode === "REAL"
+          ? "real-read-only-check"
+          : "testnet-read-only-check";
+      const result = await apiRequest(
+        "POST",
+        `/exchange-accounts/${activeAccount.id}/${checkPath}`,
+        undefined,
+        200,
+        { "X-Reauthentication-Token": reauthToken },
+      );
+      appendApiLog("Run read-only authentication", true, result);
+    } catch (error) {
+      appendApiLog("Run read-only authentication", false, String(error));
+    } finally {
+      setApiBusy(false);
+    }
+  }
 
   return (
     <main className="trade-terminal">
@@ -141,16 +416,23 @@ export default function TradeWorkspace() {
         </header>
 
         <section className="trade-market-strip">
-          {(["okx", "binance", "bybit", "mock"] as const).map((exchange) => (
+          {exchanges.map((exchange) => (
             <button
               className={exchange === activeExchange ? "active" : ""}
               key={exchange}
-              onClick={() => setActiveExchange(exchange)}
+              onClick={() => {
+                setActiveExchange(exchange);
+                setCreateForm((current) => ({
+                  ...current,
+                  exchangeName: exchange,
+                  accountMode: exchange === "mock" ? "SIMULATION" : current.accountMode,
+                }));
+              }}
             >
               {exchange.toUpperCase()}
             </button>
           ))}
-          {["BTC/USDT", "ETH/USDT", "SOL/USDT"].map((symbol) => (
+          {symbols.map((symbol) => (
             <button
               className={symbol === activeSymbol ? "symbol-active" : ""}
               key={symbol}
@@ -166,7 +448,9 @@ export default function TradeWorkspace() {
             <div className="trade-card-head">
               <div>
                 <span>Chart</span>
-                <strong>{activeExchange.toUpperCase()} · {activeSymbol}</strong>
+                <strong>
+                  {activeExchange.toUpperCase()} 路 {activeSymbol}
+                </strong>
               </div>
               <em>{accountMode}</em>
             </div>
@@ -234,8 +518,210 @@ export default function TradeWorkspace() {
           </div>
         </section>
 
+        <section className="trade-api-manager" id="api-management">
+          <div className="trade-card-head">
+            <div>
+              <span>API Management</span>
+              <strong>账户选择 / 密钥状态 / 只读认证</strong>
+            </div>
+            <button className="trade-secondary-button" onClick={refreshAccounts} disabled={!session.token || apiBusy}>
+              Refresh
+            </button>
+          </div>
+
+          <div className="trade-api-manager-grid">
+            <div className="trade-api-panel">
+              <h2>Account Selector</h2>
+              <div className="trade-account-list">
+                {exchangeAccounts.length === 0 ? (
+                  <p className="trade-muted">当前交易所还没有账户。</p>
+                ) : (
+                  exchangeAccounts.map((account) => (
+                    <button
+                      className={
+                        account.id === activeAccountId
+                          ? "trade-account-option selected"
+                          : "trade-account-option"
+                      }
+                      key={account.id}
+                      onClick={() => setActiveAccountId(account.id)}
+                    >
+                      <strong>{account.account_label}</strong>
+                      <span>
+                        {account.account_mode} / {account.trading_enabled ? "TRADING ON" : "READ ONLY"}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+              <dl className="trade-account-meta">
+                <div>
+                  <dt>Selected</dt>
+                  <dd>{activeAccount?.account_label ?? "-"}</dd>
+                </div>
+                <div>
+                  <dt>Secret</dt>
+                  <dd>{apiKeyMetadata.configured ? "Configured" : "Not set"}</dd>
+                </div>
+                <div>
+                  <dt>Passphrase</dt>
+                  <dd>{apiKeyMetadata.has_passphrase ? "Yes" : "No"}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div className="trade-api-panel">
+              <h2>Create Account</h2>
+              <div className="trade-form-grid">
+                <label>
+                  Exchange
+                  <select
+                    value={createForm.exchangeName}
+                    onChange={(event) => {
+                      const exchangeName = event.target.value as ExchangeName;
+                      setCreateForm((current) => ({
+                        ...current,
+                        exchangeName,
+                        accountMode: exchangeName === "mock" ? "SIMULATION" : current.accountMode,
+                      }));
+                    }}
+                  >
+                    {exchanges.map((exchange) => (
+                      <option key={exchange} value={exchange}>
+                        {exchange.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Mode
+                  <select
+                    value={createForm.accountMode}
+                    onChange={(event) =>
+                      setCreateForm({
+                        ...createForm,
+                        accountMode: event.target.value as AccountMode,
+                      })
+                    }
+                    disabled={createForm.exchangeName === "mock"}
+                  >
+                    <option value="SIMULATION">SIMULATION</option>
+                    <option value="TESTNET">TESTNET</option>
+                    <option value="REAL">REAL READ ONLY</option>
+                  </select>
+                </label>
+                <label>
+                  Label
+                  <input
+                    value={createForm.accountLabel}
+                    onChange={(event) =>
+                      setCreateForm({ ...createForm, accountLabel: event.target.value })
+                    }
+                    placeholder={defaultAccountLabel(createForm.exchangeName, createForm.accountMode)}
+                  />
+                </label>
+              </div>
+              <button
+                className="trade-submit compact"
+                onClick={createAccount}
+                disabled={!session.token || apiBusy}
+              >
+                Create Account
+              </button>
+            </div>
+
+            <div className="trade-api-panel">
+              <h2>Encrypted Credentials</h2>
+              <div className="trade-form-grid">
+                <label>
+                  API Key
+                  <input
+                    autoComplete="off"
+                    type="password"
+                    value={secretForm.apiKey}
+                    onChange={(event) =>
+                      setSecretForm({ ...secretForm, apiKey: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  API Secret
+                  <input
+                    autoComplete="off"
+                    type="password"
+                    value={secretForm.apiSecret}
+                    onChange={(event) =>
+                      setSecretForm({ ...secretForm, apiSecret: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Passphrase
+                  <input
+                    autoComplete="off"
+                    type="password"
+                    value={secretForm.passphrase}
+                    onChange={(event) =>
+                      setSecretForm({ ...secretForm, passphrase: event.target.value })
+                    }
+                  />
+                </label>
+                <label className="span-2">
+                  Current Password
+                  <input
+                    autoComplete="current-password"
+                    type="password"
+                    value={secretForm.password}
+                    onChange={(event) =>
+                      setSecretForm({ ...secretForm, password: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <div className="trade-action-row">
+                <button
+                  className="trade-secondary-button"
+                  onClick={saveApiKey}
+                  disabled={
+                    !activeAccount ||
+                    !secretForm.apiKey ||
+                    !secretForm.apiSecret ||
+                    !secretForm.password ||
+                    apiBusy
+                  }
+                >
+                  Save Encrypted Key
+                </button>
+                <button
+                  className="trade-submit compact"
+                  onClick={runReadOnlyCheck}
+                  disabled={!activeAccount || !secretForm.password || apiBusy}
+                >
+                  Run Read-only Check
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="trade-action-log" aria-label="api management action log">
+            {apiLogs.length === 0 ? (
+              <p className="trade-muted">No API management action yet.</p>
+            ) : (
+              apiLogs.map((log) => (
+                <article key={log.id}>
+                  <div>
+                    <strong>{log.title}</strong>
+                    <span className={log.ok ? "log-ok" : "log-fail"}>{log.ok ? "PASS" : "FAIL"}</span>
+                  </div>
+                  <pre>{prettyJson(log.detail)}</pre>
+                </article>
+              ))
+            )}
+          </div>
+        </section>
+
         <section className="trade-api-grid">
-          {(["okx", "binance", "bybit", "mock"] as const).map((exchange) => {
+          {exchanges.map((exchange) => {
             const count = accounts.filter((account) => account.exchange_name === exchange).length;
             return (
               <article className="trade-card" key={exchange}>
