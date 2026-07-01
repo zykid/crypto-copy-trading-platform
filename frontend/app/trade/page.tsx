@@ -115,6 +115,17 @@ function prettyJson(value: unknown) {
   return JSON.stringify(sanitizeDetail(value), null, 2);
 }
 
+function formatDateTime(value: string | null) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
+}
+
 function defaultAccountLabel(exchangeName: ExchangeName, mode: AccountMode) {
   if (exchangeName === "mock") {
     return "Mock Simulation";
@@ -140,6 +151,8 @@ export default function TradeWorkspace() {
   const [bottomTab, setBottomTab] = useState<BottomTab>("positions");
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
+  const [auditLoadedAt, setAuditLoadedAt] = useState("");
+  const [selectedAuditLogId, setSelectedAuditLogId] = useState("");
   const [auditFilters, setAuditFilters] = useState({
     userId: "",
     exchangeAccountId: "",
@@ -282,6 +295,11 @@ export default function TradeWorkspace() {
   const activeAccount = allSelectedAccount;
   const accountMode = activeAccount?.account_mode ?? "UNSELECTED";
   const canViewAuditLogs = session.role === "super_admin" || session.role === "admin";
+  const selectedAuditLog = auditLogs.find((record) => record.id === selectedAuditLogId);
+  const auditSeverityCounts = auditLogs.reduce<Record<string, number>>((counts, record) => {
+    counts[record.severity] = (counts[record.severity] ?? 0) + 1;
+    return counts;
+  }, {});
   const orderLocked =
     !session.token ||
     accountMode === "REAL" ||
@@ -405,6 +423,27 @@ export default function TradeWorkspace() {
     }
   }
 
+  function setAuditFilterPreset(preset: "currentUser" | "currentAccount" | "errors" | "clear") {
+    setAuditFilters((current) => {
+      if (preset === "currentUser") {
+        return { ...current, userId: session.userId };
+      }
+      if (preset === "currentAccount") {
+        return { ...current, exchangeAccountId: activeAccountId };
+      }
+      if (preset === "errors") {
+        return { ...current, severity: "ERROR" };
+      }
+      return {
+        userId: "",
+        exchangeAccountId: "",
+        action: "",
+        severity: "",
+        limit: current.limit,
+      };
+    });
+  }
+
   async function loadAuditLogs() {
     if (!canViewAuditLogs) {
       appendApiLog("Load audit logs", false, "Admin role required");
@@ -432,6 +471,8 @@ export default function TradeWorkspace() {
         throw new Error("audit log response is not an array");
       }
       setAuditLogs(payload as AuditLogRecord[]);
+      setSelectedAuditLogId(payload[0]?.id ?? "");
+      setAuditLoadedAt(new Date().toLocaleString());
       appendApiLog("Load audit logs", true, {
         count: payload.length,
         action: auditFilters.action || "*",
@@ -845,10 +886,38 @@ export default function TradeWorkspace() {
                     <strong>Audit Log</strong>
                     <span>Append-only records, admin read-only query</span>
                   </div>
-                  <span>{auditLogs.length} loaded</span>
+                  <span>{auditLogs.length} loaded{auditLoadedAt ? ` · ${auditLoadedAt}` : ""}</span>
                 </div>
                 {canViewAuditLogs ? (
                   <>
+                    <div className="trade-audit-presets">
+                      <button
+                        className="trade-secondary-button"
+                        onClick={() => setAuditFilterPreset("currentUser")}
+                        disabled={!session.userId}
+                      >
+                        Current User
+                      </button>
+                      <button
+                        className="trade-secondary-button"
+                        onClick={() => setAuditFilterPreset("currentAccount")}
+                        disabled={!activeAccountId}
+                      >
+                        Current Account
+                      </button>
+                      <button
+                        className="trade-secondary-button"
+                        onClick={() => setAuditFilterPreset("errors")}
+                      >
+                        Errors Only
+                      </button>
+                      <button
+                        className="trade-secondary-button"
+                        onClick={() => setAuditFilterPreset("clear")}
+                      >
+                        Clear Filters
+                      </button>
+                    </div>
                     <div className="trade-audit-filters">
                       <label>
                         User ID
@@ -931,36 +1000,78 @@ export default function TradeWorkspace() {
                         {auditBusy ? "Loading" : "Load"}
                       </button>
                     </div>
-                    <div className="trade-audit-list">
-                      {auditLogs.length === 0 ? (
-                        <div className="trade-empty-table">
-                          No audit records loaded. Use filters and Load to query.
-                        </div>
-                      ) : (
-                        auditLogs.map((record) => (
-                          <article className="trade-audit-record" key={record.id}>
-                            <header>
-                              <div>
-                                <strong>{record.action}</strong>
-                                <span>{record.created_at ?? "-"}</span>
-                              </div>
-                              <em>{record.severity}</em>
-                            </header>
-                            <dl>
-                              <div>
-                                <dt>User</dt>
-                                <dd>{record.user_id}</dd>
-                              </div>
-                              <div>
-                                <dt>Account</dt>
-                                <dd>{record.exchange_account_id ?? "-"}</dd>
-                              </div>
-                            </dl>
-                            <pre>{prettyJson(record.payload)}</pre>
-                          </article>
-                        ))
-                      )}
+                    <div className="trade-audit-summary">
+                      {["INFO", "OK", "WARNING", "ERROR"].map((severity) => (
+                        <span key={severity}>
+                          {severity} <strong>{auditSeverityCounts[severity] ?? 0}</strong>
+                        </span>
+                      ))}
                     </div>
+                    {auditLogs.length === 0 ? (
+                      <div className="trade-empty-table">
+                        No audit records loaded. Use filters and Load to query.
+                      </div>
+                    ) : (
+                      <div className="trade-audit-workspace">
+                        <div className="trade-audit-table" role="table" aria-label="Audit log records">
+                          <div className="trade-audit-table-head" role="row">
+                            <span>Time</span>
+                            <span>Severity</span>
+                            <span>Action</span>
+                            <span>User</span>
+                            <span>Account</span>
+                          </div>
+                          {auditLogs.map((record) => (
+                            <button
+                              className={record.id === selectedAuditLogId ? "selected" : ""}
+                              key={record.id}
+                              onClick={() => setSelectedAuditLogId(record.id)}
+                              role="row"
+                            >
+                              <span>{formatDateTime(record.created_at)}</span>
+                              <em>{record.severity}</em>
+                              <strong>{record.action}</strong>
+                              <span>{record.user_id}</span>
+                              <span>{record.exchange_account_id ?? "-"}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <article className="trade-audit-detail">
+                          {selectedAuditLog ? (
+                            <>
+                              <header>
+                                <div>
+                                  <span>Selected Record</span>
+                                  <strong>{selectedAuditLog.action}</strong>
+                                </div>
+                                <em>{selectedAuditLog.severity}</em>
+                              </header>
+                              <dl>
+                                <div>
+                                  <dt>Created</dt>
+                                  <dd>{formatDateTime(selectedAuditLog.created_at)}</dd>
+                                </div>
+                                <div>
+                                  <dt>User</dt>
+                                  <dd>{selectedAuditLog.user_id}</dd>
+                                </div>
+                                <div>
+                                  <dt>Account</dt>
+                                  <dd>{selectedAuditLog.exchange_account_id ?? "-"}</dd>
+                                </div>
+                                <div>
+                                  <dt>ID</dt>
+                                  <dd>{selectedAuditLog.id}</dd>
+                                </div>
+                              </dl>
+                              <pre>{prettyJson(selectedAuditLog.payload)}</pre>
+                            </>
+                          ) : (
+                            <div className="trade-empty-table">Select an audit record.</div>
+                          )}
+                        </article>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="trade-empty-table">
