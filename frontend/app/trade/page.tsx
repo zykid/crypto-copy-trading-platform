@@ -419,6 +419,18 @@ export default function TradeWorkspace() {
     setPhase4FinalPassword("");
   }, [activeAccountId]);
 
+  useEffect(() => {
+    function syncHashToPanel() {
+      if (window.location.hash === "#audit") {
+        setBottomTab("audit");
+      }
+    }
+
+    syncHashToPanel();
+    window.addEventListener("hashchange", syncHashToPanel);
+    return () => window.removeEventListener("hashchange", syncHashToPanel);
+  }, []);
+
   const activeAccount = allSelectedAccount;
   const accountMode = activeAccount?.account_mode ?? "UNSELECTED";
   const activeExchangeProfile = exchangeProfiles[activeExchange];
@@ -1248,6 +1260,7 @@ export default function TradeWorkspace() {
           <a className="active" href="/trade">
             Trading
           </a>
+          <a href="/trade#audit">Audit Logs</a>
           <a href="/">Console</a>
           <a href="/login">Login</a>
         </nav>
