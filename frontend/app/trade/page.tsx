@@ -57,6 +57,13 @@ type AuditFilters = {
   severity: string;
   limit: string;
 };
+type PreRealChecklistItem = {
+  id: string;
+  title: string;
+  detail: string;
+  required: boolean;
+  status: "pass" | "pending" | "warn" | "fail";
+};
 
 const emptySession: SessionState = {
   token: "",
@@ -450,6 +457,123 @@ export default function TradeWorkspace() {
     counts[record.severity] = (counts[record.severity] ?? 0) + 1;
     return counts;
   }, {});
+  const mockAccounts = accounts.filter((account) => account.exchange_name === "mock");
+  const exchangeReadOnlyAccounts = accounts.filter(
+    (account) => account.exchange_name !== "mock" && !account.trading_enabled,
+  );
+  const activeReadOnlyAuthenticationAudit = auditLogs.find(
+    (record) =>
+      record.exchange_account_id === activeAccountId &&
+      ["real.read_only.authentication.checked", "testnet.read_only.authentication.checked"].includes(record.action) &&
+      !["ERROR", "WARNING"].includes(record.severity),
+  );
+  const auditHasErrors = (auditSeverityCounts.ERROR ?? 0) > 0;
+  const liveOrderBoundaryIsLocked =
+    !activeAccount ||
+    activeAccount.exchange_name === "mock" ||
+    activeAccount.account_mode !== "REAL" ||
+    !activeAccount.trading_enabled;
+  const preRealChecklist: PreRealChecklistItem[] = [
+    {
+      id: "session",
+      title: "Authenticated session",
+      detail: session.token ? `${session.username} / ${session.role}` : "Login is required before account checks.",
+      required: true,
+      status: session.token ? "pass" : "pending",
+    },
+    {
+      id: "mock",
+      title: "Mock execution path",
+      detail:
+        mockAccounts.length > 0
+          ? `${mockAccounts.length} simulation account available.`
+          : "Create and run the Mock chain before exchange checks.",
+      required: true,
+      status: mockAccounts.length > 0 ? "pass" : "pending",
+    },
+    {
+      id: "exchange-account",
+      title: "Read-only exchange account",
+      detail:
+        exchangeReadOnlyAccounts.length > 0
+          ? `${exchangeReadOnlyAccounts.length} TESTNET/REAL read-only account available.`
+          : "Add a TESTNET or REAL account with trading disabled.",
+      required: true,
+      status: exchangeReadOnlyAccounts.length > 0 ? "pass" : "pending",
+    },
+    {
+      id: "active-account",
+      title: "Active account selected",
+      detail: activeAccount
+        ? `${defaultAccountLabel(activeAccount.exchange_name, activeAccount.account_mode)} selected.`
+        : "Select an account in API Management.",
+      required: true,
+      status: activeAccount ? "pass" : "pending",
+    },
+    {
+      id: "trading-flag",
+      title: "Trading flag remains disabled",
+      detail: activeAccount
+        ? activeAccount.trading_enabled
+          ? "Active account can trade; keep this disabled before small-fund testing."
+          : "Active account is read-only from the platform side."
+        : "Select an account to inspect the trading flag.",
+      required: true,
+      status: activeAccount ? (activeAccount.trading_enabled ? "fail" : "pass") : "pending",
+    },
+    {
+      id: "secret",
+      title: "Encrypted secret metadata",
+      detail: apiKeyMetadata.configured
+        ? "Secret is configured and not returned to the browser."
+        : "Save the API key and secret for the selected account.",
+      required: true,
+      status: apiKeyMetadata.configured ? "pass" : "pending",
+    },
+    {
+      id: "read-only-auth",
+      title: "Read-only authentication evidence",
+      detail: activeReadOnlyAuthenticationAudit
+        ? `${activeReadOnlyAuthenticationAudit.action} recorded in audit logs.`
+        : "Run read-only authentication and load the active account audit logs.",
+      required: true,
+      status: activeReadOnlyAuthenticationAudit ? "pass" : "pending",
+    },
+    {
+      id: "audit-errors",
+      title: "No current audit errors",
+      detail: auditHasErrors
+        ? `${auditSeverityCounts.ERROR} error audit record(s) in the loaded view.`
+        : "Loaded audit view has no ERROR records.",
+      required: true,
+      status: auditHasErrors ? "fail" : "pass",
+    },
+    {
+      id: "live-boundary",
+      title: "Live order boundary",
+      detail: liveOrderBoundaryIsLocked
+        ? "REAL order submission remains locked in this UI."
+        : "REAL trading is enabled on the active account.",
+      required: true,
+      status: liveOrderBoundaryIsLocked ? "pass" : "fail",
+    },
+    {
+      id: "testnet-window",
+      title: "TESTNET order window audit",
+      detail:
+        approvalAuditLogs.length > 0
+          ? `${approvalAuditLogs.length} approval window audit record(s) loaded.`
+          : "Optional: record a TESTNET order-window approval before testnet order drills.",
+      required: false,
+      status: approvalAuditLogs.length > 0 ? "pass" : "warn",
+    },
+  ];
+  const requiredPreRealItems = preRealChecklist.filter((item) => item.required);
+  const completedRequiredPreRealItems = requiredPreRealItems.filter((item) => item.status === "pass").length;
+  const preRealReady = completedRequiredPreRealItems === requiredPreRealItems.length;
+  const nextPreRealAction =
+    preRealChecklist.find((item) => item.required && item.status !== "pass")?.detail ??
+    "All required checks are complete. Next step is a manual small-fund review, not live automation.";
   const orderLocked = lockReasons.length > 0;
   const canRecordTestnetOrderWindow = testnetWindowReasons.length === 0;
 
@@ -1224,6 +1348,62 @@ export default function TradeWorkspace() {
                 </article>
               ))
             )}
+          </div>
+        </section>
+
+        <section className="trade-preflight-card" id="pre-real-checklist">
+          <div className="trade-preflight-head">
+            <div>
+              <span>Pre-Real Safety Checklist</span>
+              <strong>小额资金测试前置检查</strong>
+              <p>
+                只汇总登录、账户、密钥、只读认证和审计证据。此清单不会开启真实交易，也不会发送订单。
+              </p>
+            </div>
+            <div className="trade-preflight-status">
+              <span className={preRealReady ? "ready" : "blocked"}>
+                {preRealReady ? "READY FOR REVIEW" : "BLOCKED"}
+              </span>
+              <strong>
+                {completedRequiredPreRealItems}/{requiredPreRealItems.length}
+              </strong>
+              <small>required checks</small>
+            </div>
+          </div>
+          <div className="trade-preflight-actions">
+            <button className="trade-ghost-button" onClick={refreshAccounts} disabled={!session.token || apiBusy}>
+              Refresh Accounts
+            </button>
+            <button
+              className="trade-ghost-button"
+              onClick={() => activeAccount && focusAuditForAccount(activeAccount)}
+              disabled={!activeAccount || !canViewAuditLogs || auditBusy}
+            >
+              Load Active Audit
+            </button>
+            <button
+              className="trade-ghost-button"
+              onClick={focusTestnetApprovalAudits}
+              disabled={!canViewAuditLogs || auditBusy}
+            >
+              Load TESTNET Windows
+            </button>
+          </div>
+          <div className="trade-checklist-grid">
+            {preRealChecklist.map((item) => (
+              <article className={`trade-check-item ${item.status}`} key={item.id}>
+                <div>
+                  <strong>{item.title}</strong>
+                  <span>{item.required ? "Required" : "Optional"}</span>
+                </div>
+                <p>{item.detail}</p>
+                <b>{item.status.toUpperCase()}</b>
+              </article>
+            ))}
+          </div>
+          <div className={preRealReady ? "trade-next-action ready" : "trade-next-action"}>
+            <span>Next action</span>
+            <strong>{nextPreRealAction}</strong>
           </div>
         </section>
 
