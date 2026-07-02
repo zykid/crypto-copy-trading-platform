@@ -29,6 +29,24 @@ type ApiKeyMetadata = {
   warning?: string;
 };
 
+type Phase4ReadinessCheck = {
+  name: string;
+  status: string;
+  required: boolean;
+  detail: string;
+};
+
+type Phase4ReadinessReport = {
+  exchange_account_id: string;
+  exchange_name: ExchangeName;
+  account_mode: AccountMode;
+  overall_status: string;
+  read_only: boolean;
+  order_submission_authorized: boolean;
+  checks: Phase4ReadinessCheck[];
+  gate_reasons: string[];
+};
+
 type OrderSide = "BUY" | "SELL";
 type OrderType = "MARKET" | "LIMIT";
 
@@ -83,6 +101,7 @@ const exchanges: ExchangeName[] = ["okx", "binance", "bybit", "mock"];
 const symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"];
 const auditActionOptions = [
   "real.read_only.authentication.checked",
+  "real.small_fund.review_recorded",
   "testnet.read_only.authentication.checked",
   "testnet.order_window.approval_recorded",
   "position_reconciliation.drift_detected",
@@ -145,6 +164,7 @@ const sensitiveKeys = new Set([
   "reauthentication_token",
 ]);
 const testnetOrderWindowApprovalAck = "APPROVE_TESTNET_ORDER_WINDOW_ONLY";
+const phase4SmallFundReviewAck = "ACKNOWLEDGE_SMALL_FUND_REVIEW_ONLY";
 
 function resolveApiBase() {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -230,6 +250,9 @@ export default function TradeWorkspace() {
   const [apiLogs, setApiLogs] = useState<ApiActionLog[]>([]);
   const [isOrderPreviewOpen, setIsOrderPreviewOpen] = useState(false);
   const [orderApprovalPassword, setOrderApprovalPassword] = useState("");
+  const [phase4Readiness, setPhase4Readiness] = useState<Phase4ReadinessReport | null>(null);
+  const [phase4MaxNotional, setPhase4MaxNotional] = useState("25");
+  const [phase4ReviewPassword, setPhase4ReviewPassword] = useState("");
   const [bottomTab, setBottomTab] = useState<BottomTab>("positions");
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
@@ -374,6 +397,11 @@ export default function TradeWorkspace() {
     };
   }, [activeAccountId, apiRequest, appendApiLog, session.token]);
 
+  useEffect(() => {
+    setPhase4Readiness(null);
+    setPhase4ReviewPassword("");
+  }, [activeAccountId]);
+
   const activeAccount = allSelectedAccount;
   const accountMode = activeAccount?.account_mode ?? "UNSELECTED";
   const activeExchangeProfile = exchangeProfiles[activeExchange];
@@ -448,11 +476,31 @@ export default function TradeWorkspace() {
   const approvalAuditLogs = auditLogs.filter(
     (record) => record.action === "testnet.order_window.approval_recorded",
   );
+  const phase4ReviewAuditLogs = auditLogs.filter(
+    (record) => record.action === "real.small_fund.review_recorded",
+  );
   const latestApprovalAuditLog = approvalAuditLogs[0] ?? null;
+  const latestPhase4ReviewAuditLog = phase4ReviewAuditLogs[0] ?? null;
   const selectedApprovalPayload =
     selectedAuditLog?.action === "testnet.order_window.approval_recorded"
       ? selectedAuditLog.payload
       : null;
+  const phase4MaxNotionalValue = Number(phase4MaxNotional);
+  const activePhase4Ready =
+    phase4Readiness?.exchange_account_id === activeAccountId &&
+    phase4Readiness.overall_status === "PASS" &&
+    phase4Readiness.read_only &&
+    !phase4Readiness.order_submission_authorized;
+  const canRecordPhase4SmallFundReview =
+    Boolean(activeAccount) &&
+    activeAccount?.account_mode === "REAL" &&
+    activeAccount?.exchange_name === "okx" &&
+    session.role === "super_admin" &&
+    activePhase4Ready &&
+    Number.isFinite(phase4MaxNotionalValue) &&
+    phase4MaxNotionalValue > 0 &&
+    phase4MaxNotionalValue <= 100 &&
+    Boolean(phase4ReviewPassword);
   const auditSeverityCounts = auditLogs.reduce<Record<string, number>>((counts, record) => {
     counts[record.severity] = (counts[record.severity] ?? 0) + 1;
     return counts;
@@ -566,6 +614,15 @@ export default function TradeWorkspace() {
           : "Optional: record a TESTNET order-window approval before testnet order drills.",
       required: false,
       status: approvalAuditLogs.length > 0 ? "pass" : "warn",
+    },
+    {
+      id: "phase4-review",
+      title: "Phase 4 small-fund review",
+      detail: latestPhase4ReviewAuditLog
+        ? "REAL small-fund review audit is recorded without authorizing orders."
+        : "Optional before small funds: record a super-admin review after REAL read-only readiness passes.",
+      required: false,
+      status: latestPhase4ReviewAuditLog ? "pass" : "warn",
     },
   ];
   const requiredPreRealItems = preRealChecklist.filter((item) => item.required);
@@ -806,6 +863,92 @@ export default function TradeWorkspace() {
     setLastStatus("APPROVAL AUDIT FILTER READY");
     if (canViewAuditLogs && session.token) {
       void loadAuditLogs(nextFilters);
+    }
+  }
+
+  function focusPhase4ReviewAudits() {
+    if (!activeAccount) {
+      appendApiLog("Focus Phase 4 review audit", false, "Select an account first");
+      return;
+    }
+    const nextFilters = {
+      ...auditFilters,
+      exchangeAccountId: activeAccount.id,
+      action: "real.small_fund.review_recorded",
+      severity: "",
+    };
+    setAuditFilters(nextFilters);
+    setBottomTab("audit");
+    setLastStatus("PHASE 4 REVIEW AUDIT FILTER READY");
+    if (canViewAuditLogs && session.token) {
+      void loadAuditLogs(nextFilters);
+    }
+  }
+
+  async function loadPhase4Readiness() {
+    if (!activeAccount) {
+      appendApiLog("Load Phase 4 readiness", false, "Select a REAL OKX account first");
+      return;
+    }
+    setApiBusy(true);
+    try {
+      const report = (await apiRequest(
+        "GET",
+        `/exchange-accounts/${activeAccount.id}/phase4-readiness`,
+      )) as Phase4ReadinessReport;
+      setPhase4Readiness(report);
+      appendApiLog("Load Phase 4 readiness", report.overall_status === "PASS", report);
+    } catch (error) {
+      setPhase4Readiness(null);
+      appendApiLog("Load Phase 4 readiness", false, String(error));
+    } finally {
+      setApiBusy(false);
+    }
+  }
+
+  async function recordPhase4SmallFundReview() {
+    if (!activeAccount) {
+      appendApiLog("Record Phase 4 review", false, "Select a REAL OKX account first");
+      return;
+    }
+    if (!phase4ReviewPassword) {
+      appendApiLog("Record Phase 4 review", false, "Current password is required");
+      return;
+    }
+    setApiBusy(true);
+    try {
+      const reauthToken = await createReauthenticationToken(phase4ReviewPassword);
+      const result = await apiRequest(
+        "POST",
+        `/exchange-accounts/${activeAccount.id}/phase4-small-fund-reviews`,
+        {
+          max_notional: phase4MaxNotionalValue,
+          acknowledgement: phase4SmallFundReviewAck,
+        },
+        200,
+        { "X-Reauthentication-Token": reauthToken },
+      );
+      setPhase4ReviewPassword("");
+      appendApiLog("Record Phase 4 review", true, result);
+      const reviewAuditLogId =
+        result && typeof result === "object" && "audit_log_id" in result
+          ? String(result.audit_log_id)
+          : "";
+      const nextFilters = {
+        ...auditFilters,
+        exchangeAccountId: activeAccount.id,
+        action: "real.small_fund.review_recorded",
+        severity: "",
+      };
+      setAuditFilters(nextFilters);
+      setBottomTab("audit");
+      if (canViewAuditLogs) {
+        await loadAuditLogs(nextFilters, reviewAuditLogId);
+      }
+    } catch (error) {
+      appendApiLog("Record Phase 4 review", false, String(error));
+    } finally {
+      setApiBusy(false);
     }
   }
 
@@ -1405,6 +1548,91 @@ export default function TradeWorkspace() {
             <span>Next action</span>
             <strong>{nextPreRealAction}</strong>
           </div>
+        </section>
+
+        <section className="trade-phase4-card" id="phase4-small-fund-review">
+          <div className="trade-phase4-head">
+            <div>
+              <span>Phase 4 Control</span>
+              <strong>Small-Fund Review Audit</strong>
+              <p>
+                Records a super-admin review for the selected REAL OKX account. This does not
+                enable trading, authorize order submission, or expose API secrets.
+              </p>
+            </div>
+            <div className={activePhase4Ready ? "phase4-status ready" : "phase4-status blocked"}>
+              <span>{activePhase4Ready ? "READINESS PASS" : "READINESS BLOCKED"}</span>
+              <strong>{latestPhase4ReviewAuditLog ? "REVIEW RECORDED" : "NO REVIEW AUDIT"}</strong>
+            </div>
+          </div>
+          <div className="trade-phase4-grid">
+            <label>
+              <span>Max Notional Cap</span>
+              <input
+                inputMode="decimal"
+                value={phase4MaxNotional}
+                onChange={(event) => setPhase4MaxNotional(event.target.value)}
+                placeholder="25"
+              />
+            </label>
+            <label>
+              <span>Current Password</span>
+              <input
+                type="password"
+                value={phase4ReviewPassword}
+                onChange={(event) => setPhase4ReviewPassword(event.target.value)}
+                placeholder="Required for reauthentication"
+              />
+            </label>
+            <button
+              className="trade-secondary-button"
+              onClick={loadPhase4Readiness}
+              disabled={!activeAccount || apiBusy}
+            >
+              Load Readiness
+            </button>
+            <button
+              className="trade-submit compact"
+              onClick={recordPhase4SmallFundReview}
+              disabled={!canRecordPhase4SmallFundReview || apiBusy}
+            >
+              Record Review Audit
+            </button>
+          </div>
+          <div className="trade-phase4-actions">
+            <button
+              className="trade-ghost-button"
+              onClick={focusPhase4ReviewAudits}
+              disabled={!activeAccount || !canViewAuditLogs || auditBusy}
+            >
+              Load Review Audits
+            </button>
+            <span>
+              Required acknowledgement: <strong>{phase4SmallFundReviewAck}</strong>
+            </span>
+          </div>
+          {phase4Readiness ? (
+            <div className="trade-readiness-list">
+              {phase4Readiness.checks.map((check) => (
+                <article
+                  className={`trade-readiness-check ${
+                    check.status === "PASS" ? "pass" : "blocked"
+                  }`}
+                  key={check.name}
+                >
+                  <div>
+                    <strong>{check.name}</strong>
+                    <span>{check.status}</span>
+                  </div>
+                  <p>{check.detail}</p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="trade-muted">
+              Select a REAL OKX account and load readiness before recording a review audit.
+            </p>
+          )}
         </section>
 
         <section className="trade-api-grid">

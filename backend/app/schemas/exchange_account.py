@@ -97,3 +97,18 @@ class Phase4ReadinessReportResponse(BaseModel):
     order_submission_authorized: bool
     checks: list[Phase4ReadinessCheckResponse]
     gate_reasons: list[str]
+
+
+class Phase4SmallFundReviewRequest(BaseModel):
+    max_notional: Decimal = Field(gt=0, le=100)
+    acknowledgement: str = Field(min_length=1, max_length=120)
+
+
+class Phase4SmallFundReviewResponse(BaseModel):
+    audit_log_id: str
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    max_notional: Decimal
+    read_only_audit_log_id: str
+    order_submission_authorized: bool
+    trading_flags_changed: bool

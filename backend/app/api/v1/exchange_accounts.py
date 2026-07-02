@@ -12,6 +12,8 @@ from app.schemas.exchange_account import (
     ExchangeAccountResponse,
     ExchangeAccountUpdate,
     Phase4ReadinessReportResponse,
+    Phase4SmallFundReviewRequest,
+    Phase4SmallFundReviewResponse,
     RealReadOnlyCheckResponse,
     TestnetOrderWindowApprovalRequest,
     TestnetOrderWindowApprovalResponse,
@@ -28,6 +30,10 @@ from app.services.exchange_accounts import (
     upsert_api_key_secret,
 )
 from app.services.phase4_readiness import build_phase4_readiness_report
+from app.services.phase4_small_fund_review import (
+    Phase4SmallFundReviewBlockedError,
+    record_phase4_small_fund_review,
+)
 from app.services.real_read_only_check import (
     RealReadOnlyAccountNotFoundError,
     RealReadOnlyAuthenticationError,
@@ -333,4 +339,44 @@ def read_phase4_readiness(
             for check in report.checks
         ],
         gate_reasons=list(report.gate_reasons),
+    )
+
+
+@router.post(
+    "/{account_id}/phase4-small-fund-reviews",
+    response_model=Phase4SmallFundReviewResponse,
+)
+def record_small_fund_review(
+    account_id: str,
+    payload: Phase4SmallFundReviewRequest,
+    current_user: User = Depends(get_reauthenticated_user),
+    db: Session = Depends(get_db),
+) -> Phase4SmallFundReviewResponse:
+    try:
+        review = record_phase4_small_fund_review(
+            db,
+            user_id=current_user.id,
+            user_role=current_user.role,
+            exchange_account_id=account_id,
+            max_notional=payload.max_notional,
+            acknowledgement=payload.acknowledgement,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="account not found",
+        ) from exc
+    except Phase4SmallFundReviewBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"reasons": list(exc.reasons)},
+        ) from exc
+    return Phase4SmallFundReviewResponse(
+        audit_log_id=review.audit_log_id,
+        exchange_account_id=review.exchange_account_id,
+        exchange_name=review.exchange_name,
+        max_notional=review.max_notional,
+        read_only_audit_log_id=review.read_only_audit_log_id,
+        order_submission_authorized=review.order_submission_authorized,
+        trading_flags_changed=review.trading_flags_changed,
     )
