@@ -138,3 +138,25 @@ class Phase4SmallFundOrderWindowApprovalResponse(BaseModel):
     read_only_audit_log_id: str
     order_submission_authorized: bool
     trading_flags_changed: bool
+
+
+class Phase4FinalReleaseCheckRequest(BaseModel):
+    max_notional: Decimal = Field(gt=0, le=100)
+    dedicated_account_confirmed: bool
+    account_empty_confirmed: bool
+    withdrawals_disabled_confirmed: bool
+    delete_api_key_after_test_confirmed: bool
+    first_order_stop_review_confirmed: bool
+    no_live_order_submission_confirmed: bool
+    acknowledgement: str = Field(min_length=1, max_length=120)
+
+
+class Phase4FinalReleaseCheckResponse(BaseModel):
+    audit_log_id: str
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    max_notional: Decimal
+    review_audit_log_id: str
+    order_window_audit_log_id: str
+    order_submission_authorized: bool
+    trading_flags_changed: bool

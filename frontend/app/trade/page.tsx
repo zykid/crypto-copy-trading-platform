@@ -103,6 +103,7 @@ const auditActionOptions = [
   "real.read_only.authentication.checked",
   "real.small_fund.review_recorded",
   "real.small_fund.order_window.approval_recorded",
+  "real.small_fund.final_release_check_recorded",
   "testnet.read_only.authentication.checked",
   "testnet.order_window.approval_recorded",
   "position_reconciliation.drift_detected",
@@ -167,6 +168,7 @@ const sensitiveKeys = new Set([
 const testnetOrderWindowApprovalAck = "APPROVE_TESTNET_ORDER_WINDOW_ONLY";
 const phase4SmallFundReviewAck = "ACKNOWLEDGE_SMALL_FUND_REVIEW_ONLY";
 const phase4SmallFundOrderWindowAck = "APPROVE_REAL_SMALL_FUND_ORDER_WINDOW_ONLY";
+const phase4FinalReleaseCheckAck = "RECORD_PHASE4_FINAL_RELEASE_CHECK_ONLY";
 
 function resolveApiBase() {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -257,6 +259,15 @@ export default function TradeWorkspace() {
   const [phase4ReviewPassword, setPhase4ReviewPassword] = useState("");
   const [phase4OrderWindowPassword, setPhase4OrderWindowPassword] = useState("");
   const [phase4OrderWindowDuration, setPhase4OrderWindowDuration] = useState("5");
+  const [phase4FinalPassword, setPhase4FinalPassword] = useState("");
+  const [phase4FinalConfirmations, setPhase4FinalConfirmations] = useState({
+    dedicatedAccount: false,
+    accountEmpty: false,
+    withdrawalsDisabled: false,
+    deleteApiKeyAfterTest: false,
+    firstOrderStopReview: false,
+    noLiveOrderSubmission: false,
+  });
   const [bottomTab, setBottomTab] = useState<BottomTab>("positions");
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
@@ -404,6 +415,8 @@ export default function TradeWorkspace() {
   useEffect(() => {
     setPhase4Readiness(null);
     setPhase4ReviewPassword("");
+    setPhase4OrderWindowPassword("");
+    setPhase4FinalPassword("");
   }, [activeAccountId]);
 
   const activeAccount = allSelectedAccount;
@@ -486,12 +499,17 @@ export default function TradeWorkspace() {
   const phase4OrderWindowAuditLogs = auditLogs.filter(
     (record) => record.action === "real.small_fund.order_window.approval_recorded",
   );
+  const phase4FinalReleaseAuditLogs = auditLogs.filter(
+    (record) => record.action === "real.small_fund.final_release_check_recorded",
+  );
   const latestApprovalAuditLog = approvalAuditLogs[0] ?? null;
   const latestPhase4ReviewAuditLog = phase4ReviewAuditLogs[0] ?? null;
   const latestPhase4OrderWindowAuditLog = phase4OrderWindowAuditLogs[0] ?? null;
+  const latestPhase4FinalReleaseAuditLog = phase4FinalReleaseAuditLogs[0] ?? null;
   const selectedApprovalPayload =
     selectedAuditLog?.action === "testnet.order_window.approval_recorded" ||
-    selectedAuditLog?.action === "real.small_fund.order_window.approval_recorded"
+    selectedAuditLog?.action === "real.small_fund.order_window.approval_recorded" ||
+    selectedAuditLog?.action === "real.small_fund.final_release_check_recorded"
       ? selectedAuditLog.payload
       : null;
   const phase4MaxNotionalValue = Number(phase4MaxNotional);
@@ -529,6 +547,20 @@ export default function TradeWorkspace() {
     phase4OrderWindowDurationValue >= 1 &&
     phase4OrderWindowDurationValue <= 10 &&
     Boolean(phase4OrderWindowPassword);
+  const allPhase4FinalConfirmations = Object.values(phase4FinalConfirmations).every(Boolean);
+  const canRecordPhase4FinalReleaseCheck =
+    Boolean(activeAccount) &&
+    activeAccount?.account_mode === "REAL" &&
+    activeAccount?.exchange_name === "okx" &&
+    session.role === "super_admin" &&
+    activePhase4Ready &&
+    Boolean(latestPhase4ReviewAuditLog) &&
+    Boolean(latestPhase4OrderWindowAuditLog) &&
+    Number.isFinite(estimatedNotional) &&
+    estimatedNotional > 0 &&
+    estimatedNotional <= phase4MaxNotionalValue &&
+    allPhase4FinalConfirmations &&
+    Boolean(phase4FinalPassword);
   const auditSeverityCounts = auditLogs.reduce<Record<string, number>>((counts, record) => {
     counts[record.severity] = (counts[record.severity] ?? 0) + 1;
     return counts;
@@ -660,6 +692,15 @@ export default function TradeWorkspace() {
         : "Optional final gate: record exact symbol, side, quantity, price, notional, and duration.",
       required: false,
       status: latestPhase4OrderWindowAuditLog ? "pass" : "warn",
+    },
+    {
+      id: "phase4-final-release",
+      title: "Phase 4 final release check",
+      detail: latestPhase4FinalReleaseAuditLog
+        ? "Final release-check audit is recorded; platform order submission is still not authorized."
+        : "Optional: record final pre-small-fund confirmations after review and order-window audits exist.",
+      required: false,
+      status: latestPhase4FinalReleaseAuditLog ? "pass" : "warn",
     },
   ];
   const requiredPreRealItems = preRealChecklist.filter((item) => item.required);
@@ -941,6 +982,25 @@ export default function TradeWorkspace() {
     }
   }
 
+  function focusPhase4FinalReleaseAudits() {
+    if (!activeAccount) {
+      appendApiLog("Focus Phase 4 final release audit", false, "Select an account first");
+      return;
+    }
+    const nextFilters = {
+      ...auditFilters,
+      exchangeAccountId: activeAccount.id,
+      action: "real.small_fund.final_release_check_recorded",
+      severity: "",
+    };
+    setAuditFilters(nextFilters);
+    setBottomTab("audit");
+    setLastStatus("PHASE 4 FINAL AUDIT FILTER READY");
+    if (canViewAuditLogs && session.token) {
+      void loadAuditLogs(nextFilters);
+    }
+  }
+
   async function loadPhase4Readiness() {
     if (!activeAccount) {
       appendApiLog("Load Phase 4 readiness", false, "Select a REAL OKX account first");
@@ -1053,6 +1113,58 @@ export default function TradeWorkspace() {
       }
     } catch (error) {
       appendApiLog("Record Phase 4 REAL order window", false, String(error));
+    } finally {
+      setApiBusy(false);
+    }
+  }
+
+  async function recordPhase4FinalReleaseCheck() {
+    if (!activeAccount || !canRecordPhase4FinalReleaseCheck) {
+      return;
+    }
+    if (!phase4FinalPassword) {
+      appendApiLog("Record Phase 4 final check", false, "Current password is required");
+      return;
+    }
+    setApiBusy(true);
+    try {
+      const reauthToken = await createReauthenticationToken(phase4FinalPassword);
+      const result = await apiRequest(
+        "POST",
+        `/exchange-accounts/${activeAccount.id}/phase4-final-release-checks`,
+        {
+          max_notional: estimatedNotional,
+          dedicated_account_confirmed: phase4FinalConfirmations.dedicatedAccount,
+          account_empty_confirmed: phase4FinalConfirmations.accountEmpty,
+          withdrawals_disabled_confirmed: phase4FinalConfirmations.withdrawalsDisabled,
+          delete_api_key_after_test_confirmed:
+            phase4FinalConfirmations.deleteApiKeyAfterTest,
+          first_order_stop_review_confirmed: phase4FinalConfirmations.firstOrderStopReview,
+          no_live_order_submission_confirmed: phase4FinalConfirmations.noLiveOrderSubmission,
+          acknowledgement: phase4FinalReleaseCheckAck,
+        },
+        200,
+        { "X-Reauthentication-Token": reauthToken },
+      );
+      setPhase4FinalPassword("");
+      appendApiLog("Record Phase 4 final check", true, result);
+      const finalAuditLogId =
+        result && typeof result === "object" && "audit_log_id" in result
+          ? String(result.audit_log_id)
+          : "";
+      const nextFilters = {
+        ...auditFilters,
+        exchangeAccountId: activeAccount.id,
+        action: "real.small_fund.final_release_check_recorded",
+        severity: "",
+      };
+      setAuditFilters(nextFilters);
+      setBottomTab("audit");
+      if (canViewAuditLogs) {
+        await loadAuditLogs(nextFilters, finalAuditLogId);
+      }
+    } catch (error) {
+      appendApiLog("Record Phase 4 final check", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -1819,6 +1931,104 @@ export default function TradeWorkspace() {
               Required acknowledgement: <strong>{phase4SmallFundOrderWindowAck}</strong>
             </span>
             <span>LIMIT only / review cap {formatNumber(phase4MaxNotionalValue)} USDT / no live order</span>
+          </div>
+        </section>
+
+        <section className="trade-phase4-card" id="phase4-final-release-check">
+          <div className="trade-phase4-head">
+            <div>
+              <span>Phase 4 Final Gate</span>
+              <strong>Final Release Check Audit</strong>
+              <p>
+                Records the last pre-small-fund confirmation after the review and order-window
+                audits exist. This is audit-only and still does not authorize or submit orders.
+              </p>
+            </div>
+            <div className={latestPhase4FinalReleaseAuditLog ? "phase4-status ready" : "phase4-status blocked"}>
+              <span>{canRecordPhase4FinalReleaseCheck ? "READY TO RECORD" : "FINAL GATE LOCKED"}</span>
+              <strong>
+                {latestPhase4FinalReleaseAuditLog ? "FINAL CHECK RECORDED" : "NO FINAL CHECK"}
+              </strong>
+            </div>
+          </div>
+          <div className="trade-phase4-window-summary">
+            <article>
+              <span>Review Audit</span>
+              <strong>{latestPhase4ReviewAuditLog ? "RECORDED" : "MISSING"}</strong>
+            </article>
+            <article>
+              <span>Window Audit</span>
+              <strong>{latestPhase4OrderWindowAuditLog ? "RECORDED" : "MISSING"}</strong>
+            </article>
+            <article>
+              <span>Final Notional</span>
+              <strong>{formatNumber(estimatedNotional)} USDT</strong>
+            </article>
+            <article>
+              <span>Trading Flag</span>
+              <strong>{activeAccount?.trading_enabled ? "ON" : "OFF"}</strong>
+            </article>
+            <article>
+              <span>Order Auth</span>
+              <strong>AUDIT ONLY</strong>
+            </article>
+          </div>
+          <div className="trade-final-confirmations">
+            {[
+              ["dedicatedAccount", "Dedicated test account is confirmed"],
+              ["accountEmpty", "Account is empty or funded only with approved tiny test amount"],
+              ["withdrawalsDisabled", "Withdrawal permission is disabled on the exchange API key"],
+              ["deleteApiKeyAfterTest", "API key will be deleted after the test"],
+              ["firstOrderStopReview", "First accepted order will stop the process for manual review"],
+              ["noLiveOrderSubmission", "This button records audit only and will not submit an order"],
+            ].map(([key, label]) => (
+              <label key={key}>
+                <input
+                  type="checkbox"
+                  checked={
+                    phase4FinalConfirmations[key as keyof typeof phase4FinalConfirmations]
+                  }
+                  onChange={(event) =>
+                    setPhase4FinalConfirmations((current) => ({
+                      ...current,
+                      [key]: event.target.checked,
+                    }))
+                  }
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+          <div className="trade-phase4-grid">
+            <label>
+              <span>Current Password</span>
+              <input
+                type="password"
+                value={phase4FinalPassword}
+                onChange={(event) => setPhase4FinalPassword(event.target.value)}
+                placeholder="Required for reauthentication"
+              />
+            </label>
+            <button
+              className="trade-secondary-button"
+              onClick={focusPhase4FinalReleaseAudits}
+              disabled={!activeAccount || !canViewAuditLogs || auditBusy}
+            >
+              Load Final Audits
+            </button>
+            <button
+              className="trade-submit compact"
+              onClick={recordPhase4FinalReleaseCheck}
+              disabled={!canRecordPhase4FinalReleaseCheck || apiBusy}
+            >
+              Record Final Check
+            </button>
+          </div>
+          <div className="trade-phase4-actions">
+            <span>
+              Required acknowledgement: <strong>{phase4FinalReleaseCheckAck}</strong>
+            </span>
+            <span>Requires review audit + order-window audit / no live order</span>
           </div>
         </section>
 

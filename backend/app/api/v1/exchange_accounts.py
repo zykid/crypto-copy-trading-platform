@@ -11,6 +11,8 @@ from app.schemas.exchange_account import (
     ExchangeAccountCreate,
     ExchangeAccountResponse,
     ExchangeAccountUpdate,
+    Phase4FinalReleaseCheckRequest,
+    Phase4FinalReleaseCheckResponse,
     Phase4ReadinessReportResponse,
     Phase4SmallFundOrderWindowApprovalRequest,
     Phase4SmallFundOrderWindowApprovalResponse,
@@ -30,6 +32,10 @@ from app.services.exchange_accounts import (
     list_accounts,
     update_account,
     upsert_api_key_secret,
+)
+from app.services.phase4_final_release_check import (
+    Phase4FinalReleaseCheckBlockedError,
+    record_phase4_final_release_check,
 )
 from app.services.phase4_readiness import build_phase4_readiness_report
 from app.services.phase4_small_fund_order_window import (
@@ -436,4 +442,51 @@ def record_small_fund_order_window_approval(
         read_only_audit_log_id=approval.read_only_audit_log_id,
         order_submission_authorized=approval.order_submission_authorized,
         trading_flags_changed=approval.trading_flags_changed,
+    )
+
+
+@router.post(
+    "/{account_id}/phase4-final-release-checks",
+    response_model=Phase4FinalReleaseCheckResponse,
+)
+def record_final_release_check(
+    account_id: str,
+    payload: Phase4FinalReleaseCheckRequest,
+    current_user: User = Depends(get_reauthenticated_user),
+    db: Session = Depends(get_db),
+) -> Phase4FinalReleaseCheckResponse:
+    try:
+        final_check = record_phase4_final_release_check(
+            db,
+            user_id=current_user.id,
+            user_role=current_user.role,
+            exchange_account_id=account_id,
+            max_notional=payload.max_notional,
+            dedicated_account_confirmed=payload.dedicated_account_confirmed,
+            account_empty_confirmed=payload.account_empty_confirmed,
+            withdrawals_disabled_confirmed=payload.withdrawals_disabled_confirmed,
+            delete_api_key_after_test_confirmed=payload.delete_api_key_after_test_confirmed,
+            first_order_stop_review_confirmed=payload.first_order_stop_review_confirmed,
+            no_live_order_submission_confirmed=payload.no_live_order_submission_confirmed,
+            acknowledgement=payload.acknowledgement,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="account not found",
+        ) from exc
+    except Phase4FinalReleaseCheckBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"reasons": list(exc.reasons)},
+        ) from exc
+    return Phase4FinalReleaseCheckResponse(
+        audit_log_id=final_check.audit_log_id,
+        exchange_account_id=final_check.exchange_account_id,
+        exchange_name=final_check.exchange_name,
+        max_notional=final_check.max_notional,
+        review_audit_log_id=final_check.review_audit_log_id,
+        order_window_audit_log_id=final_check.order_window_audit_log_id,
+        order_submission_authorized=final_check.order_submission_authorized,
+        trading_flags_changed=final_check.trading_flags_changed,
     )
