@@ -1355,7 +1355,7 @@ export default function TradeWorkspace() {
   return (
     <main className="trade-terminal">
       <aside className="trade-sidebar">
-        <a className="trade-brand" href="/">
+        <a className="trade-brand" href="/trade">
           <span>CT</span>
           <strong>Copy Trading</strong>
         </a>
@@ -1364,7 +1364,7 @@ export default function TradeWorkspace() {
             Trading
           </a>
           <a href="/trade#audit">Audit Logs</a>
-          <a href="/">Console</a>
+          {session.role === "super_admin" && <a href="/">Admin Console</a>}
           <a href="/login">Login</a>
         </nav>
         <div className="trade-guardrail">

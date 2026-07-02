@@ -285,13 +285,15 @@ export default function Home() {
       return;
     }
     const token = window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
-    setRestoredStoredSession(true);
     if (!token) {
+      setRestoredStoredSession(true);
       return;
     }
-    void loadAuthenticatedSession(token).catch(() => {
-      window.localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
-    });
+    void loadAuthenticatedSession(token)
+      .catch(() => {
+        window.localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+      })
+      .finally(() => setRestoredStoredSession(true));
   }, [apiRoot, restoredStoredSession, session.token]);
 
   function appendLog(label: string, ok: boolean, detail: unknown) {
@@ -1313,6 +1315,63 @@ export default function Home() {
       value: testnetWindowApprovalForm.maxNotional || "-",
     },
   ];
+
+  if (!restoredStoredSession && !session.token) {
+    return (
+      <main className="console-access-shell">
+        <section className="console-access-card">
+          <span>SESSION CHECK</span>
+          <h1>Checking console access</h1>
+          <p>Restoring the local session before showing any administrative controls.</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!session.token) {
+    return (
+      <main className="console-access-shell">
+        <section className="console-access-card">
+          <span>ADMIN CONSOLE</span>
+          <h1>Login required</h1>
+          <p>The integration console is restricted to authenticated super administrators.</p>
+          <div className="console-access-actions">
+            <a href="/login">Login</a>
+            <a href="/trade">Open trading workspace</a>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (session.role !== "super_admin") {
+    return (
+      <main className="console-access-shell">
+        <section className="console-access-card">
+          <span>ACCESS CONTROL</span>
+          <h1>Super administrator required</h1>
+          <p>
+            Your account can use the formal trading workspace. Administrative console controls are
+            hidden unless the current role is super_admin.
+          </p>
+          <div className="console-access-summary">
+            <div>
+              <small>User</small>
+              <strong>{session.username || "-"}</strong>
+            </div>
+            <div>
+              <small>Role</small>
+              <strong>{session.role || "-"}</strong>
+            </div>
+          </div>
+          <div className="console-access-actions">
+            <a href="/trade">Open trading workspace</a>
+            <a href="/login">Switch account</a>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="terminal-shell">

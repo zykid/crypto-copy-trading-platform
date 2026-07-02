@@ -257,8 +257,8 @@ export default function LoginPage() {
               <span>{apiRoot}</span>
               <h2>{mode === "login" ? "登录账户" : "注册账户"}</h2>
             </div>
-            <a href="/" className="auth-console-link">
-              控制台
+            <a href="/trade" className="auth-console-link">
+              交易页
             </a>
           </div>
 
