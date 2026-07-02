@@ -73,6 +73,8 @@ type AuditFilters = {
   exchangeAccountId: string;
   action: string;
   severity: string;
+  createdFrom: string;
+  createdTo: string;
   limit: string;
 };
 type PreRealChecklistItem = {
@@ -218,6 +220,17 @@ function formatDateTime(value: string | null) {
   return date.toLocaleString();
 }
 
+function toAuditQueryDateTime(value: string) {
+  if (!value.trim()) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid audit date filter: ${value}`);
+  }
+  return date.toISOString();
+}
+
 function defaultAccountLabel(exchangeName: ExchangeName, mode: AccountMode) {
   if (exchangeName === "mock") {
     return "Mock Simulation";
@@ -278,6 +291,8 @@ export default function TradeWorkspace() {
     exchangeAccountId: "",
     action: "",
     severity: "",
+    createdFrom: "",
+    createdTo: "",
     limit: "50",
   });
   const [createForm, setCreateForm] = useState({
@@ -857,6 +872,8 @@ export default function TradeWorkspace() {
         exchangeAccountId: "",
         action: "",
         severity: "",
+        createdFrom: "",
+        createdTo: "",
         limit: current.limit,
       };
     });
@@ -885,6 +902,14 @@ export default function TradeWorkspace() {
       if (filterOverride.severity.trim()) {
         params.set("severity", filterOverride.severity.trim());
       }
+      const createdFrom = toAuditQueryDateTime(filterOverride.createdFrom);
+      const createdTo = toAuditQueryDateTime(filterOverride.createdTo);
+      if (createdFrom) {
+        params.set("created_from", createdFrom);
+      }
+      if (createdTo) {
+        params.set("created_to", createdTo);
+      }
       params.set("limit", filterOverride.limit || "50");
 
       const payload = await apiRequest("GET", `/admin/observability/audit-logs?${params}`);
@@ -900,12 +925,56 @@ export default function TradeWorkspace() {
         count: records.length,
         action: filterOverride.action || "*",
         severity: filterOverride.severity || "*",
+        created_from: createdFrom || "*",
+        created_to: createdTo || "*",
       });
     } catch (error) {
       appendApiLog("Load audit logs", false, String(error));
     } finally {
       setAuditBusy(false);
     }
+  }
+
+  function exportAuditReport() {
+    if (!auditLogs.length) {
+      appendApiLog("Export audit report", false, "Load audit logs first");
+      return;
+    }
+    const generatedAt = new Date().toISOString();
+    const report = {
+      report_type: "audit_log_read_only_export",
+      generated_at: generatedAt,
+      generated_by: {
+        user_id: session.userId,
+        username: session.username,
+        role: session.role,
+      },
+      filters: auditFilters,
+      record_count: auditLogs.length,
+      severity_counts: auditSeverityCounts,
+      phase4_counts: {
+        small_fund_reviews: phase4ReviewAuditLogs.length,
+        real_order_windows: phase4OrderWindowAuditLogs.length,
+        final_release_checks: phase4FinalReleaseAuditLogs.length,
+      },
+      records: auditLogs.map((record) => ({
+        ...record,
+        payload: sanitizeDetail(record.payload),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `audit-report-${generatedAt.replace(/[:.]/g, "-")}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    appendApiLog("Export audit report", true, {
+      record_count: auditLogs.length,
+      generated_at: generatedAt,
+    });
   }
 
   function openOrderPreview() {
@@ -2219,6 +2288,32 @@ export default function TradeWorkspace() {
                         </select>
                       </label>
                       <label>
+                        Created From
+                        <input
+                          type="datetime-local"
+                          value={auditFilters.createdFrom}
+                          onChange={(event) =>
+                            setAuditFilters((current) => ({
+                              ...current,
+                              createdFrom: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Created To
+                        <input
+                          type="datetime-local"
+                          value={auditFilters.createdTo}
+                          onChange={(event) =>
+                            setAuditFilters((current) => ({
+                              ...current,
+                              createdTo: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
                         Limit
                         <select
                           value={auditFilters.limit}
@@ -2241,6 +2336,13 @@ export default function TradeWorkspace() {
                       >
                         {auditBusy ? "Loading" : "Load"}
                       </button>
+                      <button
+                        className="trade-secondary-button"
+                        onClick={exportAuditReport}
+                        disabled={!auditLogs.length}
+                      >
+                        Export JSON
+                      </button>
                     </div>
                     <div className="trade-audit-summary">
                       {["INFO", "OK", "WARNING", "ERROR"].map((severity) => (
@@ -2250,6 +2352,15 @@ export default function TradeWorkspace() {
                       ))}
                       <span>
                         TESTNET Windows <strong>{approvalAuditLogs.length}</strong>
+                      </span>
+                      <span>
+                        Phase 4 Reviews <strong>{phase4ReviewAuditLogs.length}</strong>
+                      </span>
+                      <span>
+                        REAL Windows <strong>{phase4OrderWindowAuditLogs.length}</strong>
+                      </span>
+                      <span>
+                        Final Checks <strong>{phase4FinalReleaseAuditLogs.length}</strong>
                       </span>
                     </div>
                     {latestApprovalAuditLog ? (

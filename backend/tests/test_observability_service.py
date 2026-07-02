@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -52,13 +54,18 @@ def create_audit_log(
     account: ExchangeAccount,
     action: str,
     severity: str,
+    created_at: datetime | None = None,
 ) -> AuditLog:
+    values: dict[str, datetime] = {}
+    if created_at is not None:
+        values["created_at"] = created_at
     record = AuditLog(
         user_id=user.id,
         exchange_account_id=account.id,
         action=action,
         severity=severity,
         payload={"action": action},
+        **values,
     )
     db_session.add(record)
     db_session.flush()
@@ -72,13 +79,18 @@ def create_system_event(
     account: ExchangeAccount,
     event_type: str,
     severity: str,
+    created_at: datetime | None = None,
 ) -> SystemEvent:
+    values: dict[str, datetime] = {}
+    if created_at is not None:
+        values["created_at"] = created_at
     record = SystemEvent(
         user_id=user.id,
         exchange_account_id=account.id,
         event_type=event_type,
         severity=severity,
         payload={"event_type": event_type},
+        **values,
     )
     db_session.add(record)
     db_session.flush()
@@ -148,6 +160,84 @@ def test_list_system_events_filters_by_event_type(db_session: Session) -> None:
     records = service.list_system_events(
         db_session,
         SystemEventFilter(event_type="position_reconciliation.drift_detected"),
+    )
+
+    assert records == (expected,)
+
+
+def test_list_audit_logs_filters_by_created_range(db_session: Session) -> None:
+    user, account = create_user_and_account(db_session)
+    service = ObservabilityService()
+    create_audit_log(
+        db_session,
+        user=user,
+        account=account,
+        action="audit.before",
+        severity="INFO",
+        created_at=datetime(2026, 6, 1, 0, 0, tzinfo=UTC),
+    )
+    expected = create_audit_log(
+        db_session,
+        user=user,
+        account=account,
+        action="audit.in_range",
+        severity="WARNING",
+        created_at=datetime(2026, 6, 2, 12, 0, tzinfo=UTC),
+    )
+    create_audit_log(
+        db_session,
+        user=user,
+        account=account,
+        action="audit.after",
+        severity="ERROR",
+        created_at=datetime(2026, 6, 3, 0, 0, tzinfo=UTC),
+    )
+
+    records = service.list_audit_logs(
+        db_session,
+        AuditLogFilter(
+            created_from=datetime(2026, 6, 2, 0, 0, tzinfo=UTC),
+            created_to=datetime(2026, 6, 2, 23, 59, tzinfo=UTC),
+        ),
+    )
+
+    assert records == (expected,)
+
+
+def test_list_system_events_filters_by_created_range(db_session: Session) -> None:
+    user, account = create_user_and_account(db_session)
+    service = ObservabilityService()
+    create_system_event(
+        db_session,
+        user=user,
+        account=account,
+        event_type="system.before",
+        severity="INFO",
+        created_at=datetime(2026, 6, 1, 0, 0, tzinfo=UTC),
+    )
+    expected = create_system_event(
+        db_session,
+        user=user,
+        account=account,
+        event_type="system.in_range",
+        severity="WARNING",
+        created_at=datetime(2026, 6, 2, 12, 0, tzinfo=UTC),
+    )
+    create_system_event(
+        db_session,
+        user=user,
+        account=account,
+        event_type="system.after",
+        severity="ERROR",
+        created_at=datetime(2026, 6, 3, 0, 0, tzinfo=UTC),
+    )
+
+    records = service.list_system_events(
+        db_session,
+        SystemEventFilter(
+            created_from=datetime(2026, 6, 2, 0, 0, tzinfo=UTC),
+            created_to=datetime(2026, 6, 2, 23, 59, tzinfo=UTC),
+        ),
     )
 
     assert records == (expected,)

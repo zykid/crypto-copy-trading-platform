@@ -3169,7 +3169,7 @@ body {
 
 .trade-audit-filters {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) repeat(2, minmax(150px, 0.8fr)) auto auto;
   gap: 10px;
   align-items: end;
   border: 1px solid #1f2937;

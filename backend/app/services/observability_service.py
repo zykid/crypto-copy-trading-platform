@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
@@ -14,6 +15,8 @@ class AuditLogFilter:
     exchange_account_id: str | None = None
     action: str | None = None
     severity: str | None = None
+    created_from: datetime | None = None
+    created_to: datetime | None = None
     limit: int = 50
 
 
@@ -23,6 +26,8 @@ class SystemEventFilter:
     exchange_account_id: str | None = None
     event_type: str | None = None
     severity: str | None = None
+    created_from: datetime | None = None
+    created_to: datetime | None = None
     limit: int = 50
 
 
@@ -41,6 +46,12 @@ class ObservabilityService:
         )
         query = _apply_optional_filter(query, AuditLog.action, filters.action)
         query = _apply_optional_filter(query, AuditLog.severity, filters.severity)
+        query = _apply_created_range(
+            query,
+            AuditLog.created_at,
+            filters.created_from,
+            filters.created_to,
+        )
         query = query.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(
             _bounded_limit(filters.limit)
         )
@@ -60,6 +71,12 @@ class ObservabilityService:
         )
         query = _apply_optional_filter(query, SystemEvent.event_type, filters.event_type)
         query = _apply_optional_filter(query, SystemEvent.severity, filters.severity)
+        query = _apply_created_range(
+            query,
+            SystemEvent.created_at,
+            filters.created_from,
+            filters.created_to,
+        )
         query = query.order_by(SystemEvent.created_at.desc(), SystemEvent.id.desc()).limit(
             _bounded_limit(filters.limit)
         )
@@ -70,6 +87,19 @@ def _apply_optional_filter(query: Select, column, value: str | None) -> Select:
     if value is None:
         return query
     return query.where(column == value)
+
+
+def _apply_created_range(
+    query: Select,
+    column,
+    created_from: datetime | None,
+    created_to: datetime | None,
+) -> Select:
+    if created_from is not None:
+        query = query.where(column >= created_from)
+    if created_to is not None:
+        query = query.where(column <= created_to)
+    return query
 
 
 def _bounded_limit(limit: int) -> int:

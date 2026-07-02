@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -20,6 +22,8 @@ def list_audit_logs(
     exchange_account_id: str | None = None,
     action: str | None = None,
     severity: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
     limit: int = Query(default=50, ge=1, le=100),
     _admin_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
@@ -31,6 +35,8 @@ def list_audit_logs(
             exchange_account_id=exchange_account_id,
             action=action,
             severity=severity,
+            created_from=created_from,
+            created_to=created_to,
             limit=limit,
         ),
     )
@@ -42,6 +48,8 @@ def list_system_events(
     exchange_account_id: str | None = None,
     event_type: str | None = None,
     severity: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
     limit: int = Query(default=50, ge=1, le=100),
     _admin_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
@@ -53,6 +61,8 @@ def list_system_events(
             exchange_account_id=exchange_account_id,
             event_type=event_type,
             severity=severity,
+            created_from=created_from,
+            created_to=created_to,
             limit=limit,
         ),
     )
