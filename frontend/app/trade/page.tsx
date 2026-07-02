@@ -733,6 +733,40 @@ export default function TradeWorkspace() {
   const requiredPreRealItems = preRealChecklist.filter((item) => item.required);
   const completedRequiredPreRealItems = requiredPreRealItems.filter((item) => item.status === "pass").length;
   const preRealReady = completedRequiredPreRealItems === requiredPreRealItems.length;
+  const phase4AuditTrailReady =
+    Boolean(latestPhase4ReviewAuditLog) &&
+    Boolean(latestPhase4OrderWindowAuditLog) &&
+    Boolean(latestPhase4FinalReleaseAuditLog);
+  const finalReadinessMatrix = [
+    {
+      title: "Required Safety Checks",
+      value: `${completedRequiredPreRealItems}/${requiredPreRealItems.length}`,
+      detail: preRealReady ? "Required pre-real checks are complete." : "Complete all required checks first.",
+      status: preRealReady ? "pass" : "blocked",
+    },
+    {
+      title: "REAL Read-only Readiness",
+      value: activePhase4Ready ? "PASS" : "BLOCKED",
+      detail: activePhase4Ready
+        ? "Selected REAL account is read-only and order submission is not authorized."
+        : "Load readiness for a REAL OKX read-only account.",
+      status: activePhase4Ready ? "pass" : "blocked",
+    },
+    {
+      title: "Audit Trail",
+      value: phase4AuditTrailReady ? "COMPLETE" : "INCOMPLETE",
+      detail: phase4AuditTrailReady
+        ? "Review, order-window, and final release-check audits are recorded."
+        : "Record Phase 4 audit-only review, window, and final check before any small-fund test.",
+      status: phase4AuditTrailReady ? "pass" : "warn",
+    },
+    {
+      title: "Live Order Submission",
+      value: "LOCKED",
+      detail: "This UI still does not submit REAL exchange orders.",
+      status: "pass",
+    },
+  ];
   const nextPreRealAction =
     preRealChecklist.find((item) => item.required && item.status !== "pass")?.detail ??
     "All required checks are complete. Next step is a manual small-fund review, not live automation.";
@@ -1847,6 +1881,28 @@ export default function TradeWorkspace() {
           <div className={preRealReady ? "trade-next-action ready" : "trade-next-action"}>
             <span>Next action</span>
             <strong>{nextPreRealAction}</strong>
+          </div>
+        </section>
+
+        <section className="trade-final-readiness-card" id="small-fund-final-readiness">
+          <div className="trade-section-heading">
+            <div>
+              <span>Final Gate</span>
+              <h2>Small-Fund Test Readiness</h2>
+              <p>
+                Consolidated view before any Phase 4 small-fund test. Passing this panel still keeps
+                live order submission locked in the current build.
+              </p>
+            </div>
+          </div>
+          <div className="trade-final-readiness-grid">
+            {finalReadinessMatrix.map((item) => (
+              <article className={`trade-final-readiness-item ${item.status}`} key={item.title}>
+                <span>{item.title}</span>
+                <strong>{item.value}</strong>
+                <p>{item.detail}</p>
+              </article>
+            ))}
           </div>
         </section>
 

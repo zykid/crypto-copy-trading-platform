@@ -2418,6 +2418,62 @@ body {
   padding: 16px;
 }
 
+.trade-final-readiness-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #243244;
+  border-radius: 8px;
+  background: #0f172a;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+  padding: 16px;
+}
+
+.trade-final-readiness-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.trade-final-readiness-item {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #243244;
+  border-radius: 8px;
+  background: #0b1220;
+  padding: 12px;
+}
+
+.trade-final-readiness-item span {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.trade-final-readiness-item strong {
+  color: #e5edf5;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.trade-final-readiness-item p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.trade-final-readiness-item.pass {
+  border-color: rgba(20, 184, 143, 0.55);
+}
+
+.trade-final-readiness-item.warn {
+  border-color: rgba(245, 158, 11, 0.55);
+}
+
+.trade-final-readiness-item.blocked {
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
 .trade-preflight-head {
   display: flex;
   align-items: flex-start;
@@ -3459,6 +3515,7 @@ body {
   .trade-api-grid,
   .trade-api-manager-grid,
   .trade-checklist-grid,
+  .trade-final-readiness-grid,
   .trade-phase4-grid,
   .trade-phase4-window-summary,
   .trade-final-confirmations,
