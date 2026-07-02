@@ -86,6 +86,7 @@ Do not include API keys, API secrets, passphrases, JWTs, raw exchange secrets, o
 
 ## Current Validation Records
 
+- `docs/phase-4-small-capital-final-checklist.md` defines the final checklist before any small-capital REAL validation. It separates the first REAL read-only validation from any later order-window approval, and it does not authorize REAL order placement.
 - `docs/phase-4-real-readiness-gate-validation-20260630.md` records the first deployed readiness-gate validation on the temporary Ubuntu host. The result was `BLOCKED`, `read_only=true`, and `order_submission_authorized=false`.
 - `docs/phase-4-super-admin-mfa-readiness-validation-20260630.md` records the deployed MFA readiness state. The temporary super administrator had MFA not enabled and no pending enrollment, so Phase 4 remains blocked until deliberate operator enrollment.
 - `docs/phase-4-small-fund-readiness-ui-validation-20260702.md` records the deployed small-fund readiness UI panel. It consolidates required safety checks, REAL read-only status, audit trail status, and the live-order lock state for operator review before any separate small-capital order-window approval.
