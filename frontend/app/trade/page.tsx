@@ -461,6 +461,13 @@ export default function TradeWorkspace() {
         activeAccount.trading_enabled ? "trading flag on" : "read-only flag"
       }`
     : "Select an exchange account to bind this ticket.";
+  const activeExchangeAccounts = accounts.filter((account) => account.exchange_name === activeExchange);
+  const accountModeSummary = {
+    simulation: accounts.filter((account) => account.account_mode === "SIMULATION").length,
+    testnet: accounts.filter((account) => account.account_mode === "TESTNET").length,
+    real: accounts.filter((account) => account.account_mode === "REAL").length,
+    tradingEnabled: accounts.filter((account) => account.trading_enabled).length,
+  };
   const activeMarket = marketSnapshots[activeSymbol] ?? marketSnapshots["BTC/USDT"];
   const parsedPrice = Number(orderForm.price);
   const parsedQuantity = Number(orderForm.quantity);
@@ -1357,34 +1364,68 @@ export default function TradeWorkspace() {
       <aside className="trade-sidebar">
         <a className="trade-brand" href="/trade">
           <span>CT</span>
-          <strong>Copy Trading</strong>
+          <strong>CryptoDesk</strong>
         </a>
         <nav>
           <a className="active" href="/trade">
-            Trading
+            Trading Terminal
           </a>
-          <a href="/trade#audit">Audit Logs</a>
+          <a href="/trade#portfolio">Portfolio</a>
+          <a href="/trade#api-management">API & Accounts</a>
+          <a href="/trade#risk">Risk Center</a>
+          <a href="/trade#audit">Audit Center</a>
+          <a href="/trade#phase4-small-fund-review">Small-Fund Gate</a>
           {session.role === "super_admin" && <a href="/">Admin Console</a>}
           <a href="/login">Login</a>
         </nav>
         <div className="trade-guardrail">
           <span>Guardrail</span>
           <strong>NO LIVE ORDER</strong>
-          <p>REAL accounts are read-only in this stage. Mock is the only executable route.</p>
+          <p>Live execution remains gated. This terminal can preview orders, validate accounts, and record approvals.</p>
         </div>
       </aside>
 
       <section className="trade-main">
         <header className="trade-topbar">
           <div>
-            <span className="trade-kicker">Exchange Workspace</span>
-            <h1>{activeSymbol} Unified Trading</h1>
+            <span className="trade-kicker">Unified Exchange Workspace</span>
+            <h1>{activeSymbol} Trading Terminal</h1>
+          </div>
+          <div className="trade-topbar-actions">
+            <a href="/trade#api-management">Add API</a>
+            <a href="/trade#audit">Audit</a>
+            {session.role === "super_admin" ? <a href="/">Console</a> : null}
           </div>
           <div className="trade-user-pill">
             <span>{session.token ? session.username : "Not logged in"}</span>
             <strong>{session.role || "guest"}</strong>
           </div>
         </header>
+
+        <section className="trade-command-center" id="portfolio">
+          <article>
+            <span>Workspace Mode</span>
+            <strong>SIM / TESTNET / REAL READ ONLY</strong>
+            <p>REAL execution is blocked until super-admin review, audit evidence, and explicit order-window approval exist.</p>
+          </article>
+          <article>
+            <span>Accounts</span>
+            <strong>{accounts.length}</strong>
+            <p>
+              SIM {accountModeSummary.simulation} / TESTNET {accountModeSummary.testnet} / REAL {accountModeSummary.real}
+            </p>
+          </article>
+          <article>
+            <span>Selected Venue</span>
+            <strong>{activeExchangeProfile.venue}</strong>
+            <p>{activeExchangeAccounts.length} account(s) on this exchange.</p>
+          </article>
+          <article>
+            <span>Execution Boundary</span>
+            <strong>{accountModeSummary.tradingEnabled > 0 ? "REVIEW REQUIRED" : "LOCKED"}</strong>
+            <p>{accountModeSummary.tradingEnabled} account(s) currently have trading flag enabled.</p>
+          </article>
+        </section>
 
         <section className="trade-market-strip">
           {exchanges.map((exchange) => {
@@ -1403,7 +1444,7 @@ export default function TradeWorkspace() {
                 }}
               >
                 <strong>{exchangeProfiles[exchange].label}</strong>
-                <span>{accountCount} accounts</span>
+                <span>{accountCount} accounts / {exchangeProfiles[exchange].route}</span>
               </button>
             );
           })}
@@ -1604,6 +1645,38 @@ export default function TradeWorkspace() {
               </ul>
             )}
           </div>
+        </section>
+
+        <section className="trade-desk-grid" id="risk">
+          <article className="trade-desk-panel">
+            <div className="trade-card-head">
+              <div>
+                <span>Account Routing</span>
+                <strong>账户选择 {"->"} 交易所窗口 {"->"} 下单预览</strong>
+              </div>
+              <em>{selectedAccountRoute}</em>
+            </div>
+            <div className="trade-route-steps">
+              <span className={activeAccount ? "done" : ""}>1. Select account</span>
+              <span className={apiKeyMetadata.configured ? "done" : ""}>2. Validate credentials</span>
+              <span className={estimatedNotional > 0 ? "done" : ""}>3. Prepare preview</span>
+              <span className={lockReasons.length === 0 ? "done" : ""}>4. Safety gate</span>
+            </div>
+          </article>
+          <article className="trade-desk-panel">
+            <div className="trade-card-head">
+              <div>
+                <span>Risk Gate</span>
+                <strong>{lockReasons.length === 0 ? "Preview Open" : "Blocked"}</strong>
+              </div>
+              <em>{lockReasons.length} reason(s)</em>
+            </div>
+            <ul className="trade-risk-chips">
+              {(lockReasons.length ? lockReasons : ["Mock preview route is available"]).map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </article>
         </section>
 
         <section className="trade-api-manager" id="api-management">
