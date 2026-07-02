@@ -112,3 +112,29 @@ class Phase4SmallFundReviewResponse(BaseModel):
     read_only_audit_log_id: str
     order_submission_authorized: bool
     trading_flags_changed: bool
+
+
+class Phase4SmallFundOrderWindowApprovalRequest(BaseModel):
+    symbol: str = Field(min_length=1, max_length=40)
+    side: OrderSide
+    max_quantity: Decimal = Field(gt=0)
+    limit_price: Decimal = Field(gt=0)
+    max_notional: Decimal = Field(gt=0, le=100)
+    duration_minutes: int = Field(ge=1, le=10)
+    acknowledgement: str = Field(min_length=1, max_length=120)
+
+
+class Phase4SmallFundOrderWindowApprovalResponse(BaseModel):
+    audit_log_id: str
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    symbol: str
+    side: OrderSide
+    max_quantity: Decimal
+    limit_price: Decimal
+    max_notional: Decimal
+    duration_minutes: int
+    review_audit_log_id: str
+    read_only_audit_log_id: str
+    order_submission_authorized: bool
+    trading_flags_changed: bool

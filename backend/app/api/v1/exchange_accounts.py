@@ -12,6 +12,8 @@ from app.schemas.exchange_account import (
     ExchangeAccountResponse,
     ExchangeAccountUpdate,
     Phase4ReadinessReportResponse,
+    Phase4SmallFundOrderWindowApprovalRequest,
+    Phase4SmallFundOrderWindowApprovalResponse,
     Phase4SmallFundReviewRequest,
     Phase4SmallFundReviewResponse,
     RealReadOnlyCheckResponse,
@@ -30,6 +32,10 @@ from app.services.exchange_accounts import (
     upsert_api_key_secret,
 )
 from app.services.phase4_readiness import build_phase4_readiness_report
+from app.services.phase4_small_fund_order_window import (
+    Phase4SmallFundOrderWindowBlockedError,
+    record_phase4_small_fund_order_window_approval,
+)
 from app.services.phase4_small_fund_review import (
     Phase4SmallFundReviewBlockedError,
     record_phase4_small_fund_review,
@@ -379,4 +385,55 @@ def record_small_fund_review(
         read_only_audit_log_id=review.read_only_audit_log_id,
         order_submission_authorized=review.order_submission_authorized,
         trading_flags_changed=review.trading_flags_changed,
+    )
+
+
+@router.post(
+    "/{account_id}/phase4-small-fund-order-window-approvals",
+    response_model=Phase4SmallFundOrderWindowApprovalResponse,
+)
+def record_small_fund_order_window_approval(
+    account_id: str,
+    payload: Phase4SmallFundOrderWindowApprovalRequest,
+    current_user: User = Depends(get_reauthenticated_user),
+    db: Session = Depends(get_db),
+) -> Phase4SmallFundOrderWindowApprovalResponse:
+    try:
+        approval = record_phase4_small_fund_order_window_approval(
+            db,
+            user_id=current_user.id,
+            user_role=current_user.role,
+            exchange_account_id=account_id,
+            symbol=payload.symbol,
+            side=payload.side,
+            max_quantity=payload.max_quantity,
+            limit_price=payload.limit_price,
+            max_notional=payload.max_notional,
+            duration_minutes=payload.duration_minutes,
+            acknowledgement=payload.acknowledgement,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="account not found",
+        ) from exc
+    except Phase4SmallFundOrderWindowBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"reasons": list(exc.reasons)},
+        ) from exc
+    return Phase4SmallFundOrderWindowApprovalResponse(
+        audit_log_id=approval.audit_log_id,
+        exchange_account_id=approval.exchange_account_id,
+        exchange_name=approval.exchange_name,
+        symbol=approval.symbol,
+        side=approval.side,
+        max_quantity=approval.max_quantity,
+        limit_price=approval.limit_price,
+        max_notional=approval.max_notional,
+        duration_minutes=approval.duration_minutes,
+        review_audit_log_id=approval.review_audit_log_id,
+        read_only_audit_log_id=approval.read_only_audit_log_id,
+        order_submission_authorized=approval.order_submission_authorized,
+        trading_flags_changed=approval.trading_flags_changed,
     )

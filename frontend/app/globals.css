@@ -2692,6 +2692,36 @@ body {
   padding: 10px;
 }
 
+.trade-phase4-window-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.trade-phase4-window-summary article {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid #243244;
+  border-radius: 8px;
+  background: #0b1220;
+  padding: 12px;
+}
+
+.trade-phase4-window-summary span {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.trade-phase4-window-summary strong {
+  min-width: 0;
+  color: #e5edf5;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
 .trade-phase4-actions {
   display: flex;
   flex-wrap: wrap;
@@ -3396,6 +3426,7 @@ body {
   .trade-api-manager-grid,
   .trade-checklist-grid,
   .trade-phase4-grid,
+  .trade-phase4-window-summary,
   .trade-readiness-list,
   .trade-audit-workspace,
   .trade-bottom-grid {

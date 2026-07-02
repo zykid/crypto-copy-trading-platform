@@ -102,6 +102,7 @@ const symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"];
 const auditActionOptions = [
   "real.read_only.authentication.checked",
   "real.small_fund.review_recorded",
+  "real.small_fund.order_window.approval_recorded",
   "testnet.read_only.authentication.checked",
   "testnet.order_window.approval_recorded",
   "position_reconciliation.drift_detected",
@@ -165,6 +166,7 @@ const sensitiveKeys = new Set([
 ]);
 const testnetOrderWindowApprovalAck = "APPROVE_TESTNET_ORDER_WINDOW_ONLY";
 const phase4SmallFundReviewAck = "ACKNOWLEDGE_SMALL_FUND_REVIEW_ONLY";
+const phase4SmallFundOrderWindowAck = "APPROVE_REAL_SMALL_FUND_ORDER_WINDOW_ONLY";
 
 function resolveApiBase() {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -253,6 +255,8 @@ export default function TradeWorkspace() {
   const [phase4Readiness, setPhase4Readiness] = useState<Phase4ReadinessReport | null>(null);
   const [phase4MaxNotional, setPhase4MaxNotional] = useState("25");
   const [phase4ReviewPassword, setPhase4ReviewPassword] = useState("");
+  const [phase4OrderWindowPassword, setPhase4OrderWindowPassword] = useState("");
+  const [phase4OrderWindowDuration, setPhase4OrderWindowDuration] = useState("5");
   const [bottomTab, setBottomTab] = useState<BottomTab>("positions");
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
@@ -479,10 +483,15 @@ export default function TradeWorkspace() {
   const phase4ReviewAuditLogs = auditLogs.filter(
     (record) => record.action === "real.small_fund.review_recorded",
   );
+  const phase4OrderWindowAuditLogs = auditLogs.filter(
+    (record) => record.action === "real.small_fund.order_window.approval_recorded",
+  );
   const latestApprovalAuditLog = approvalAuditLogs[0] ?? null;
   const latestPhase4ReviewAuditLog = phase4ReviewAuditLogs[0] ?? null;
+  const latestPhase4OrderWindowAuditLog = phase4OrderWindowAuditLogs[0] ?? null;
   const selectedApprovalPayload =
-    selectedAuditLog?.action === "testnet.order_window.approval_recorded"
+    selectedAuditLog?.action === "testnet.order_window.approval_recorded" ||
+    selectedAuditLog?.action === "real.small_fund.order_window.approval_recorded"
       ? selectedAuditLog.payload
       : null;
   const phase4MaxNotionalValue = Number(phase4MaxNotional);
@@ -501,6 +510,25 @@ export default function TradeWorkspace() {
     phase4MaxNotionalValue > 0 &&
     phase4MaxNotionalValue <= 100 &&
     Boolean(phase4ReviewPassword);
+  const phase4OrderWindowDurationValue = Number(phase4OrderWindowDuration);
+  const canRecordPhase4OrderWindow =
+    Boolean(activeAccount) &&
+    activeAccount?.account_mode === "REAL" &&
+    activeAccount?.exchange_name === "okx" &&
+    session.role === "super_admin" &&
+    activePhase4Ready &&
+    Boolean(latestPhase4ReviewAuditLog) &&
+    orderForm.orderType === "LIMIT" &&
+    Number.isFinite(parsedQuantity) &&
+    parsedQuantity > 0 &&
+    Number.isFinite(parsedPrice) &&
+    parsedPrice > 0 &&
+    estimatedNotional > 0 &&
+    estimatedNotional <= phase4MaxNotionalValue &&
+    Number.isFinite(phase4OrderWindowDurationValue) &&
+    phase4OrderWindowDurationValue >= 1 &&
+    phase4OrderWindowDurationValue <= 10 &&
+    Boolean(phase4OrderWindowPassword);
   const auditSeverityCounts = auditLogs.reduce<Record<string, number>>((counts, record) => {
     counts[record.severity] = (counts[record.severity] ?? 0) + 1;
     return counts;
@@ -623,6 +651,15 @@ export default function TradeWorkspace() {
         : "Optional before small funds: record a super-admin review after REAL read-only readiness passes.",
       required: false,
       status: latestPhase4ReviewAuditLog ? "pass" : "warn",
+    },
+    {
+      id: "phase4-real-window",
+      title: "REAL small-fund order window",
+      detail: latestPhase4OrderWindowAuditLog
+        ? "REAL small-fund order window approval is recorded as audit-only evidence."
+        : "Optional final gate: record exact symbol, side, quantity, price, notional, and duration.",
+      required: false,
+      status: latestPhase4OrderWindowAuditLog ? "pass" : "warn",
     },
   ];
   const requiredPreRealItems = preRealChecklist.filter((item) => item.required);
@@ -885,6 +922,25 @@ export default function TradeWorkspace() {
     }
   }
 
+  function focusPhase4OrderWindowAudits() {
+    if (!activeAccount) {
+      appendApiLog("Focus Phase 4 REAL order window audit", false, "Select an account first");
+      return;
+    }
+    const nextFilters = {
+      ...auditFilters,
+      exchangeAccountId: activeAccount.id,
+      action: "real.small_fund.order_window.approval_recorded",
+      severity: "",
+    };
+    setAuditFilters(nextFilters);
+    setBottomTab("audit");
+    setLastStatus("PHASE 4 ORDER WINDOW AUDIT FILTER READY");
+    if (canViewAuditLogs && session.token) {
+      void loadAuditLogs(nextFilters);
+    }
+  }
+
   async function loadPhase4Readiness() {
     if (!activeAccount) {
       appendApiLog("Load Phase 4 readiness", false, "Select a REAL OKX account first");
@@ -947,6 +1003,56 @@ export default function TradeWorkspace() {
       }
     } catch (error) {
       appendApiLog("Record Phase 4 review", false, String(error));
+    } finally {
+      setApiBusy(false);
+    }
+  }
+
+  async function recordPhase4OrderWindowApproval() {
+    if (!activeAccount || !canRecordPhase4OrderWindow) {
+      return;
+    }
+    if (!phase4OrderWindowPassword) {
+      appendApiLog("Record Phase 4 REAL order window", false, "Current password is required");
+      return;
+    }
+    setApiBusy(true);
+    try {
+      const reauthToken = await createReauthenticationToken(phase4OrderWindowPassword);
+      const result = await apiRequest(
+        "POST",
+        `/exchange-accounts/${activeAccount.id}/phase4-small-fund-order-window-approvals`,
+        {
+          symbol: normalizedPreviewSymbol,
+          side: orderSide,
+          max_quantity: parsedQuantity,
+          limit_price: parsedPrice,
+          max_notional: estimatedNotional,
+          duration_minutes: phase4OrderWindowDurationValue,
+          acknowledgement: phase4SmallFundOrderWindowAck,
+        },
+        200,
+        { "X-Reauthentication-Token": reauthToken },
+      );
+      setPhase4OrderWindowPassword("");
+      appendApiLog("Record Phase 4 REAL order window", true, result);
+      const approvalAuditLogId =
+        result && typeof result === "object" && "audit_log_id" in result
+          ? String(result.audit_log_id)
+          : "";
+      const nextFilters = {
+        ...auditFilters,
+        exchangeAccountId: activeAccount.id,
+        action: "real.small_fund.order_window.approval_recorded",
+        severity: "",
+      };
+      setAuditFilters(nextFilters);
+      setBottomTab("audit");
+      if (canViewAuditLogs) {
+        await loadAuditLogs(nextFilters, approvalAuditLogId);
+      }
+    } catch (error) {
+      appendApiLog("Record Phase 4 REAL order window", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -1633,6 +1739,87 @@ export default function TradeWorkspace() {
               Select a REAL OKX account and load readiness before recording a review audit.
             </p>
           )}
+        </section>
+
+        <section className="trade-phase4-card" id="phase4-real-order-window">
+          <div className="trade-phase4-head">
+            <div>
+              <span>Phase 4 Control</span>
+              <strong>REAL Small-Fund Order Window</strong>
+              <p>
+                Records the exact REAL order-window approval as append-only audit evidence.
+                This still does not enable trading or submit an exchange order.
+              </p>
+            </div>
+            <div className={latestPhase4OrderWindowAuditLog ? "phase4-status ready" : "phase4-status blocked"}>
+              <span>{canRecordPhase4OrderWindow ? "READY TO RECORD" : "WINDOW LOCKED"}</span>
+              <strong>{latestPhase4OrderWindowAuditLog ? "WINDOW RECORDED" : "NO WINDOW AUDIT"}</strong>
+            </div>
+          </div>
+          <div className="trade-phase4-window-summary">
+            <article>
+              <span>Symbol</span>
+              <strong>{normalizedPreviewSymbol}</strong>
+            </article>
+            <article>
+              <span>Side</span>
+              <strong className={orderSide === "BUY" ? "preview-buy" : "preview-sell"}>
+                {orderSide}
+              </strong>
+            </article>
+            <article>
+              <span>Limit Price</span>
+              <strong>{orderForm.orderType === "LIMIT" ? `${formatNumber(parsedPrice)} USDT` : "LIMIT required"}</strong>
+            </article>
+            <article>
+              <span>Quantity</span>
+              <strong>{Number.isFinite(parsedQuantity) ? parsedQuantity : "-"}</strong>
+            </article>
+            <article>
+              <span>Max Notional</span>
+              <strong>{formatNumber(estimatedNotional)} USDT</strong>
+            </article>
+          </div>
+          <div className="trade-phase4-grid">
+            <label>
+              <span>Window Duration</span>
+              <input
+                inputMode="numeric"
+                value={phase4OrderWindowDuration}
+                onChange={(event) => setPhase4OrderWindowDuration(event.target.value)}
+                placeholder="1-10 minutes"
+              />
+            </label>
+            <label>
+              <span>Current Password</span>
+              <input
+                type="password"
+                value={phase4OrderWindowPassword}
+                onChange={(event) => setPhase4OrderWindowPassword(event.target.value)}
+                placeholder="Required for reauthentication"
+              />
+            </label>
+            <button
+              className="trade-secondary-button"
+              onClick={focusPhase4OrderWindowAudits}
+              disabled={!activeAccount || !canViewAuditLogs || auditBusy}
+            >
+              Load Window Audits
+            </button>
+            <button
+              className="trade-submit compact"
+              onClick={recordPhase4OrderWindowApproval}
+              disabled={!canRecordPhase4OrderWindow || apiBusy}
+            >
+              Record Window Audit
+            </button>
+          </div>
+          <div className="trade-phase4-actions">
+            <span>
+              Required acknowledgement: <strong>{phase4SmallFundOrderWindowAck}</strong>
+            </span>
+            <span>LIMIT only / review cap {formatNumber(phase4MaxNotionalValue)} USDT / no live order</span>
+          </div>
         </section>
 
         <section className="trade-api-grid">
