@@ -2690,6 +2690,60 @@ body {
   margin-left: 6px;
 }
 
+.trade-audit-highlight {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(245, 189, 66, 0.35);
+  border-radius: 8px;
+  background: rgba(245, 189, 66, 0.08);
+  padding: 12px;
+}
+
+.trade-audit-highlight > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trade-audit-highlight span,
+.trade-audit-highlight dt,
+.trade-approval-grid span {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.trade-audit-highlight strong {
+  color: #f8fafc;
+  overflow-wrap: anywhere;
+}
+
+.trade-audit-highlight dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.trade-audit-highlight dl div,
+.trade-approval-grid div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #243244;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.35);
+  padding: 10px;
+}
+
+.trade-audit-highlight dd {
+  margin: 0;
+  color: #f5bd42;
+  font-size: 12px;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
 .trade-audit-filters {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
@@ -2846,6 +2900,17 @@ body {
   font-size: 12px;
   overflow-wrap: anywhere;
   text-align: right;
+}
+
+.trade-approval-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.trade-approval-grid strong {
+  color: #f5bd42;
+  overflow-wrap: anywhere;
 }
 
 .trade-audit-detail pre {

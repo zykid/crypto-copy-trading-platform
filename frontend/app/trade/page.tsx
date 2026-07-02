@@ -50,6 +50,13 @@ type AuditLogRecord = {
 };
 
 type BottomTab = "positions" | "orders" | "history" | "audit";
+type AuditFilters = {
+  userId: string;
+  exchangeAccountId: string;
+  action: string;
+  severity: string;
+  limit: string;
+};
 
 const emptySession: SessionState = {
   token: "",
@@ -221,7 +228,7 @@ export default function TradeWorkspace() {
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
   const [auditLoadedAt, setAuditLoadedAt] = useState("");
   const [selectedAuditLogId, setSelectedAuditLogId] = useState("");
-  const [auditFilters, setAuditFilters] = useState({
+  const [auditFilters, setAuditFilters] = useState<AuditFilters>({
     userId: "",
     exchangeAccountId: "",
     action: "",
@@ -431,6 +438,14 @@ export default function TradeWorkspace() {
   ].filter(Boolean) as string[];
   const canViewAuditLogs = session.role === "super_admin" || session.role === "admin";
   const selectedAuditLog = auditLogs.find((record) => record.id === selectedAuditLogId);
+  const approvalAuditLogs = auditLogs.filter(
+    (record) => record.action === "testnet.order_window.approval_recorded",
+  );
+  const latestApprovalAuditLog = approvalAuditLogs[0] ?? null;
+  const selectedApprovalPayload =
+    selectedAuditLog?.action === "testnet.order_window.approval_recorded"
+      ? selectedAuditLog.payload
+      : null;
   const auditSeverityCounts = auditLogs.reduce<Record<string, number>>((counts, record) => {
     counts[record.severity] = (counts[record.severity] ?? 0) + 1;
     return counts;
@@ -576,7 +591,10 @@ export default function TradeWorkspace() {
     });
   }
 
-  async function loadAuditLogs() {
+  async function loadAuditLogs(
+    filterOverride: AuditFilters = auditFilters,
+    preferredSelectedId = "",
+  ) {
     if (!canViewAuditLogs) {
       appendApiLog("Load audit logs", false, "Admin role required");
       return;
@@ -584,31 +602,33 @@ export default function TradeWorkspace() {
     setAuditBusy(true);
     try {
       const params = new URLSearchParams();
-      if (auditFilters.userId.trim()) {
-        params.set("user_id", auditFilters.userId.trim());
+      if (filterOverride.userId.trim()) {
+        params.set("user_id", filterOverride.userId.trim());
       }
-      if (auditFilters.exchangeAccountId.trim()) {
-        params.set("exchange_account_id", auditFilters.exchangeAccountId.trim());
+      if (filterOverride.exchangeAccountId.trim()) {
+        params.set("exchange_account_id", filterOverride.exchangeAccountId.trim());
       }
-      if (auditFilters.action.trim()) {
-        params.set("action", auditFilters.action.trim());
+      if (filterOverride.action.trim()) {
+        params.set("action", filterOverride.action.trim());
       }
-      if (auditFilters.severity.trim()) {
-        params.set("severity", auditFilters.severity.trim());
+      if (filterOverride.severity.trim()) {
+        params.set("severity", filterOverride.severity.trim());
       }
-      params.set("limit", auditFilters.limit || "50");
+      params.set("limit", filterOverride.limit || "50");
 
       const payload = await apiRequest("GET", `/admin/observability/audit-logs?${params}`);
       if (!Array.isArray(payload)) {
         throw new Error("audit log response is not an array");
       }
-      setAuditLogs(payload as AuditLogRecord[]);
-      setSelectedAuditLogId(payload[0]?.id ?? "");
+      const records = payload as AuditLogRecord[];
+      setAuditLogs(records);
+      const preferredRecord = records.find((record) => record.id === preferredSelectedId);
+      setSelectedAuditLogId(preferredRecord?.id ?? records[0]?.id ?? "");
       setAuditLoadedAt(new Date().toLocaleString());
       appendApiLog("Load audit logs", true, {
-        count: payload.length,
-        action: auditFilters.action || "*",
-        severity: auditFilters.severity || "*",
+        count: records.length,
+        action: filterOverride.action || "*",
+        severity: filterOverride.severity || "*",
       });
     } catch (error) {
       appendApiLog("Load audit logs", false, String(error));
@@ -630,16 +650,39 @@ export default function TradeWorkspace() {
   }
 
   function focusAuditForAccount(account: ExchangeAccount) {
-    setAuditFilters((current) => ({
-      ...current,
+    const nextFilters = {
+      ...auditFilters,
       exchangeAccountId: account.id,
       action:
         account.account_mode === "REAL"
           ? "real.read_only.authentication.checked"
           : "testnet.read_only.authentication.checked",
-    }));
+    };
+    setAuditFilters(nextFilters);
     setBottomTab("audit");
     setLastStatus("AUDIT FILTER READY");
+    if (canViewAuditLogs && session.token) {
+      void loadAuditLogs(nextFilters);
+    }
+  }
+
+  function focusTestnetApprovalAudits() {
+    if (!activeAccount) {
+      appendApiLog("Focus testnet approval audit", false, "Select an account first");
+      return;
+    }
+    const nextFilters = {
+      ...auditFilters,
+      exchangeAccountId: activeAccount.id,
+      action: "testnet.order_window.approval_recorded",
+      severity: "",
+    };
+    setAuditFilters(nextFilters);
+    setBottomTab("audit");
+    setLastStatus("APPROVAL AUDIT FILTER READY");
+    if (canViewAuditLogs && session.token) {
+      void loadAuditLogs(nextFilters);
+    }
   }
 
   function confirmOrderPreview() {
@@ -678,13 +721,22 @@ export default function TradeWorkspace() {
       );
       setOrderApprovalPassword("");
       appendApiLog("Record testnet order window", true, result);
-      setAuditFilters((current) => ({
-        ...current,
+      const approvalAuditLogId =
+        result && typeof result === "object" && "audit_log_id" in result
+          ? String(result.audit_log_id)
+          : "";
+      const nextFilters = {
+        ...auditFilters,
         exchangeAccountId: activeAccount.id,
         action: "testnet.order_window.approval_recorded",
-      }));
+        severity: "",
+      };
+      setAuditFilters(nextFilters);
       setBottomTab("audit");
       setIsOrderPreviewOpen(false);
+      if (canViewAuditLogs) {
+        await loadAuditLogs(nextFilters, approvalAuditLogId);
+      }
     } catch (error) {
       appendApiLog("Record testnet order window", false, String(error));
     } finally {
@@ -1272,6 +1324,13 @@ export default function TradeWorkspace() {
                       </button>
                       <button
                         className="trade-secondary-button"
+                        onClick={focusTestnetApprovalAudits}
+                        disabled={!activeAccountId}
+                      >
+                        TESTNET Windows
+                      </button>
+                      <button
+                        className="trade-secondary-button"
                         onClick={() => setAuditFilterPreset("clear")}
                       >
                         Clear Filters
@@ -1371,7 +1430,44 @@ export default function TradeWorkspace() {
                           {severity} <strong>{auditSeverityCounts[severity] ?? 0}</strong>
                         </span>
                       ))}
+                      <span>
+                        TESTNET Windows <strong>{approvalAuditLogs.length}</strong>
+                      </span>
                     </div>
+                    {latestApprovalAuditLog ? (
+                      <article className="trade-audit-highlight">
+                        <div>
+                          <span>Latest TESTNET approval window</span>
+                          <strong>{formatDateTime(latestApprovalAuditLog.created_at)}</strong>
+                        </div>
+                        <dl>
+                          <div>
+                            <dt>Symbol</dt>
+                            <dd>{String(latestApprovalAuditLog.payload.symbol ?? "-")}</dd>
+                          </div>
+                          <div>
+                            <dt>Side</dt>
+                            <dd>{String(latestApprovalAuditLog.payload.side ?? "-")}</dd>
+                          </div>
+                          <div>
+                            <dt>Order auth</dt>
+                            <dd>
+                              {latestApprovalAuditLog.payload.order_submission_authorized === true
+                                ? "AUTHORIZED"
+                                : "AUDIT ONLY"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Expires</dt>
+                            <dd>
+                              {latestApprovalAuditLog.payload.expires_at
+                                ? formatDateTime(String(latestApprovalAuditLog.payload.expires_at))
+                                : "-"}
+                            </dd>
+                          </div>
+                        </dl>
+                      </article>
+                    ) : null}
                     {auditLogs.length === 0 ? (
                       <div className="trade-empty-table">
                         No audit records loaded. Use filters and Load to query.
@@ -1429,6 +1525,42 @@ export default function TradeWorkspace() {
                                   <dd>{selectedAuditLog.id}</dd>
                                 </div>
                               </dl>
+                              {selectedApprovalPayload ? (
+                                <div className="trade-approval-grid">
+                                  <div>
+                                    <span>Symbol</span>
+                                    <strong>{String(selectedApprovalPayload.symbol ?? "-")}</strong>
+                                  </div>
+                                  <div>
+                                    <span>Side</span>
+                                    <strong>{String(selectedApprovalPayload.side ?? "-")}</strong>
+                                  </div>
+                                  <div>
+                                    <span>Max Quantity</span>
+                                    <strong>{String(selectedApprovalPayload.max_quantity ?? "-")}</strong>
+                                  </div>
+                                  <div>
+                                    <span>Max Notional</span>
+                                    <strong>{String(selectedApprovalPayload.max_notional ?? "-")}</strong>
+                                  </div>
+                                  <div>
+                                    <span>Submission</span>
+                                    <strong>
+                                      {selectedApprovalPayload.order_submission_authorized === true
+                                        ? "AUTHORIZED"
+                                        : "AUDIT ONLY"}
+                                    </strong>
+                                  </div>
+                                  <div>
+                                    <span>Trading Flags</span>
+                                    <strong>
+                                      {selectedApprovalPayload.trading_flags_changed === true
+                                        ? "CHANGED"
+                                        : "UNCHANGED"}
+                                    </strong>
+                                  </div>
+                                </div>
+                              ) : null}
                               <pre>{prettyJson(selectedAuditLog.payload)}</pre>
                             </>
                           ) : (
