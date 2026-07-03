@@ -7,6 +7,7 @@ from app.api.v1.admin_storage import router as admin_storage_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.exchange_accounts import router as exchange_accounts_router
 from app.api.v1.health import router as health_router
+from app.api.v1.market_data import router as market_data_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.permissions import router as permissions_router
@@ -49,6 +50,11 @@ def create_app() -> FastAPI:
     app.include_router(signals_router, prefix="/api/v1/signals", tags=["signals"])
     app.include_router(orders_router, prefix="/api/v1/orders", tags=["orders"])
     app.include_router(positions_router, prefix="/api/v1/positions", tags=["positions"])
+    app.include_router(
+        market_data_router,
+        prefix="/api/v1/market-data",
+        tags=["market-data"],
+    )
     app.include_router(
         risk_settings_router,
         prefix="/api/v1/risk-settings",

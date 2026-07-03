@@ -54,6 +54,9 @@ services:
       TRADING_DATA_ROOT: ${TRADING_DATA_ROOT:-}
       STORAGE_LOCATION_ALLOWLIST: ${STORAGE_LOCATION_ALLOWLIST:-}
       TESTNET_ADAPTERS_ENABLED: ${TESTNET_ADAPTERS_ENABLED:-false}
+      GEXBOT_API_BASE_URL: ${GEXBOT_API_BASE_URL:-https://api.gex.bot/v2}
+      GEXBOT_API_KEY: ${GEXBOT_API_KEY:-}
+      GEXBOT_TIMEOUT_SECONDS: ${GEXBOT_TIMEOUT_SECONDS:-5}
     depends_on:
       postgres:
         condition: service_healthy

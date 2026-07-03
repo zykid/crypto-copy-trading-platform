@@ -29,6 +29,16 @@ type ApiKeyMetadata = {
   warning?: string;
 };
 
+type MarketDataProvider = {
+  id: string;
+  name: string;
+  base_url: string;
+  configured: boolean;
+  auth_required: boolean;
+  read_only: boolean;
+  supports: string[];
+};
+
 type Phase4ReadinessCheck = {
   name: string;
   status: string;
@@ -306,6 +316,14 @@ export default function TradeWorkspace() {
     passphrase: "",
     password: "",
   });
+  const [marketDataProviders, setMarketDataProviders] = useState<MarketDataProvider[]>([]);
+  const [marketDataBusy, setMarketDataBusy] = useState(false);
+  const [marketDataForm, setMarketDataForm] = useState({
+    ticker: "SPX",
+    package: "classic",
+    category: "gex_full",
+  });
+  const [marketDataResult, setMarketDataResult] = useState<unknown>(null);
 
   const appendApiLog = useCallback((title: string, ok: boolean, detail: unknown) => {
     setApiLogs((current) => [
@@ -347,6 +365,13 @@ export default function TradeWorkspace() {
     setAccounts(Array.isArray(payload) ? (payload as ExchangeAccount[]) : []);
   }, [apiRequest]);
 
+  const refreshMarketDataProviders = useCallback(async () => {
+    const payload = (await apiRequest("GET", "/market-data/providers")) as {
+      providers?: MarketDataProvider[];
+    };
+    setMarketDataProviders(Array.isArray(payload.providers) ? payload.providers : []);
+  }, [apiRequest]);
+
   useEffect(() => {
     const token = readStoredToken();
     if (!token) {
@@ -382,6 +407,16 @@ export default function TradeWorkspace() {
 
     void loadSession().catch(() => setLastStatus("SESSION CHECK FAILED"));
   }, [apiRoot]);
+
+  useEffect(() => {
+    if (!session.token) {
+      setMarketDataProviders([]);
+      return;
+    }
+    void refreshMarketDataProviders().catch((error) =>
+      appendApiLog("Load market data providers", false, String(error)),
+    );
+  }, [appendApiLog, refreshMarketDataProviders, session.token]);
 
   const exchangeAccounts = useMemo(
     () => accounts.filter((account) => account.exchange_name === activeExchange),
@@ -779,6 +814,7 @@ export default function TradeWorkspace() {
     "All required checks are complete. Next step is a manual small-fund review, not live automation.";
   const orderLocked = lockReasons.length > 0;
   const canRecordTestnetOrderWindow = testnetWindowReasons.length === 0;
+  const gexbotProvider = marketDataProviders.find((provider) => provider.id === "gexbot");
 
   const marketRows = [
     { price: formatNumber(activeMarket.ask), amount: "0.184", side: "ask" },
@@ -894,6 +930,52 @@ export default function TradeWorkspace() {
       appendApiLog("Run read-only authentication", false, String(error));
     } finally {
       setApiBusy(false);
+    }
+  }
+
+  async function loadGexbotTickers() {
+    if (!session.token) {
+      appendApiLog("Load GEXBot tickers", false, "Please log in first");
+      return;
+    }
+    setMarketDataBusy(true);
+    try {
+      const result = await apiRequest("GET", "/market-data/gexbot/tickers");
+      setMarketDataResult(result);
+      appendApiLog("Load GEXBot tickers", true, result);
+    } catch (error) {
+      appendApiLog("Load GEXBot tickers", false, String(error));
+    } finally {
+      setMarketDataBusy(false);
+    }
+  }
+
+  async function loadGexbotDataset() {
+    if (!session.token) {
+      appendApiLog("Load GEXBot dataset", false, "Please log in first");
+      return;
+    }
+    const ticker = marketDataForm.ticker.trim().toUpperCase();
+    const packageName = marketDataForm.package.trim().toLowerCase();
+    const category = marketDataForm.category.trim().toLowerCase();
+    if (!ticker || !category) {
+      appendApiLog("Load GEXBot dataset", false, "Ticker and category are required");
+      return;
+    }
+    setMarketDataBusy(true);
+    try {
+      const result = await apiRequest(
+        "GET",
+        `/market-data/gexbot/${encodeURIComponent(packageName)}/${encodeURIComponent(
+          ticker,
+        )}/${encodeURIComponent(category)}`,
+      );
+      setMarketDataResult(result);
+      appendApiLog("Load GEXBot dataset", true, result);
+    } catch (error) {
+      appendApiLog("Load GEXBot dataset", false, String(error));
+    } finally {
+      setMarketDataBusy(false);
     }
   }
 
@@ -1677,6 +1759,107 @@ export default function TradeWorkspace() {
               ))}
             </ul>
           </article>
+        </section>
+
+        <section className="trade-market-data-panel" id="market-data">
+          <div className="trade-card-head">
+            <div>
+              <span>市场数据服务</span>
+              <strong>GEXBot 只读数据源</strong>
+            </div>
+            <button
+              className="trade-secondary-button"
+              onClick={refreshMarketDataProviders}
+              disabled={!session.token || marketDataBusy}
+            >
+              刷新
+            </button>
+          </div>
+          <div className="trade-market-data-grid">
+            <article className="trade-market-data-status">
+              <span>Provider</span>
+              <strong>{gexbotProvider?.name ?? "GEXBot"}</strong>
+              <p>
+                {gexbotProvider?.configured
+                  ? "后端已配置 API Key，可读取授权数据集。"
+                  : "后端未配置 API Key，仅可读取公开或本地可用数据。"}
+              </p>
+              <dl>
+                <div>
+                  <dt>模式</dt>
+                  <dd>Read Only</dd>
+                </div>
+                <div>
+                  <dt>接口</dt>
+                  <dd>{gexbotProvider?.supports?.join(" / ") ?? "tickers / classic / state"}</dd>
+                </div>
+              </dl>
+            </article>
+            <article className="trade-market-data-query">
+              <label>
+                Ticker
+                <input
+                  value={marketDataForm.ticker}
+                  onChange={(event) =>
+                    setMarketDataForm((current) => ({
+                      ...current,
+                      ticker: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                数据包
+                <select
+                  value={marketDataForm.package}
+                  onChange={(event) =>
+                    setMarketDataForm((current) => ({
+                      ...current,
+                      package: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="classic">classic</option>
+                  <option value="state">state</option>
+                </select>
+              </label>
+              <label>
+                Category
+                <input
+                  value={marketDataForm.category}
+                  onChange={(event) =>
+                    setMarketDataForm((current) => ({
+                      ...current,
+                      category: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <div className="trade-action-row">
+                <button
+                  className="trade-secondary-button"
+                  onClick={loadGexbotTickers}
+                  disabled={!session.token || marketDataBusy}
+                >
+                  读取标的列表
+                </button>
+                <button
+                  className="trade-submit compact"
+                  onClick={loadGexbotDataset}
+                  disabled={!session.token || marketDataBusy}
+                >
+                  读取数据集
+                </button>
+              </div>
+            </article>
+          </div>
+          <div className="trade-market-data-result">
+            <div>
+              <strong>最近市场数据结果</strong>
+              <span>{marketDataBusy ? "读取中" : marketDataResult ? "已加载" : "待执行"}</span>
+            </div>
+            <pre>{marketDataResult ? prettyJson(marketDataResult) : "暂无数据"}</pre>
+          </div>
         </section>
 
         <section className="trade-api-manager" id="api-management">
