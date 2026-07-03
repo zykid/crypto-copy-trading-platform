@@ -358,6 +358,13 @@ function defaultAccountLabel(exchangeName: ExchangeName, mode: AccountMode) {
   return `${exchangeName.toUpperCase()} 测试网只读账户`;
 }
 
+function safeAccountModeLabel(mode: AccountMode | string | undefined) {
+  if (!mode) {
+    return "未选择";
+  }
+  return accountModeLabels[mode as AccountMode] ?? String(mode);
+}
+
 function formatNumber(value: number, maximumFractionDigits = 2) {
   if (!Number.isFinite(value)) {
     return "-";
@@ -639,7 +646,7 @@ export default function TradeWorkspace() {
         : "只读"
       : "未启用";
   const selectedAccountRoute = activeAccount
-    ? `${activeExchangeProfile.label} / ${accountModeLabels[activeAccount.account_mode]} / ${
+    ? `${activeExchangeProfile.label} / ${safeAccountModeLabel(activeAccount.account_mode)} / ${
         activeAccount.trading_enabled ? "交易标记已开启" : "只读标记"
       }`
     : "请选择交易所账户绑定当前下单面板。";
@@ -1067,11 +1074,15 @@ export default function TradeWorkspace() {
 
   async function runReadOnlyCheck() {
     if (!activeAccount) {
-      appendApiLog("执行只读认证", false, "请先选择账户");
+      appendApiLog("测试连接", false, "请先选择账户");
       return;
     }
     if (activeAccount.account_mode === "SIMULATION") {
-      appendApiLog("执行只读认证", false, "模拟账户不使用交易所 API");
+      appendApiLog("测试连接", false, "模拟账户不使用交易所 API");
+      return;
+    }
+    if (!apiKeyMetadata.configured) {
+      appendApiLog("测试连接", false, "请先加密保存密钥；连接测试是可选步骤，不会阻止保存");
       return;
     }
     setApiBusy(true);
@@ -1088,9 +1099,39 @@ export default function TradeWorkspace() {
         200,
         { "X-Reauthentication-Token": reauthToken },
       );
-      appendApiLog("执行只读认证", true, result);
+      appendApiLog("测试连接", true, result);
     } catch (error) {
-      appendApiLog("执行只读认证", false, String(error));
+      appendApiLog("测试连接", false, String(error));
+    } finally {
+      setApiBusy(false);
+    }
+  }
+
+  async function deleteApiKey() {
+    if (!activeAccount) {
+      appendApiLog("删除密钥", false, "请先选择账户");
+      return;
+    }
+    if (!apiKeyMetadata.configured) {
+      appendApiLog("删除密钥", false, "当前账户没有已保存的密钥");
+      return;
+    }
+    const confirmed = window.confirm("确认删除该账户的加密密钥？删除后需要重新配置 API Key。");
+    if (!confirmed) {
+      appendApiLog("删除密钥", false, "用户取消删除");
+      return;
+    }
+    setApiBusy(true);
+    try {
+      await apiRequest("DELETE", `/exchange-accounts/${activeAccount.id}/api-key`, undefined, 204);
+      setApiKeyMetadata(emptyMetadata);
+      appendApiLog("删除密钥", true, {
+        exchange_account_id: activeAccount.id,
+        configured: false,
+      });
+      await refreshAccounts();
+    } catch (error) {
+      appendApiLog("删除密钥", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -1272,7 +1313,7 @@ export default function TradeWorkspace() {
     setActiveExchange(account.exchange_name);
     setActiveAccountId(account.id);
     setBottomTab("positions");
-    setLastStatus("ACCOUNT SELECTED");
+    setLastStatus("账户已选择");
   }
 
   function focusAuditForAccount(account: ExchangeAccount) {
@@ -1825,7 +1866,7 @@ export default function TradeWorkspace() {
                 </div>
                 <div>
                   <dt>模式</dt>
-                  <dd>{activeAccount ? accountModeLabels[activeAccount.account_mode] : "未选择"}</dd>
+                <dd>{safeAccountModeLabel(activeAccount?.account_mode)}</dd>
                 </div>
                 <div>
                   <dt>路由</dt>
@@ -1926,7 +1967,7 @@ export default function TradeWorkspace() {
                 ) : (
                   exchangeAccounts.map((account) => (
                     <option key={account.id} value={account.id}>
-                      {account.account_label} / {accountModeLabels[account.account_mode]}
+                      {account.account_label} / {safeAccountModeLabel(account.account_mode)}
                     </option>
                   ))
                 )}
@@ -2112,7 +2153,7 @@ export default function TradeWorkspace() {
           <div className="trade-card-head">
             <div>
               <span>API 管理</span>
-              <strong>账户选择 / 密钥状态 / 只读认证</strong>
+              <strong>统一添加 / 密钥状态 / 测试连接</strong>
             </div>
             <button className="trade-secondary-button" onClick={refreshAccounts} disabled={!session.token || apiBusy}>
               刷新
@@ -2121,10 +2162,10 @@ export default function TradeWorkspace() {
 
           <div className="trade-api-manager-grid">
             <div className="trade-api-panel">
-              <h2>账户选择</h2>
+              <h2>已添加账户</h2>
               <div className="trade-account-list">
                 {exchangeAccounts.length === 0 ? (
-                  <p className="trade-muted">当前交易所还没有账户。</p>
+                  <p className="trade-muted">当前交易所还没有账户。填写右侧信息后可创建账户并保存密钥。</p>
                 ) : (
                   exchangeAccounts.map((account) => (
                     <article
@@ -2137,9 +2178,9 @@ export default function TradeWorkspace() {
                     >
                       <div>
                         <strong>{account.account_label}</strong>
-                  <span>
-                    {accountModeLabels[account.account_mode]} / {account.trading_enabled ? "交易已开启" : "只读"}
-                  </span>
+                        <span>
+                          {safeAccountModeLabel(account.account_mode)} / {account.trading_enabled ? "交易已开启" : "只读"}
+                        </span>
                       </div>
                       <div className="trade-account-actions">
                         <button onClick={() => selectAccountForTrading(account)}>用于下单面板</button>
@@ -2181,7 +2222,8 @@ export default function TradeWorkspace() {
             </div>
 
             <div className="trade-api-panel">
-              <h2>创建账户</h2>
+              <h2>添加交易所账户</h2>
+              <p className="trade-muted">先选择交易所和模式，创建账户后再保存密钥。保存密钥不会强制执行连接测试。</p>
               <div className="trade-form-grid">
                 <label>
                   交易所
@@ -2241,7 +2283,8 @@ export default function TradeWorkspace() {
             </div>
 
             <div className="trade-api-panel">
-              <h2>加密密钥</h2>
+              <h2>API Key 与连接测试</h2>
+              <p className="trade-muted">连接测试是独立功能。正式环境建议先测试连接，再用于小额资金人工复核。</p>
               <div className="trade-form-grid">
                 <label>
                   API Key
@@ -2266,7 +2309,7 @@ export default function TradeWorkspace() {
                   />
                 </label>
                 <label>
-                  Passphrase
+                  Passphrase 口令
                   <input
                     autoComplete="off"
                     type="password"
@@ -2305,9 +2348,16 @@ export default function TradeWorkspace() {
                 <button
                   className="trade-submit compact"
                   onClick={runReadOnlyCheck}
-                  disabled={!activeAccount || !secretForm.password || apiBusy}
+                  disabled={!activeAccount || !apiKeyMetadata.configured || !secretForm.password || apiBusy}
                 >
-                  执行只读认证
+                  测试连接
+                </button>
+                <button
+                  className="trade-danger-button span-2"
+                  onClick={deleteApiKey}
+                  disabled={!activeAccount || !apiKeyMetadata.configured || apiBusy}
+                >
+                  删除密钥
                 </button>
               </div>
             </div>
@@ -3123,7 +3173,7 @@ export default function TradeWorkspace() {
               </div>
               <div>
                  <dt>模式</dt>
-                 <dd>{activeAccount ? accountModeLabels[activeAccount.account_mode] : "-"}</dd>
+                 <dd>{safeAccountModeLabel(activeAccount?.account_mode)}</dd>
               </div>
               <div>
                  <dt>账户状态</dt>

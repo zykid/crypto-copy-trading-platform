@@ -169,7 +169,7 @@ def read_api_key_metadata(
 @router.delete("/{account_id}/api-key", status_code=status.HTTP_204_NO_CONTENT)
 def remove_api_key(
     account_id: str,
-    current_user: User = Depends(get_reauthenticated_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     account = get_owned_account(db, user_id=current_user.id, account_id=account_id)

@@ -146,7 +146,11 @@ def test_reauthentication_token_must_match_user_and_auth_version(
         )
 
 
-def test_api_key_mutations_require_recent_reauthentication() -> None:
-    for endpoint in (set_api_key, remove_api_key):
-        dependency = signature(endpoint).parameters["current_user"].default
-        assert dependency.dependency is get_reauthenticated_user
+def test_set_api_key_requires_recent_reauthentication() -> None:
+    dependency = signature(set_api_key).parameters["current_user"].default
+    assert dependency.dependency is get_reauthenticated_user
+
+
+def test_remove_api_key_requires_authenticated_session() -> None:
+    dependency = signature(remove_api_key).parameters["current_user"].default
+    assert dependency.dependency is get_current_user

@@ -3546,6 +3546,28 @@ body {
   color: #64748b;
 }
 
+.trade-danger-button {
+  border: 1px solid #7f1d1d;
+  border-radius: 8px;
+  min-height: 38px;
+  background: rgba(127, 29, 29, 0.2);
+  color: #fecaca;
+  font-weight: 900;
+  padding: 8px 12px;
+}
+
+.trade-danger-button:hover:not(:disabled) {
+  border-color: #ef4444;
+  background: rgba(185, 28, 28, 0.35);
+  color: #ffffff;
+}
+
+.trade-danger-button:disabled {
+  border-color: #243244;
+  background: #111827;
+  color: #64748b;
+}
+
 .trade-submit.compact {
   min-height: 38px;
   padding: 8px 12px;
@@ -3555,6 +3577,10 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.trade-action-row .span-2 {
+  grid-column: 1 / -1;
 }
 
 .trade-action-log {
