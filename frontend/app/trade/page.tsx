@@ -98,7 +98,7 @@ const emptyMetadata: ApiKeyMetadata = {
   has_passphrase: false,
 };
 
-const apiBaseFallback = "http://192.168.2.42:8000/api/v1";
+const apiBaseFallback = "http://localhost:8000/api/v1";
 const exchanges: ExchangeName[] = ["okx", "binance", "bybit", "mock"];
 const symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"];
 const auditActionOptions = [
@@ -261,7 +261,7 @@ export default function TradeWorkspace() {
     price: "",
     quantity: "0.001",
   });
-  const [lastStatus, setLastStatus] = useState("READ ONLY");
+  const [lastStatus, setLastStatus] = useState("只读");
   const [apiKeyMetadata, setApiKeyMetadata] = useState<ApiKeyMetadata>(emptyMetadata);
   const [apiBusy, setApiBusy] = useState(false);
   const [apiLogs, setApiLogs] = useState<ApiActionLog[]>([]);
@@ -500,7 +500,7 @@ export default function TradeWorkspace() {
     trading_enabled: activeAccount?.trading_enabled ?? false,
   };
   const lockReasons = [
-    !session.token ? "Login required" : null,
+    !session.token ? "需要先登录" : null,
     !activeAccount ? "Select an exchange account" : null,
     activeAccount && !activeAccount.is_active ? "Account is inactive" : null,
     activeAccount?.account_mode === "REAL" ? "REAL account is read-only in this stage" : null,
@@ -512,7 +512,7 @@ export default function TradeWorkspace() {
       : null,
   ].filter(Boolean) as string[];
   const testnetWindowReasons = [
-    !session.token ? "Login required" : null,
+    !session.token ? "需要先登录" : null,
     !activeAccount ? "Select an exchange account" : null,
     activeAccount && !activeAccount.is_active ? "Account is inactive" : null,
     activeAccount?.account_mode !== "TESTNET" ? "Account mode must be TESTNET" : null,
@@ -619,7 +619,7 @@ export default function TradeWorkspace() {
     {
       id: "session",
       title: "Authenticated session",
-      detail: session.token ? `${session.username} / ${session.role}` : "Login is required before account checks.",
+      detail: session.token ? `${session.username} / ${session.role}` : "账户检查前需要先登录。",
       required: true,
       status: session.token ? "pass" : "pending",
     },
@@ -1364,66 +1364,66 @@ export default function TradeWorkspace() {
       <aside className="trade-sidebar">
         <a className="trade-brand" href="/trade">
           <span>CT</span>
-          <strong>CryptoDesk</strong>
+          <strong>交易工作台</strong>
         </a>
         <nav>
           <a className="active" href="/trade">
-            Trading Terminal
+            交易终端
           </a>
-          <a href="/trade#portfolio">Portfolio</a>
-          <a href="/trade#api-management">API & Accounts</a>
-          <a href="/trade#risk">Risk Center</a>
-          <a href="/trade#audit">Audit Center</a>
-          <a href="/trade#phase4-small-fund-review">Small-Fund Gate</a>
-          {session.role === "super_admin" && <a href="/">Admin Console</a>}
-          <a href="/login">Login</a>
+          <a href="/trade#portfolio">资产概览</a>
+          <a href="/trade#api-management">API 与账户</a>
+          <a href="/trade#risk">风控中心</a>
+          <a href="/trade#audit">审计中心</a>
+          <a href="/trade#phase4-small-fund-review">小额测试闸门</a>
+          {session.role === "super_admin" && <a href="/">管理控制台</a>}
+          <a href="/login">登录</a>
         </nav>
         <div className="trade-guardrail">
-          <span>Guardrail</span>
-          <strong>NO LIVE ORDER</strong>
-          <p>Live execution remains gated. This terminal can preview orders, validate accounts, and record approvals.</p>
+          <span>运行边界</span>
+          <strong>禁止实盘下单</strong>
+          <p>实盘执行仍被闸门拦截。当前终端仅用于预览订单、验证账户和记录审批。</p>
         </div>
       </aside>
 
       <section className="trade-main">
         <header className="trade-topbar">
           <div>
-            <span className="trade-kicker">Unified Exchange Workspace</span>
-            <h1>{activeSymbol} Trading Terminal</h1>
+            <span className="trade-kicker">统一交易所工作区</span>
+            <h1>{activeSymbol} 交易终端</h1>
           </div>
           <div className="trade-topbar-actions">
-            <a href="/trade#api-management">Add API</a>
-            <a href="/trade#audit">Audit</a>
-            {session.role === "super_admin" ? <a href="/">Console</a> : null}
+            <a href="/trade#api-management">添加 API</a>
+            <a href="/trade#audit">审计</a>
+            {session.role === "super_admin" ? <a href="/">控制台</a> : null}
           </div>
           <div className="trade-user-pill">
-            <span>{session.token ? session.username : "Not logged in"}</span>
-            <strong>{session.role || "guest"}</strong>
+            <span>{session.token ? session.username : "未登录"}</span>
+            <strong>{session.role || "访客"}</strong>
           </div>
         </header>
 
         <section className="trade-command-center" id="portfolio">
           <article>
-            <span>Workspace Mode</span>
-            <strong>SIM / TESTNET / REAL READ ONLY</strong>
-            <p>REAL execution is blocked until super-admin review, audit evidence, and explicit order-window approval exist.</p>
+            <span>工作区模式</span>
+            <strong>模拟 / 测试网 / 真实账户只读</strong>
+            <p>真实执行必须通过超级管理员复核、审计留痕和订单窗口审批。</p>
           </article>
           <article>
-            <span>Accounts</span>
+            <span>账户</span>
             <strong>{accounts.length}</strong>
             <p>
               SIM {accountModeSummary.simulation} / TESTNET {accountModeSummary.testnet} / REAL {accountModeSummary.real}
             </p>
           </article>
           <article>
-            <span>Selected Venue</span>
+            <span>当前交易所</span>
             <strong>{activeExchangeProfile.venue}</strong>
-            <p>{activeExchangeAccounts.length} account(s) on this exchange.</p>
+            <p>当前交易所有 {activeExchangeAccounts.length} 个账户。</p>
           </article>
           <article>
-            <span>Execution Boundary</span>
-            <strong>{accountModeSummary.tradingEnabled > 0 ? "REVIEW REQUIRED" : "LOCKED"}</strong>
-            <p>{accountModeSummary.tradingEnabled} account(s) currently have trading flag enabled.</p>
+            <span>执行边界</span>
+            <strong>{accountModeSummary.tradingEnabled > 0 ? "需要复核" : "已锁定"}</strong>
+            <p>{accountModeSummary.tradingEnabled} 个账户当前启用了交易标记。</p>
           </article>
         </section>
 
@@ -1444,7 +1444,7 @@ export default function TradeWorkspace() {
                 }}
               >
                 <strong>{exchangeProfiles[exchange].label}</strong>
-                <span>{accountCount} accounts / {exchangeProfiles[exchange].route}</span>
+                <span>{accountCount} 个账户 / {exchangeProfiles[exchange].route}</span>
               </button>
             );
           })}
@@ -1463,7 +1463,7 @@ export default function TradeWorkspace() {
           <div className="trade-card trade-chart">
             <div className="trade-card-head">
               <div>
-                <span>Chart</span>
+                <span>行情图</span>
                 <strong>
                   {activeExchangeProfile.label} / {activeSymbol}
                 </strong>
@@ -1472,7 +1472,7 @@ export default function TradeWorkspace() {
                 {formatNumber(activeMarket.last)} USDT {activeMarket.change}
               </em>
             </div>
-            <div className="trade-chart-canvas" aria-label="market chart preview">
+            <div className="trade-chart-canvas" aria-label="行情图预览">
               {Array.from({ length: 34 }, (_, index) => (
                 <span
                   className={index % 3 === 0 ? "down" : "up"}
@@ -1483,7 +1483,7 @@ export default function TradeWorkspace() {
             </div>
             <div className="trade-exchange-window">
               <div>
-                <span>Exchange Window</span>
+                <span>交易所窗口</span>
                 <strong>{activeExchangeProfile.venue}</strong>
               </div>
               <div className="trade-window-status">
@@ -1492,24 +1492,24 @@ export default function TradeWorkspace() {
               </div>
               <dl>
                 <div>
-                  <dt>Account</dt>
-                  <dd>{activeAccount?.account_label ?? "Not selected"}</dd>
+                  <dt>账户</dt>
+                  <dd>{activeAccount?.account_label ?? "未选择"}</dd>
                 </div>
                 <div>
-                  <dt>Mode</dt>
+                  <dt>模式</dt>
                   <dd>{accountMode}</dd>
                 </div>
                 <div>
-                  <dt>Route</dt>
+                  <dt>路由</dt>
                   <dd>{activeExchangeProfile.route}</dd>
                 </div>
                 <div>
-                  <dt>Secret</dt>
-                  <dd>{apiKeyMetadata.configured ? "Configured" : "Not set"}</dd>
+                  <dt>密钥</dt>
+                  <dd>{apiKeyMetadata.configured ? "已配置" : "未配置"}</dd>
                 </div>
               </dl>
               <div className="trade-window-route">
-                <span>Ticket Binding</span>
+                <span>订单绑定</span>
                 <strong>{selectedAccountRoute}</strong>
               </div>
               <p>{activeExchangeProfile.window}</p>
@@ -1518,8 +1518,8 @@ export default function TradeWorkspace() {
 
           <div className="trade-card trade-orderbook">
             <div className="trade-card-head">
-              <strong>Order Book</strong>
-              <span>Read only</span>
+              <strong>订单簿</strong>
+              <span>只读</span>
             </div>
             {marketRows.map((row) => (
               <div className={`book-row ${row.side}`} key={`${row.price}-${row.amount}`}>
@@ -1531,45 +1531,45 @@ export default function TradeWorkspace() {
 
           <div className="trade-card trade-ticket">
             <div className="trade-card-head">
-              <strong>Order Ticket</strong>
+              <strong>下单面板</strong>
               <span>{lastStatus}</span>
             </div>
-            <div className="trade-ticket-mode" aria-label="order type selector">
+            <div className="trade-ticket-mode" aria-label="订单类型选择">
               <button
                 className={orderForm.orderType === "MARKET" ? "active" : ""}
                 onClick={() => setOrderForm((current) => ({ ...current, orderType: "MARKET" }))}
               >
-                Market
+                市价
               </button>
               <button
                 className={orderForm.orderType === "LIMIT" ? "active" : ""}
                 onClick={() => setOrderForm((current) => ({ ...current, orderType: "LIMIT" }))}
               >
-                Limit
+                限价
               </button>
             </div>
-            <div className="trade-side-switch" aria-label="order side selector">
+            <div className="trade-side-switch" aria-label="买卖方向选择">
               <button
                 className={orderSide === "BUY" ? "buy active" : "buy"}
                 onClick={() => setOrderSide("BUY")}
               >
-                Buy
+                买入
               </button>
               <button
                 className={orderSide === "SELL" ? "sell active" : "sell"}
                 onClick={() => setOrderSide("SELL")}
               >
-                Sell
+                卖出
               </button>
             </div>
             <label>
-              Price
+              价格
               <input
                 inputMode="decimal"
                 readOnly={orderForm.orderType === "MARKET"}
                 value={
                   orderForm.orderType === "MARKET"
-                    ? `Market / ${formatNumber(activeMarket.last)}`
+                    ? `市价 / ${formatNumber(activeMarket.last)}`
                     : orderForm.price
                 }
                 onChange={(event) =>
@@ -1578,7 +1578,7 @@ export default function TradeWorkspace() {
               />
             </label>
             <label>
-              Quantity
+              数量
               <input
                 inputMode="decimal"
                 value={orderForm.quantity}
@@ -1588,13 +1588,13 @@ export default function TradeWorkspace() {
               />
             </label>
             <label>
-              Account
+              账户
               <select
                 value={activeAccountId}
                 onChange={(event) => setActiveAccountId(event.target.value)}
               >
                 {exchangeAccounts.length === 0 ? (
-                  <option value="">No {activeExchangeProfile.label} account</option>
+                  <option value="">暂无 {activeExchangeProfile.label} 账户</option>
                 ) : (
                   exchangeAccounts.map((account) => (
                     <option key={account.id} value={account.id}>
@@ -1605,38 +1605,38 @@ export default function TradeWorkspace() {
               </select>
             </label>
             <div className="trade-ticket-account">
-              <span>Selected Route</span>
+              <span>当前路由</span>
               <strong>{selectedAccountRoute}</strong>
             </div>
             <div className="trade-order-preview">
               <div>
-                <span>Side</span>
+                <span>方向</span>
                 <strong className={orderSide === "BUY" ? "preview-buy" : "preview-sell"}>
                   {orderSide}
                 </strong>
               </div>
               <div>
-                <span>Type</span>
+                <span>类型</span>
                 <strong>{orderForm.orderType}</strong>
               </div>
               <div>
-                <span>Estimated Price</span>
+                <span>预估价格</span>
                 <strong>{formatNumber(referencePrice)} USDT</strong>
               </div>
               <div>
-                <span>Estimated Notional</span>
+                <span>预估名义金额</span>
                 <strong>{formatNumber(estimatedNotional)} USDT</strong>
               </div>
             </div>
             <div className="trade-route-panel">
-              <span>Client Order ID Preview</span>
+              <span>客户端订单 ID 预览</span>
               <code>{clientOrderIdPreview}</code>
             </div>
             <button className="trade-submit" onClick={openOrderPreview}>
-              Review Order Preview
+              查看下单预览
             </button>
             {lockReasons.length === 0 ? (
-              <p>Mock preview route is open. This view still does not submit orders.</p>
+              <p>Mock 预览路由已开放。当前页面仍不会提交真实订单。</p>
             ) : (
               <ul className="trade-lock-list">
                 {lockReasons.map((reason) => (
@@ -1651,28 +1651,28 @@ export default function TradeWorkspace() {
           <article className="trade-desk-panel">
             <div className="trade-card-head">
               <div>
-                <span>Account Routing</span>
+                <span>账户路由</span>
                 <strong>账户选择 {"->"} 交易所窗口 {"->"} 下单预览</strong>
               </div>
               <em>{selectedAccountRoute}</em>
             </div>
             <div className="trade-route-steps">
-              <span className={activeAccount ? "done" : ""}>1. Select account</span>
-              <span className={apiKeyMetadata.configured ? "done" : ""}>2. Validate credentials</span>
-              <span className={estimatedNotional > 0 ? "done" : ""}>3. Prepare preview</span>
-              <span className={lockReasons.length === 0 ? "done" : ""}>4. Safety gate</span>
+              <span className={activeAccount ? "done" : ""}>1. 选择账户</span>
+              <span className={apiKeyMetadata.configured ? "done" : ""}>2. 验证密钥</span>
+              <span className={estimatedNotional > 0 ? "done" : ""}>3. 生成预览</span>
+              <span className={lockReasons.length === 0 ? "done" : ""}>4. 安全闸门</span>
             </div>
           </article>
           <article className="trade-desk-panel">
             <div className="trade-card-head">
               <div>
-                <span>Risk Gate</span>
-                <strong>{lockReasons.length === 0 ? "Preview Open" : "Blocked"}</strong>
+                <span>风控闸门</span>
+                <strong>{lockReasons.length === 0 ? "预览开放" : "已拦截"}</strong>
               </div>
-              <em>{lockReasons.length} reason(s)</em>
+              <em>{lockReasons.length} 条原因</em>
             </div>
             <ul className="trade-risk-chips">
-              {(lockReasons.length ? lockReasons : ["Mock preview route is available"]).map((reason) => (
+              {(lockReasons.length ? lockReasons : ["Mock 预览路由可用"]).map((reason) => (
                 <li key={reason}>{reason}</li>
               ))}
             </ul>
@@ -1682,17 +1682,17 @@ export default function TradeWorkspace() {
         <section className="trade-api-manager" id="api-management">
           <div className="trade-card-head">
             <div>
-              <span>API Management</span>
+              <span>API 管理</span>
               <strong>账户选择 / 密钥状态 / 只读认证</strong>
             </div>
             <button className="trade-secondary-button" onClick={refreshAccounts} disabled={!session.token || apiBusy}>
-              Refresh
+              刷新
             </button>
           </div>
 
           <div className="trade-api-manager-grid">
             <div className="trade-api-panel">
-              <h2>Account Selector</h2>
+              <h2>账户选择</h2>
               <div className="trade-account-list">
                 {exchangeAccounts.length === 0 ? (
                   <p className="trade-muted">当前交易所还没有账户。</p>
@@ -1709,18 +1709,18 @@ export default function TradeWorkspace() {
                       <div>
                         <strong>{account.account_label}</strong>
                         <span>
-                          {account.account_mode} / {account.trading_enabled ? "TRADING ON" : "READ ONLY"}
+                          {account.account_mode} / {account.trading_enabled ? "交易已开启" : "只读"}
                         </span>
                       </div>
                       <div className="trade-account-actions">
-                        <button onClick={() => selectAccountForTrading(account)}>Use in Ticket</button>
+                        <button onClick={() => selectAccountForTrading(account)}>用于下单面板</button>
                         <button
                           onClick={() => {
                             selectAccountForTrading(account);
                             setBottomTab("positions");
                           }}
                         >
-                          Exchange Window
+                          交易所窗口
                         </button>
                         <button
                           onClick={() => {
@@ -1728,7 +1728,7 @@ export default function TradeWorkspace() {
                             focusAuditForAccount(account);
                           }}
                         >
-                          Audit
+                          审计
                         </button>
                       </div>
                     </article>
@@ -1737,12 +1737,12 @@ export default function TradeWorkspace() {
               </div>
               <dl className="trade-account-meta">
                 <div>
-                  <dt>Selected</dt>
+                  <dt>已选择</dt>
                   <dd>{activeAccount?.account_label ?? "-"}</dd>
                 </div>
                 <div>
-                  <dt>Secret</dt>
-                  <dd>{apiKeyMetadata.configured ? "Configured" : "Not set"}</dd>
+                  <dt>密钥</dt>
+                  <dd>{apiKeyMetadata.configured ? "已配置" : "未配置"}</dd>
                 </div>
                 <div>
                   <dt>Passphrase</dt>
@@ -1788,7 +1788,7 @@ export default function TradeWorkspace() {
                   >
                     <option value="SIMULATION">SIMULATION</option>
                     <option value="TESTNET">TESTNET</option>
-                    <option value="REAL">REAL READ ONLY</option>
+                    <option value="REAL">真实账户只读</option>
                   </select>
                 </label>
                 <label>

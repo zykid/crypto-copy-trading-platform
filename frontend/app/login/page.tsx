@@ -38,7 +38,7 @@ const accountIntents: Array<{
   {
     value: "copy_observer",
     title: "跟单观察",
-    text: "注册后仍为普通用户，跟单权限需管理员授权。",
+    text: "注册后仍为普通用户，跟单权限需要管理员授权。",
   },
   {
     value: "strategy_tester",
@@ -48,7 +48,7 @@ const accountIntents: Array<{
   {
     value: "team_member",
     title: "团队成员",
-    text: "预留团队场景，注册后需管理员分配共享权限。",
+    text: "预留团队场景，注册后需要管理员分配共享权限。",
   },
 ];
 
@@ -119,7 +119,7 @@ export default function LoginPage() {
     const body = text ? JSON.parse(text) : null;
     if (response.status !== expectedStatus) {
       const detail = isObject(body) && body.detail ? String(body.detail) : text;
-      throw new Error(detail || `${method} ${path} returned ${response.status}`);
+      throw new Error(detail || `${method} ${path} 返回 ${response.status}`);
     }
     return body;
   }
@@ -138,7 +138,7 @@ export default function LoginPage() {
     }
     const userId = body.id ?? body.user_id;
     if (typeof userId !== "string" || userId.trim() === "") {
-      throw new Error("Login succeeded, but the user profile did not include an ID");
+      throw new Error("登录成功，但用户资料缺少 user_id");
     }
     return {
       id: userId,
@@ -222,26 +222,26 @@ export default function LoginPage() {
       <section className="auth-shell">
         <aside className="auth-market-panel">
           <div className="auth-brand-block">
-            <span>SIMULATION FIRST</span>
+            <span>模拟优先</span>
             <h1>多租户加密货币交易执行与跟单平台</h1>
             <p>统一账户、统一风控、统一审计。</p>
           </div>
 
-          <div className="market-board" aria-label="界面状态">
+          <div className="market-board" aria-label="登录页安全状态">
             <div>
               <span>BTC/USDT</span>
-              <strong>Mock</strong>
+              <strong>模拟</strong>
               <em>SIM</em>
             </div>
             <div>
-              <span>Risk Engine</span>
-              <strong>ON</strong>
-              <em>SAFE</em>
+              <span>风控引擎</span>
+              <strong>开启</strong>
+              <em>安全</em>
             </div>
             <div>
-              <span>Order Mode</span>
-              <strong>Read Only</strong>
-              <em>LOCKED</em>
+              <span>订单模式</span>
+              <strong>只读</strong>
+              <em>锁定</em>
             </div>
           </div>
 
@@ -254,12 +254,9 @@ export default function LoginPage() {
         <section className="auth-card">
           <div className="auth-card-heading">
             <div>
-              <span>{apiRoot}</span>
+              <span>安全认证</span>
               <h2>{mode === "login" ? "登录账户" : "注册账户"}</h2>
             </div>
-            <a href="/trade" className="auth-console-link">
-              交易页
-            </a>
           </div>
 
           <div className="auth-tabs" role="tablist" aria-label="认证方式">
@@ -309,9 +306,7 @@ export default function LoginPage() {
                     }
                   />
                   <button
-                    aria-label={
-                      showLoginPassword ? "Hide password" : "Show password"
-                    }
+                    aria-label={showLoginPassword ? "隐藏密码" : "显示密码"}
                     className="password-visibility-button"
                     onClick={() => setShowLoginPassword(!showLoginPassword)}
                     type="button"
@@ -394,7 +389,7 @@ export default function LoginPage() {
                     />
                     <button
                       aria-label={
-                        showRegisterPassword ? "Hide password" : "Show password"
+                        showRegisterPassword ? "隐藏密码" : "显示密码"
                       }
                       className="password-visibility-button"
                       onClick={() =>
@@ -429,9 +424,7 @@ export default function LoginPage() {
                     />
                     <button
                       aria-label={
-                        showRegisterConfirmPassword
-                          ? "Hide password"
-                          : "Show password"
+                        showRegisterConfirmPassword ? "隐藏密码" : "显示密码"
                       }
                       className="password-visibility-button"
                       onClick={() =>

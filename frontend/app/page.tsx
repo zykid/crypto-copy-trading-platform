@@ -1332,12 +1332,12 @@ export default function Home() {
     return (
       <main className="console-access-shell">
         <section className="console-access-card">
-          <span>ADMIN CONSOLE</span>
-          <h1>Login required</h1>
-          <p>The integration console is restricted to authenticated super administrators.</p>
+          <span>管理控制台</span>
+          <h1>需要登录</h1>
+          <p>集成测试控制台仅允许已认证的超级管理员访问。</p>
           <div className="console-access-actions">
-            <a href="/login">Login</a>
-            <a href="/trade">Open trading workspace</a>
+            <a href="/login">登录</a>
+            <a href="/trade">打开交易工作区</a>
           </div>
         </section>
       </main>
@@ -1348,25 +1348,24 @@ export default function Home() {
     return (
       <main className="console-access-shell">
         <section className="console-access-card">
-          <span>ACCESS CONTROL</span>
-          <h1>Super administrator required</h1>
+          <span>访问控制</span>
+          <h1>需要超级管理员权限</h1>
           <p>
-            Your account can use the formal trading workspace. Administrative console controls are
-            hidden unless the current role is super_admin.
+            当前账户可以使用交易工作区。管理控制台仅在角色为 super_admin 时显示。
           </p>
           <div className="console-access-summary">
             <div>
-              <small>User</small>
+              <small>用户</small>
               <strong>{session.username || "-"}</strong>
             </div>
             <div>
-              <small>Role</small>
+              <small>角色</small>
               <strong>{session.role || "-"}</strong>
             </div>
           </div>
           <div className="console-access-actions">
-            <a href="/trade">Open trading workspace</a>
-            <a href="/login">Switch account</a>
+            <a href="/trade">打开交易工作区</a>
+            <a href="/login">切换账户</a>
           </div>
         </section>
       </main>
@@ -1381,7 +1380,7 @@ export default function Home() {
           <strong>Copy Trading</strong>
         </a>
         <nav className="sidebar-nav">
-          <a href="/trade">Trade Workspace</a>
+          <a href="/trade">交易工作区</a>
           <a href="#overview">总览</a>
           <a href="#mock-flow">Mock 交易</a>
           <a href="#session">会话</a>
@@ -1393,7 +1392,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-safety">
           <span>运行边界</span>
-          <strong>NO LIVE ORDER</strong>
+          <strong>禁止实盘下单</strong>
           <p>测试期仅允许 Mock 执行，真实 API 只读验证。</p>
         </div>
       </aside>
@@ -1405,9 +1404,9 @@ export default function Home() {
             <div className="subtle">Ubuntu 集成测试控制台</div>
           </div>
           <div className="topbar-actions">
-            <span className="status">SIMULATION / TESTNET / REAL READ ONLY</span>
+            <span className="status">模拟 / 测试网 / 真实账户只读</span>
             <a className="topbar-login-link" href="/trade">
-              Trade
+              交易
             </a>
             <a className="topbar-login-link" href="/login">
               登录页
@@ -1424,7 +1423,7 @@ export default function Home() {
               当前页面支持 MockExchange 模拟执行与 TESTNET 只读认证。测试网账户始终关闭交易，不提供下单操作。
             </p>
           </div>
-          <div className="api-chip">API {apiRoot}</div>
+          <div className="api-chip">后端服务已连接</div>
         </section>
 
         <section className="overview-strip" aria-label="测试状态总览">
@@ -1457,7 +1456,7 @@ export default function Home() {
             <strong>当前测试边界</strong>
             <span>Mock 可执行；TESTNET/REAL 只读验证；测试网订单窗口只记录审批审计，不提交订单。</span>
           </div>
-          <span className="safety-badge">NO LIVE ORDER</span>
+          <span className="safety-badge">禁止实盘下单</span>
         </section>
 
         <section className="market-metrics" aria-label="测试模块状态">
@@ -1593,7 +1592,7 @@ export default function Home() {
                   <span>Order Ticket</span>
                   <strong>Execution guarded</strong>
                 </div>
-                <span className="locked-pill">NO LIVE ORDER</span>
+                <span className="locked-pill">禁止实盘下单</span>
               </div>
               <div className="ticket-mode">
                 <button type="button" className="active">Mock</button>
