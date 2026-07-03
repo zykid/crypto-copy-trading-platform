@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 type AuthMode = "login" | "register";
 
@@ -24,6 +25,7 @@ type UserProfile = {
 };
 
 const SESSION_TOKEN_STORAGE_KEY = "trading_platform_token";
+const apiBaseFallback = "http://localhost:8000/api/v1";
 
 const accountIntents: Array<{
   value: AccountIntent;
@@ -52,15 +54,20 @@ const accountIntents: Array<{
   },
 ];
 
-function resolveApiBase() {
+function normalizeApiRoot(value: string) {
+  const trimmed = value.replace(/\/$/, "");
+  return trimmed.endsWith("/api/v1") ? trimmed : `${trimmed}/api/v1`;
+}
+
+function resolveApiRoot() {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
   if (typeof window === "undefined") {
-    return configured || "http://localhost:8000";
+    return normalizeApiRoot(configured || apiBaseFallback);
   }
   if (!configured || configured === "http://localhost:8000") {
-    return `${window.location.protocol}//${window.location.hostname}:8000`;
+    return `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
   }
-  return configured;
+  return normalizeApiRoot(configured);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -75,8 +82,9 @@ function formatError(value: unknown) {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("login");
-  const [apiBase] = useState(resolveApiBase);
+  const [apiRoot] = useState(resolveApiRoot);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<AuthLog | null>(null);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -96,7 +104,6 @@ export default function LoginPage() {
     intent: "normal_user" as AccountIntent,
   });
 
-  const apiRoot = useMemo(() => `${apiBase}/api/v1`, [apiBase]);
   const selectedIntent = accountIntents.find(
     (intent) => intent.value === registerForm.intent,
   );
@@ -165,7 +172,10 @@ export default function LoginPage() {
       ok: true,
       message: `已登录 ${profile.username}，角色 ${profile.role}`,
     });
-    window.location.href = "/trade";
+    router.replace("/trade");
+    window.setTimeout(() => {
+      window.location.assign("/trade");
+    }, 100);
   }
 
   async function submitLogin() {
