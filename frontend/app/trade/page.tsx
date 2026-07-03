@@ -182,10 +182,18 @@ const phase4SmallFundReviewAck = "ACKNOWLEDGE_SMALL_FUND_REVIEW_ONLY";
 const phase4SmallFundOrderWindowAck = "APPROVE_REAL_SMALL_FUND_ORDER_WINDOW_ONLY";
 const phase4FinalReleaseCheckAck = "RECORD_PHASE4_FINAL_RELEASE_CHECK_ONLY";
 
+function normalizeApiRoot(value: string) {
+  const trimmed = value.replace(/\/$/, "");
+  return trimmed.endsWith("/api/v1") ? trimmed : `${trimmed}/api/v1`;
+}
+
 function resolveApiBase() {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (typeof window !== "undefined" && (!configured || configured === "http://localhost:8000")) {
+    return `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
+  }
   if (configured) {
-    return configured.replace(/\/$/, "");
+    return normalizeApiRoot(configured);
   }
   return apiBaseFallback;
 }
