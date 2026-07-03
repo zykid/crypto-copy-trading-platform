@@ -481,7 +481,12 @@ export default function TradeWorkspace() {
 
   const refreshAccounts = useCallback(async () => {
     const payload = await apiRequest("GET", "/exchange-accounts");
-    setAccounts(Array.isArray(payload) ? (payload as ExchangeAccount[]) : []);
+    const nextAccounts = Array.isArray(payload) ? (payload as ExchangeAccount[]) : [];
+    setAccounts(nextAccounts);
+    setActiveAccountId((current) =>
+      current && nextAccounts.some((account) => account.id === current) ? current : "",
+    );
+    return nextAccounts;
   }, [apiRequest]);
 
   const refreshMarketDataProviders = useCallback(async () => {
@@ -1041,8 +1046,9 @@ export default function TradeWorkspace() {
     }
     setApiBusy(true);
     try {
-      await refreshAccounts();
+      const nextAccounts = await refreshAccounts();
       appendApiLog("刷新账户", true, {
+        account_count: nextAccounts.length,
         selected_account_id: activeAccountId || null,
       });
     } catch (error) {
@@ -1166,6 +1172,43 @@ export default function TradeWorkspace() {
       await refreshAccounts();
     } catch (error) {
       appendApiLog("删除密钥", false, String(error));
+    } finally {
+      setApiBusy(false);
+    }
+  }
+
+  async function deleteExchangeAccount() {
+    if (!activeAccount) {
+      appendApiLog("删除账户", false, "请先选择账户");
+      return;
+    }
+    const confirmed = window.confirm(
+      `确认删除账户「${activeAccount.account_label}」？这只会删除平台内的账户记录和已保存密钥，不会删除交易所真实账户。`,
+    );
+    if (!confirmed) {
+      appendApiLog("删除账户", false, "用户取消删除");
+      return;
+    }
+    setApiBusy(true);
+    try {
+      const deletedAccount = activeAccount;
+      await apiRequest("DELETE", `/exchange-accounts/${deletedAccount.id}`, undefined, 204);
+      setAccounts((current) => current.filter((account) => account.id !== deletedAccount.id));
+      setActiveAccountId("");
+      setApiKeyMetadata(emptyMetadata);
+      setSecretForm({
+        apiKey: "",
+        apiSecret: "",
+        passphrase: "",
+        password: "",
+      });
+      appendApiLog("删除账户", true, {
+        exchange_account_id: deletedAccount.id,
+        account_label: deletedAccount.account_label,
+      });
+      await refreshAccounts();
+    } catch (error) {
+      appendApiLog("删除账户", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -2417,7 +2460,14 @@ export default function TradeWorkspace() {
                   onClick={deleteApiKey}
                   disabled={!activeAccount || !selectedApiKeyMetadata.configured || apiBusy}
                 >
-                  删除密钥
+                  删除密钥（保留账户）
+                </button>
+                <button
+                  className="trade-danger-button span-2"
+                  onClick={deleteExchangeAccount}
+                  disabled={!activeAccount || apiBusy}
+                >
+                  删除账户
                 </button>
               </div>
             </div>
