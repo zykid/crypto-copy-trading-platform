@@ -78,6 +78,14 @@ type AuditLogRecord = {
 };
 
 type BottomTab = "positions" | "orders" | "history" | "audit";
+type WorkspaceSection =
+  | "terminal"
+  | "portfolio"
+  | "api-management"
+  | "risk"
+  | "audit"
+  | "market-data"
+  | "small-fund";
 type AuditFilters = {
   userId: string;
   exchangeAccountId: string;
@@ -110,7 +118,89 @@ const emptyMetadata: ApiKeyMetadata = {
 
 const apiBaseFallback = "http://localhost:8000/api/v1";
 const exchanges: ExchangeName[] = ["okx", "binance", "bybit", "mock"];
-const symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"];
+const symbols = [
+  "BTC/USDT",
+  "ETH/USDT",
+  "SOL/USDT",
+  "BNB/USDT",
+  "XRP/USDT",
+  "DOGE/USDT",
+  "ADA/USDT",
+  "AVAX/USDT",
+  "LINK/USDT",
+  "TON/USDT",
+  "BTC/USDC",
+  "ETH/USDC",
+];
+const workspaceHashMap: Record<string, WorkspaceSection> = {
+  "": "terminal",
+  "#terminal": "terminal",
+  "#portfolio": "portfolio",
+  "#api-management": "api-management",
+  "#risk": "risk",
+  "#audit": "audit",
+  "#market-data": "market-data",
+  "#phase4-small-fund-review": "small-fund",
+  "#pre-real-checklist": "small-fund",
+  "#small-fund-final-readiness": "small-fund",
+  "#phase4-real-order-window": "small-fund",
+  "#phase4-final-release-check": "small-fund",
+};
+const workspaceLabels: Record<WorkspaceSection, string> = {
+  terminal: "交易终端",
+  portfolio: "资产概览",
+  "api-management": "API 与账户",
+  risk: "风控中心",
+  audit: "审计中心",
+  "market-data": "市场数据",
+  "small-fund": "小额测试闸门",
+};
+const orderSideLabels: Record<OrderSide, string> = {
+  BUY: "买入",
+  SELL: "卖出",
+};
+const orderTypeLabels: Record<OrderType, string> = {
+  MARKET: "市价",
+  LIMIT: "限价",
+};
+const accountModeLabels: Record<AccountMode, string> = {
+  SIMULATION: "模拟",
+  TESTNET: "测试网",
+  REAL: "真实只读",
+};
+const resultLabels: Record<string, string> = {
+  PASS: "通过",
+  FAIL: "失败",
+  BLOCKED: "已锁定",
+  PENDING: "待处理",
+  WARN: "警告",
+  READY_FOR_REVIEW: "可人工复核",
+  READINESS_PASS: "准备就绪",
+  READINESS_BLOCKED: "准备未完成",
+  REVIEW_RECORDED: "复核已记录",
+  NO_REVIEW_AUDIT: "无复核审计",
+  READY_TO_RECORD: "可记录",
+  WINDOW_LOCKED: "窗口已锁定",
+  WINDOW_RECORDED: "窗口已记录",
+  NO_WINDOW_AUDIT: "无窗口审计",
+  FINAL_GATE_LOCKED: "终审已锁定",
+  FINAL_CHECK_RECORDED: "终审已记录",
+  NO_FINAL_CHECK: "无终审记录",
+  COMPLETE: "完成",
+  INCOMPLETE: "未完成",
+  LOCKED: "已锁定",
+  MISSING: "缺失",
+  RECORDED: "已记录",
+  ON: "开启",
+  OFF: "关闭",
+  AUDIT_ONLY: "仅审计",
+};
+const severityLabels: Record<string, string> = {
+  INFO: "信息",
+  OK: "正常",
+  WARNING: "警告",
+  ERROR: "错误",
+};
 const auditActionOptions = [
   "real.read_only.authentication.checked",
   "real.small_fund.review_recorded",
@@ -138,33 +228,42 @@ const exchangeProfiles: Record<
 > = {
   okx: {
     label: "OKX",
-    venue: "Unified Account",
-    route: "REAL / TESTNET read-only",
-    window: "Balances, positions, and order checks stay read-only.",
+    venue: "统一账户",
+    route: "真实 / 测试网只读",
+    window: "余额、持仓和订单校验均保持只读。",
   },
   binance: {
     label: "Binance",
-    venue: "Spot / Futures",
-    route: "TESTNET read-only",
-    window: "Adapter window is reserved for testnet validation.",
+    venue: "现货 / 合约",
+    route: "测试网只读",
+    window: "适配器窗口保留用于测试网验证。",
   },
   bybit: {
     label: "Bybit",
-    venue: "Unified Trading",
-    route: "TESTNET read-only",
-    window: "Adapter window is reserved for testnet validation.",
+    venue: "统一交易账户",
+    route: "测试网只读",
+    window: "适配器窗口保留用于测试网验证。",
   },
   mock: {
-    label: "Mock Exchange",
-    venue: "Simulation",
-    route: "Simulation executable",
-    window: "Mock route can execute only after account trading and risk checks pass.",
+    label: "Mock 模拟交易所",
+    venue: "模拟环境",
+    route: "模拟可执行",
+    window: "Mock 路由仅在账户交易标记与风控检查通过后执行。",
   },
 };
 const marketSnapshots: Record<string, { last: number; bid: number; ask: number; change: string }> = {
   "BTC/USDT": { last: 68420.5, bid: 68410, ask: 68428.2, change: "+1.42%" },
   "ETH/USDT": { last: 3582.16, bid: 3581.4, ask: 3583.2, change: "+0.86%" },
   "SOL/USDT": { last: 151.72, bid: 151.61, ask: 151.84, change: "-0.31%" },
+  "BNB/USDT": { last: 612.3, bid: 612.1, ask: 612.6, change: "+0.24%" },
+  "XRP/USDT": { last: 0.62, bid: 0.619, ask: 0.621, change: "-0.18%" },
+  "DOGE/USDT": { last: 0.125, bid: 0.1248, ask: 0.1252, change: "+0.51%" },
+  "ADA/USDT": { last: 0.41, bid: 0.409, ask: 0.411, change: "+0.12%" },
+  "AVAX/USDT": { last: 27.84, bid: 27.8, ask: 27.88, change: "-0.44%" },
+  "LINK/USDT": { last: 14.62, bid: 14.6, ask: 14.65, change: "+0.33%" },
+  "TON/USDT": { last: 3.18, bid: 3.17, ask: 3.19, change: "+0.09%" },
+  "BTC/USDC": { last: 68405.2, bid: 68398.4, ask: 68412.8, change: "+1.39%" },
+  "ETH/USDC": { last: 3580.4, bid: 3579.6, ask: 3581.2, change: "+0.81%" },
 };
 const sensitiveKeys = new Set([
   "api_key",
@@ -244,19 +343,19 @@ function toAuditQueryDateTime(value: string) {
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new Error(`Invalid audit date filter: ${value}`);
+    throw new Error(`审计日期筛选无效：${value}`);
   }
   return date.toISOString();
 }
 
 function defaultAccountLabel(exchangeName: ExchangeName, mode: AccountMode) {
   if (exchangeName === "mock") {
-    return "Mock Simulation";
+    return "Mock 模拟账户";
   }
   if (mode === "REAL") {
-    return `${exchangeName.toUpperCase()} Production Read Only`;
+    return `${exchangeName.toUpperCase()} 正式只读账户`;
   }
-  return `${exchangeName.toUpperCase()} Testnet Read Only`;
+  return `${exchangeName.toUpperCase()} 测试网只读账户`;
 }
 
 function formatNumber(value: number, maximumFractionDigits = 2) {
@@ -273,6 +372,9 @@ export default function TradeWorkspace() {
   const [accounts, setAccounts] = useState<ExchangeAccount[]>([]);
   const [activeExchange, setActiveExchange] = useState<ExchangeName>("okx");
   const [activeSymbol, setActiveSymbol] = useState("BTC/USDT");
+  const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceSection>("terminal");
+  const [symbolSearch, setSymbolSearch] = useState("");
+  const [favoriteSymbols, setFavoriteSymbols] = useState<string[]>(["BTC/USDT", "ETH/USDT", "SOL/USDT"]);
   const [activeAccountId, setActiveAccountId] = useState("");
   const [orderSide, setOrderSide] = useState<OrderSide>("BUY");
   const [orderForm, setOrderForm] = useState({
@@ -422,7 +524,7 @@ export default function TradeWorkspace() {
     void loadSession().catch(() => {
       localStorage.removeItem("trading_platform_token");
       setSession(emptySession);
-      setLastStatus("SESSION CHECK FAILED");
+      setLastStatus("会话检查失败");
       setSessionChecked(true);
       window.location.replace("/login");
     });
@@ -434,7 +536,7 @@ export default function TradeWorkspace() {
       return;
     }
     void refreshMarketDataProviders().catch((error) =>
-      appendApiLog("Load market data providers", false, String(error)),
+      appendApiLog("加载市场数据服务商", false, String(error)),
     );
   }, [appendApiLog, refreshMarketDataProviders, session.token]);
 
@@ -472,7 +574,7 @@ export default function TradeWorkspace() {
       } catch (error) {
         if (!cancelled) {
           setApiKeyMetadata(emptyMetadata);
-          appendApiLog("Read API key metadata", false, String(error));
+          appendApiLog("读取 API Key 状态", false, String(error));
         }
       }
     }
@@ -491,7 +593,9 @@ export default function TradeWorkspace() {
 
   useEffect(() => {
     function syncHashToPanel() {
-      if (window.location.hash === "#audit") {
+      const workspace = workspaceHashMap[window.location.hash] ?? "terminal";
+      setActiveWorkspace(workspace);
+      if (workspace === "audit") {
         setBottomTab("audit");
       }
     }
@@ -501,21 +605,44 @@ export default function TradeWorkspace() {
     return () => window.removeEventListener("hashchange", syncHashToPanel);
   }, []);
 
+  useEffect(() => {
+    const stored = window.localStorage.getItem("favorite_trading_symbols");
+    if (!stored) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        const knownSymbols = parsed.filter((symbol): symbol is string => symbols.includes(symbol));
+        if (knownSymbols.length > 0) {
+          setFavoriteSymbols(knownSymbols);
+        }
+      }
+    } catch {
+      window.localStorage.removeItem("favorite_trading_symbols");
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("favorite_trading_symbols", JSON.stringify(favoriteSymbols));
+  }, [favoriteSymbols]);
+
   const activeAccount = allSelectedAccount;
   const accountMode = activeAccount?.account_mode ?? "UNSELECTED";
   const activeExchangeProfile = exchangeProfiles[activeExchange];
+  const activeWorkspaceLabel = workspaceLabels[activeWorkspace];
   const activeAccountHealth = !activeAccount
-    ? "NO ACCOUNT"
+    ? "未绑定账户"
     : activeAccount.is_active
       ? activeAccount.trading_enabled
-        ? "TRADING ENABLED"
-        : "READ ONLY"
-      : "INACTIVE";
+        ? "交易已开启"
+        : "只读"
+      : "未启用";
   const selectedAccountRoute = activeAccount
-    ? `${activeExchangeProfile.label} / ${activeAccount.account_mode} / ${
-        activeAccount.trading_enabled ? "trading flag on" : "read-only flag"
+    ? `${activeExchangeProfile.label} / ${accountModeLabels[activeAccount.account_mode]} / ${
+        activeAccount.trading_enabled ? "交易标记已开启" : "只读标记"
       }`
-    : "Select an exchange account to bind this ticket.";
+    : "请选择交易所账户绑定当前下单面板。";
   const activeExchangeAccounts = accounts.filter((account) => account.exchange_name === activeExchange);
   const accountModeSummary = {
     simulation: accounts.filter((account) => account.account_mode === "SIMULATION").length,
@@ -524,6 +651,22 @@ export default function TradeWorkspace() {
     tradingEnabled: accounts.filter((account) => account.trading_enabled).length,
   };
   const activeMarket = marketSnapshots[activeSymbol] ?? marketSnapshots["BTC/USDT"];
+  const favoriteSymbolSet = useMemo(() => new Set(favoriteSymbols), [favoriteSymbols]);
+  const filteredSymbols = useMemo(() => {
+    const query = symbolSearch.trim().toUpperCase().replace("/", "");
+    return symbols
+      .filter((symbol) => !query || symbol.replace("/", "").includes(query) || symbol.includes(query))
+      .sort((left, right) => {
+        const favoriteDiff = Number(favoriteSymbolSet.has(right)) - Number(favoriteSymbolSet.has(left));
+        return favoriteDiff || left.localeCompare(right);
+      });
+  }, [favoriteSymbolSet, symbolSearch]);
+  const favoritePinnedSymbols = symbols.filter((symbol) => favoriteSymbolSet.has(symbol)).slice(0, 5);
+  const toggleFavoriteSymbol = useCallback((symbol: string) => {
+    setFavoriteSymbols((current) =>
+      current.includes(symbol) ? current.filter((item) => item !== symbol) : [symbol, ...current],
+    );
+  }, []);
   const parsedPrice = Number(orderForm.price);
   const parsedQuantity = Number(orderForm.quantity);
   const referencePrice =
@@ -556,26 +699,26 @@ export default function TradeWorkspace() {
   };
   const lockReasons = [
     !session.token ? "需要先登录" : null,
-    !activeAccount ? "Select an exchange account" : null,
-    activeAccount && !activeAccount.is_active ? "Account is inactive" : null,
-    activeAccount?.account_mode === "REAL" ? "REAL account is read-only in this stage" : null,
-    activeExchange !== "mock" ? "Only Mock can be executable from this ticket" : null,
-    activeAccount && !activeAccount.trading_enabled ? "Account trading flag is disabled" : null,
-    !Number.isFinite(parsedQuantity) || parsedQuantity <= 0 ? "Quantity must be greater than 0" : null,
+    !activeAccount ? "请选择交易所账户" : null,
+    activeAccount && !activeAccount.is_active ? "账户未启用" : null,
+    activeAccount?.account_mode === "REAL" ? "当前阶段真实账户保持只读" : null,
+    activeExchange !== "mock" ? "当前下单面板仅允许 Mock 执行" : null,
+    activeAccount && !activeAccount.trading_enabled ? "账户交易标记未开启" : null,
+    !Number.isFinite(parsedQuantity) || parsedQuantity <= 0 ? "数量必须大于 0" : null,
     orderForm.orderType === "LIMIT" && (!Number.isFinite(parsedPrice) || parsedPrice <= 0)
-      ? "Limit price is required"
+      ? "限价单必须填写有效价格"
       : null,
   ].filter(Boolean) as string[];
   const testnetWindowReasons = [
     !session.token ? "需要先登录" : null,
-    !activeAccount ? "Select an exchange account" : null,
-    activeAccount && !activeAccount.is_active ? "Account is inactive" : null,
-    activeAccount?.account_mode !== "TESTNET" ? "Account mode must be TESTNET" : null,
-    activeExchange === "mock" ? "Mock uses simulation flow instead of a testnet window" : null,
-    activeAccount?.trading_enabled ? "Account trading flag must stay disabled before approval" : null,
-    !apiKeyMetadata.configured ? "Encrypted API key metadata is required" : null,
-    !Number.isFinite(parsedQuantity) || parsedQuantity <= 0 ? "Quantity must be greater than 0" : null,
-    estimatedNotional <= 0 ? "Estimated notional must be greater than 0" : null,
+    !activeAccount ? "请选择交易所账户" : null,
+    activeAccount && !activeAccount.is_active ? "账户未启用" : null,
+    activeAccount?.account_mode !== "TESTNET" ? "账户模式必须为测试网" : null,
+    activeExchange === "mock" ? "Mock 使用模拟流程，不进入测试网窗口" : null,
+    activeAccount?.trading_enabled ? "审批前账户交易标记必须保持关闭" : null,
+    !apiKeyMetadata.configured ? "需要先配置加密 API Key 元数据" : null,
+    !Number.isFinite(parsedQuantity) || parsedQuantity <= 0 ? "数量必须大于 0" : null,
+    estimatedNotional <= 0 ? "预估名义金额必须大于 0" : null,
   ].filter(Boolean) as string[];
   const canViewAuditLogs = session.role === "super_admin" || session.role === "admin";
   const selectedAuditLog = auditLogs.find((record) => record.id === selectedAuditLogId);
@@ -673,121 +816,121 @@ export default function TradeWorkspace() {
   const preRealChecklist: PreRealChecklistItem[] = [
     {
       id: "session",
-      title: "Authenticated session",
+      title: "登录会话",
       detail: session.token ? `${session.username} / ${session.role}` : "账户检查前需要先登录。",
       required: true,
       status: session.token ? "pass" : "pending",
     },
     {
       id: "mock",
-      title: "Mock execution path",
+      title: "Mock 执行链路",
       detail:
         mockAccounts.length > 0
-          ? `${mockAccounts.length} simulation account available.`
-          : "Create and run the Mock chain before exchange checks.",
+          ? `已有 ${mockAccounts.length} 个模拟账户。`
+          : "先创建并运行 Mock 全链路，再进行交易所检查。",
       required: true,
       status: mockAccounts.length > 0 ? "pass" : "pending",
     },
     {
       id: "exchange-account",
-      title: "Read-only exchange account",
+      title: "只读交易所账户",
       detail:
         exchangeReadOnlyAccounts.length > 0
-          ? `${exchangeReadOnlyAccounts.length} TESTNET/REAL read-only account available.`
-          : "Add a TESTNET or REAL account with trading disabled.",
+          ? `已有 ${exchangeReadOnlyAccounts.length} 个测试网或真实只读账户。`
+          : "添加一个关闭交易开关的测试网或真实账户。",
       required: true,
       status: exchangeReadOnlyAccounts.length > 0 ? "pass" : "pending",
     },
     {
       id: "active-account",
-      title: "Active account selected",
+      title: "已选择活动账户",
       detail: activeAccount
-        ? `${defaultAccountLabel(activeAccount.exchange_name, activeAccount.account_mode)} selected.`
-        : "Select an account in API Management.",
+        ? `已选择 ${defaultAccountLabel(activeAccount.exchange_name, activeAccount.account_mode)}。`
+        : "请在 API 与账户中选择账户。",
       required: true,
       status: activeAccount ? "pass" : "pending",
     },
     {
       id: "trading-flag",
-      title: "Trading flag remains disabled",
+      title: "交易开关保持关闭",
       detail: activeAccount
         ? activeAccount.trading_enabled
-          ? "Active account can trade; keep this disabled before small-fund testing."
-          : "Active account is read-only from the platform side."
-        : "Select an account to inspect the trading flag.",
+          ? "当前账户已允许交易，小额测试前应保持关闭。"
+          : "平台侧当前账户保持只读。"
+        : "选择账户后检查交易开关。",
       required: true,
       status: activeAccount ? (activeAccount.trading_enabled ? "fail" : "pass") : "pending",
     },
     {
       id: "secret",
-      title: "Encrypted secret metadata",
+      title: "密钥加密元数据",
       detail: apiKeyMetadata.configured
-        ? "Secret is configured and not returned to the browser."
-        : "Save the API key and secret for the selected account.",
+        ? "Secret 已配置，且不会返回浏览器。"
+        : "为选中账户保存 API Key 与 Secret。",
       required: true,
       status: apiKeyMetadata.configured ? "pass" : "pending",
     },
     {
       id: "read-only-auth",
-      title: "Read-only authentication evidence",
+      title: "只读认证证据",
       detail: activeReadOnlyAuthenticationAudit
-        ? `${activeReadOnlyAuthenticationAudit.action} recorded in audit logs.`
-        : "Run read-only authentication and load the active account audit logs.",
+        ? `审计日志已记录 ${activeReadOnlyAuthenticationAudit.action}。`
+        : "执行只读认证，并加载当前账户审计日志。",
       required: true,
       status: activeReadOnlyAuthenticationAudit ? "pass" : "pending",
     },
     {
       id: "audit-errors",
-      title: "No current audit errors",
+      title: "当前审计无错误",
       detail: auditHasErrors
-        ? `${auditSeverityCounts.ERROR} error audit record(s) in the loaded view.`
-        : "Loaded audit view has no ERROR records.",
+        ? `当前加载视图中有 ${auditSeverityCounts.ERROR} 条 ERROR 审计记录。`
+        : "当前加载视图没有 ERROR 记录。",
       required: true,
       status: auditHasErrors ? "fail" : "pass",
     },
     {
       id: "live-boundary",
-      title: "Live order boundary",
+      title: "真实下单边界",
       detail: liveOrderBoundaryIsLocked
-        ? "REAL order submission remains locked in this UI."
-        : "REAL trading is enabled on the active account.",
+        ? "当前界面仍锁定真实订单提交。"
+        : "当前活动账户已启用真实交易。",
       required: true,
       status: liveOrderBoundaryIsLocked ? "pass" : "fail",
     },
     {
       id: "testnet-window",
-      title: "TESTNET order window audit",
+      title: "测试网订单窗口审计",
       detail:
         approvalAuditLogs.length > 0
-          ? `${approvalAuditLogs.length} approval window audit record(s) loaded.`
-          : "Optional: record a TESTNET order-window approval before testnet order drills.",
+          ? `已加载 ${approvalAuditLogs.length} 条审批窗口审计记录。`
+          : "可选：测试网订单演练前记录测试网订单窗口审批。",
       required: false,
       status: approvalAuditLogs.length > 0 ? "pass" : "warn",
     },
     {
       id: "phase4-review",
-      title: "Phase 4 small-fund review",
+      title: "第四阶段小额资金复核",
       detail: latestPhase4ReviewAuditLog
-        ? "REAL small-fund review audit is recorded without authorizing orders."
-        : "Optional before small funds: record a super-admin review after REAL read-only readiness passes.",
+        ? "真实小额资金复核审计已记录，但不授权下单。"
+        : "可选：真实账户只读检查通过后，由超级管理员记录复核。",
       required: false,
       status: latestPhase4ReviewAuditLog ? "pass" : "warn",
     },
     {
       id: "phase4-real-window",
-      title: "REAL small-fund order window",
+      title: "真实小额订单窗口",
       detail: latestPhase4OrderWindowAuditLog
-        ? "REAL small-fund order window approval is recorded as audit-only evidence."
-        : "Optional final gate: record exact symbol, side, quantity, price, notional, and duration.",
+        ? "真实小额订单窗口审批已作为仅审计证据记录。"
+        : "可选终点：记录精确交易对、方向、数量、价格、名义金额和窗口时长。",
       required: false,
       status: latestPhase4OrderWindowAuditLog ? "pass" : "warn",
     },
     {
       id: "phase4-final-release",
-      title: "Phase 4 final release check",
+      title: "第四阶段最终确认",
       detail: latestPhase4FinalReleaseAuditLog
-        ? "Final release-check audit is recorded; platform order submission is still not authorized."
-        : "Optional: record final pre-small-fund confirmations after review and order-window audits exist.",
+        ? "最终确认审计已记录；平台仍未授权自动提交订单。"
+        : "可选：复核和订单窗口审计存在后，记录小额测试前最终确认。",
       required: false,
       status: latestPhase4FinalReleaseAuditLog ? "pass" : "warn",
     },
@@ -801,37 +944,37 @@ export default function TradeWorkspace() {
     Boolean(latestPhase4FinalReleaseAuditLog);
   const finalReadinessMatrix = [
     {
-      title: "Required Safety Checks",
+      title: "必需安全检查",
       value: `${completedRequiredPreRealItems}/${requiredPreRealItems.length}`,
-      detail: preRealReady ? "Required pre-real checks are complete." : "Complete all required checks first.",
+      detail: preRealReady ? "真实测试前必需检查已完成。" : "请先完成所有必需检查。",
       status: preRealReady ? "pass" : "blocked",
     },
     {
-      title: "REAL Read-only Readiness",
-      value: activePhase4Ready ? "PASS" : "BLOCKED",
+      title: "真实账户只读就绪",
+      value: activePhase4Ready ? "通过" : "已锁定",
       detail: activePhase4Ready
-        ? "Selected REAL account is read-only and order submission is not authorized."
-        : "Load readiness for a REAL OKX read-only account.",
+        ? "选中的真实账户为只读，且未授权订单提交。"
+        : "请加载真实 OKX 只读账户的就绪状态。",
       status: activePhase4Ready ? "pass" : "blocked",
     },
     {
-      title: "Audit Trail",
-      value: phase4AuditTrailReady ? "COMPLETE" : "INCOMPLETE",
+      title: "审计链路",
+      value: phase4AuditTrailReady ? "完成" : "未完成",
       detail: phase4AuditTrailReady
-        ? "Review, order-window, and final release-check audits are recorded."
-        : "Record Phase 4 audit-only review, window, and final check before any small-fund test.",
+        ? "复核、订单窗口和最终确认审计均已记录。"
+        : "小额资金测试前，记录第四阶段仅审计复核、窗口和最终确认。",
       status: phase4AuditTrailReady ? "pass" : "warn",
     },
     {
-      title: "Live Order Submission",
-      value: "LOCKED",
-      detail: "This UI still does not submit REAL exchange orders.",
+      title: "真实订单提交",
+      value: "已锁定",
+      detail: "当前 UI 仍不会提交真实交易所订单。",
       status: "pass",
     },
   ];
   const nextPreRealAction =
     preRealChecklist.find((item) => item.required && item.status !== "pass")?.detail ??
-    "All required checks are complete. Next step is a manual small-fund review, not live automation.";
+    "所有必需检查已完成。下一步是人工小额资金复核，不是自动真实下单。";
   const orderLocked = lockReasons.length > 0;
   const canRecordTestnetOrderWindow = testnetWindowReasons.length === 0;
   const gexbotProvider = marketDataProviders.find((provider) => provider.id === "gexbot");
@@ -845,7 +988,7 @@ export default function TradeWorkspace() {
 
   async function createAccount() {
     if (!session.token) {
-      appendApiLog("Create account", false, "Please log in first");
+      appendApiLog("创建账户", false, "请先登录");
       return;
     }
     setApiBusy(true);
@@ -866,9 +1009,9 @@ export default function TradeWorkspace() {
       await refreshAccounts();
       setActiveExchange(account.exchange_name);
       setActiveAccountId(account.id);
-      appendApiLog("Create exchange account", true, account);
+      appendApiLog("创建交易所账户", true, account);
     } catch (error) {
-      appendApiLog("Create exchange account", false, String(error));
+      appendApiLog("创建交易所账户", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -879,18 +1022,18 @@ export default function TradeWorkspace() {
       reauthentication_token?: string;
     };
     if (!payload.reauthentication_token) {
-      throw new Error("reauthentication token missing");
+      throw new Error("缺少二次认证令牌");
     }
     return payload.reauthentication_token;
   }
 
   async function saveApiKey() {
     if (!activeAccount) {
-      appendApiLog("Save encrypted API key", false, "Please select an account first");
+      appendApiLog("保存加密 API Key", false, "请先选择账户");
       return;
     }
     if (activeAccount.exchange_name === "okx" && !secretForm.passphrase) {
-      appendApiLog("Save encrypted API key", false, "OKX requires API passphrase");
+      appendApiLog("保存加密 API Key", false, "OKX 需要填写 Passphrase 口令");
       return;
     }
     setApiBusy(true);
@@ -914,9 +1057,9 @@ export default function TradeWorkspace() {
         passphrase: "",
         password: "",
       });
-      appendApiLog("Save encrypted API key", true, metadata);
+      appendApiLog("保存加密 API Key", true, metadata);
     } catch (error) {
-      appendApiLog("Save encrypted API key", false, String(error));
+      appendApiLog("保存加密 API Key", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -924,11 +1067,11 @@ export default function TradeWorkspace() {
 
   async function runReadOnlyCheck() {
     if (!activeAccount) {
-      appendApiLog("Run read-only authentication", false, "Please select an account first");
+      appendApiLog("执行只读认证", false, "请先选择账户");
       return;
     }
     if (activeAccount.account_mode === "SIMULATION") {
-      appendApiLog("Run read-only authentication", false, "SIMULATION accounts do not use exchange API");
+      appendApiLog("执行只读认证", false, "模拟账户不使用交易所 API");
       return;
     }
     setApiBusy(true);
@@ -945,9 +1088,9 @@ export default function TradeWorkspace() {
         200,
         { "X-Reauthentication-Token": reauthToken },
       );
-      appendApiLog("Run read-only authentication", true, result);
+      appendApiLog("执行只读认证", true, result);
     } catch (error) {
-      appendApiLog("Run read-only authentication", false, String(error));
+      appendApiLog("执行只读认证", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -955,16 +1098,16 @@ export default function TradeWorkspace() {
 
   async function loadGexbotTickers() {
     if (!session.token) {
-      appendApiLog("Load GEXBot tickers", false, "Please log in first");
+      appendApiLog("加载 GEXBot 交易对", false, "请先登录");
       return;
     }
     setMarketDataBusy(true);
     try {
       const result = await apiRequest("GET", "/market-data/gexbot/tickers");
       setMarketDataResult(result);
-      appendApiLog("Load GEXBot tickers", true, result);
+      appendApiLog("加载 GEXBot 交易对", true, result);
     } catch (error) {
-      appendApiLog("Load GEXBot tickers", false, String(error));
+      appendApiLog("加载 GEXBot 交易对", false, String(error));
     } finally {
       setMarketDataBusy(false);
     }
@@ -972,14 +1115,14 @@ export default function TradeWorkspace() {
 
   async function loadGexbotDataset() {
     if (!session.token) {
-      appendApiLog("Load GEXBot dataset", false, "Please log in first");
+      appendApiLog("加载 GEXBot 数据集", false, "请先登录");
       return;
     }
     const ticker = marketDataForm.ticker.trim().toUpperCase();
     const packageName = marketDataForm.package.trim().toLowerCase();
     const category = marketDataForm.category.trim().toLowerCase();
     if (!ticker || !category) {
-      appendApiLog("Load GEXBot dataset", false, "Ticker and category are required");
+      appendApiLog("加载 GEXBot 数据集", false, "需要填写交易对和分类");
       return;
     }
     setMarketDataBusy(true);
@@ -991,9 +1134,9 @@ export default function TradeWorkspace() {
         )}/${encodeURIComponent(category)}`,
       );
       setMarketDataResult(result);
-      appendApiLog("Load GEXBot dataset", true, result);
+      appendApiLog("加载 GEXBot 数据集", true, result);
     } catch (error) {
-      appendApiLog("Load GEXBot dataset", false, String(error));
+      appendApiLog("加载 GEXBot 数据集", false, String(error));
     } finally {
       setMarketDataBusy(false);
     }
@@ -1027,7 +1170,7 @@ export default function TradeWorkspace() {
     preferredSelectedId = "",
   ) {
     if (!canViewAuditLogs) {
-      appendApiLog("Load audit logs", false, "Admin role required");
+      appendApiLog("加载审计日志", false, "需要管理员权限");
       return;
     }
     setAuditBusy(true);
@@ -1064,7 +1207,7 @@ export default function TradeWorkspace() {
       const preferredRecord = records.find((record) => record.id === preferredSelectedId);
       setSelectedAuditLogId(preferredRecord?.id ?? records[0]?.id ?? "");
       setAuditLoadedAt(new Date().toLocaleString());
-      appendApiLog("Load audit logs", true, {
+      appendApiLog("加载审计日志", true, {
         count: records.length,
         action: filterOverride.action || "*",
         severity: filterOverride.severity || "*",
@@ -1072,7 +1215,7 @@ export default function TradeWorkspace() {
         created_to: createdTo || "*",
       });
     } catch (error) {
-      appendApiLog("Load audit logs", false, String(error));
+      appendApiLog("加载审计日志", false, String(error));
     } finally {
       setAuditBusy(false);
     }
@@ -1080,7 +1223,7 @@ export default function TradeWorkspace() {
 
   function exportAuditReport() {
     if (!auditLogs.length) {
-      appendApiLog("Export audit report", false, "Load audit logs first");
+      appendApiLog("导出审计报告", false, "请先加载审计日志");
       return;
     }
     const generatedAt = new Date().toISOString();
@@ -1114,7 +1257,7 @@ export default function TradeWorkspace() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    appendApiLog("Export audit report", true, {
+    appendApiLog("导出审计报告", true, {
       record_count: auditLogs.length,
       generated_at: generatedAt,
     });
@@ -1122,7 +1265,7 @@ export default function TradeWorkspace() {
 
   function openOrderPreview() {
     setIsOrderPreviewOpen(true);
-    setLastStatus(orderLocked ? "PREVIEW LOCKED" : "PREVIEW READY");
+    setLastStatus(orderLocked ? "预览已锁定" : "预览就绪");
   }
 
   function selectAccountForTrading(account: ExchangeAccount) {
@@ -1143,7 +1286,7 @@ export default function TradeWorkspace() {
     };
     setAuditFilters(nextFilters);
     setBottomTab("audit");
-    setLastStatus("AUDIT FILTER READY");
+    setLastStatus("审计筛选已就绪");
     if (canViewAuditLogs && session.token) {
       void loadAuditLogs(nextFilters);
     }
@@ -1151,7 +1294,7 @@ export default function TradeWorkspace() {
 
   function focusTestnetApprovalAudits() {
     if (!activeAccount) {
-      appendApiLog("Focus testnet approval audit", false, "Select an account first");
+      appendApiLog("定位测试网审批审计", false, "请先选择账户");
       return;
     }
     const nextFilters = {
@@ -1162,7 +1305,7 @@ export default function TradeWorkspace() {
     };
     setAuditFilters(nextFilters);
     setBottomTab("audit");
-    setLastStatus("APPROVAL AUDIT FILTER READY");
+    setLastStatus("审批审计筛选已就绪");
     if (canViewAuditLogs && session.token) {
       void loadAuditLogs(nextFilters);
     }
@@ -1170,7 +1313,7 @@ export default function TradeWorkspace() {
 
   function focusPhase4ReviewAudits() {
     if (!activeAccount) {
-      appendApiLog("Focus Phase 4 review audit", false, "Select an account first");
+      appendApiLog("定位第四阶段复核审计", false, "请先选择账户");
       return;
     }
     const nextFilters = {
@@ -1181,7 +1324,7 @@ export default function TradeWorkspace() {
     };
     setAuditFilters(nextFilters);
     setBottomTab("audit");
-    setLastStatus("PHASE 4 REVIEW AUDIT FILTER READY");
+    setLastStatus("第四阶段复核审计筛选已就绪");
     if (canViewAuditLogs && session.token) {
       void loadAuditLogs(nextFilters);
     }
@@ -1189,7 +1332,7 @@ export default function TradeWorkspace() {
 
   function focusPhase4OrderWindowAudits() {
     if (!activeAccount) {
-      appendApiLog("Focus Phase 4 REAL order window audit", false, "Select an account first");
+      appendApiLog("定位第四阶段真实订单窗口审计", false, "请先选择账户");
       return;
     }
     const nextFilters = {
@@ -1200,7 +1343,7 @@ export default function TradeWorkspace() {
     };
     setAuditFilters(nextFilters);
     setBottomTab("audit");
-    setLastStatus("PHASE 4 ORDER WINDOW AUDIT FILTER READY");
+    setLastStatus("第四阶段订单窗口审计筛选已就绪");
     if (canViewAuditLogs && session.token) {
       void loadAuditLogs(nextFilters);
     }
@@ -1208,7 +1351,7 @@ export default function TradeWorkspace() {
 
   function focusPhase4FinalReleaseAudits() {
     if (!activeAccount) {
-      appendApiLog("Focus Phase 4 final release audit", false, "Select an account first");
+      appendApiLog("定位第四阶段最终确认审计", false, "请先选择账户");
       return;
     }
     const nextFilters = {
@@ -1219,7 +1362,7 @@ export default function TradeWorkspace() {
     };
     setAuditFilters(nextFilters);
     setBottomTab("audit");
-    setLastStatus("PHASE 4 FINAL AUDIT FILTER READY");
+    setLastStatus("第四阶段最终审计筛选已就绪");
     if (canViewAuditLogs && session.token) {
       void loadAuditLogs(nextFilters);
     }
@@ -1227,7 +1370,7 @@ export default function TradeWorkspace() {
 
   async function loadPhase4Readiness() {
     if (!activeAccount) {
-      appendApiLog("Load Phase 4 readiness", false, "Select a REAL OKX account first");
+      appendApiLog("加载第四阶段就绪状态", false, "请先选择真实 OKX 账户");
       return;
     }
     setApiBusy(true);
@@ -1237,10 +1380,10 @@ export default function TradeWorkspace() {
         `/exchange-accounts/${activeAccount.id}/phase4-readiness`,
       )) as Phase4ReadinessReport;
       setPhase4Readiness(report);
-      appendApiLog("Load Phase 4 readiness", report.overall_status === "PASS", report);
+      appendApiLog("加载第四阶段就绪状态", report.overall_status === "PASS", report);
     } catch (error) {
       setPhase4Readiness(null);
-      appendApiLog("Load Phase 4 readiness", false, String(error));
+      appendApiLog("加载第四阶段就绪状态", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -1248,11 +1391,11 @@ export default function TradeWorkspace() {
 
   async function recordPhase4SmallFundReview() {
     if (!activeAccount) {
-      appendApiLog("Record Phase 4 review", false, "Select a REAL OKX account first");
+      appendApiLog("记录第四阶段复核", false, "请先选择真实 OKX 账户");
       return;
     }
     if (!phase4ReviewPassword) {
-      appendApiLog("Record Phase 4 review", false, "Current password is required");
+      appendApiLog("记录第四阶段复核", false, "需要当前登录密码");
       return;
     }
     setApiBusy(true);
@@ -1269,7 +1412,7 @@ export default function TradeWorkspace() {
         { "X-Reauthentication-Token": reauthToken },
       );
       setPhase4ReviewPassword("");
-      appendApiLog("Record Phase 4 review", true, result);
+      appendApiLog("记录第四阶段复核", true, result);
       const reviewAuditLogId =
         result && typeof result === "object" && "audit_log_id" in result
           ? String(result.audit_log_id)
@@ -1286,7 +1429,7 @@ export default function TradeWorkspace() {
         await loadAuditLogs(nextFilters, reviewAuditLogId);
       }
     } catch (error) {
-      appendApiLog("Record Phase 4 review", false, String(error));
+      appendApiLog("记录第四阶段复核", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -1297,7 +1440,7 @@ export default function TradeWorkspace() {
       return;
     }
     if (!phase4OrderWindowPassword) {
-      appendApiLog("Record Phase 4 REAL order window", false, "Current password is required");
+      appendApiLog("记录第四阶段真实订单窗口", false, "需要当前登录密码");
       return;
     }
     setApiBusy(true);
@@ -1319,7 +1462,7 @@ export default function TradeWorkspace() {
         { "X-Reauthentication-Token": reauthToken },
       );
       setPhase4OrderWindowPassword("");
-      appendApiLog("Record Phase 4 REAL order window", true, result);
+      appendApiLog("记录第四阶段真实订单窗口", true, result);
       const approvalAuditLogId =
         result && typeof result === "object" && "audit_log_id" in result
           ? String(result.audit_log_id)
@@ -1336,7 +1479,7 @@ export default function TradeWorkspace() {
         await loadAuditLogs(nextFilters, approvalAuditLogId);
       }
     } catch (error) {
-      appendApiLog("Record Phase 4 REAL order window", false, String(error));
+      appendApiLog("记录第四阶段真实订单窗口", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -1347,7 +1490,7 @@ export default function TradeWorkspace() {
       return;
     }
     if (!phase4FinalPassword) {
-      appendApiLog("Record Phase 4 final check", false, "Current password is required");
+      appendApiLog("记录第四阶段最终确认", false, "需要当前登录密码");
       return;
     }
     setApiBusy(true);
@@ -1371,7 +1514,7 @@ export default function TradeWorkspace() {
         { "X-Reauthentication-Token": reauthToken },
       );
       setPhase4FinalPassword("");
-      appendApiLog("Record Phase 4 final check", true, result);
+      appendApiLog("记录第四阶段最终确认", true, result);
       const finalAuditLogId =
         result && typeof result === "object" && "audit_log_id" in result
           ? String(result.audit_log_id)
@@ -1388,7 +1531,7 @@ export default function TradeWorkspace() {
         await loadAuditLogs(nextFilters, finalAuditLogId);
       }
     } catch (error) {
-      appendApiLog("Record Phase 4 final check", false, String(error));
+      appendApiLog("记录第四阶段最终确认", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -1398,7 +1541,7 @@ export default function TradeWorkspace() {
     if (orderLocked) {
       return;
     }
-    appendApiLog("Order preview confirmed", true, orderPreviewPayload);
+    appendApiLog("下单预览已确认", true, orderPreviewPayload);
     setBottomTab("history");
     setIsOrderPreviewOpen(false);
   }
@@ -1408,7 +1551,7 @@ export default function TradeWorkspace() {
       return;
     }
     if (!orderApprovalPassword) {
-      appendApiLog("Record testnet order window", false, "Current password is required");
+      appendApiLog("记录测试网订单窗口", false, "需要当前登录密码");
       return;
     }
     setApiBusy(true);
@@ -1429,7 +1572,7 @@ export default function TradeWorkspace() {
         { "X-Reauthentication-Token": reauthToken },
       );
       setOrderApprovalPassword("");
-      appendApiLog("Record testnet order window", true, result);
+      appendApiLog("记录测试网订单窗口", true, result);
       const approvalAuditLogId =
         result && typeof result === "object" && "audit_log_id" in result
           ? String(result.audit_log_id)
@@ -1447,7 +1590,7 @@ export default function TradeWorkspace() {
         await loadAuditLogs(nextFilters, approvalAuditLogId);
       }
     } catch (error) {
-      appendApiLog("Record testnet order window", false, String(error));
+      appendApiLog("记录测试网订单窗口", false, String(error));
     } finally {
       setApiBusy(false);
     }
@@ -1455,7 +1598,7 @@ export default function TradeWorkspace() {
 
   function focusAuditForCurrentAccount() {
     if (!activeAccount) {
-      appendApiLog("Focus audit logs", false, "Select an account first");
+      appendApiLog("定位审计日志", false, "请先选择账户");
       return;
     }
     focusAuditForAccount(activeAccount);
@@ -1465,7 +1608,7 @@ export default function TradeWorkspace() {
     return (
       <main className="trade-auth-loading">
         <section>
-          <span>SESSION CHECK</span>
+          <span>会话检查</span>
           <h1>正在恢复交易会话</h1>
           <p>登录会话确认完成后会进入交易终端。</p>
         </section>
@@ -1477,7 +1620,7 @@ export default function TradeWorkspace() {
     return (
       <main className="trade-auth-loading">
         <section>
-          <span>AUTH REQUIRED</span>
+          <span>需要认证</span>
           <h1>需要登录</h1>
           <p>正在跳转到登录页面。</p>
         </section>
@@ -1486,21 +1629,34 @@ export default function TradeWorkspace() {
   }
 
   return (
-    <main className="trade-terminal">
+    <main className={`trade-terminal trade-workspace-${activeWorkspace}`}>
       <aside className="trade-sidebar">
         <a className="trade-brand" href="/trade">
           <span>CT</span>
           <strong>交易工作台</strong>
         </a>
         <nav>
-          <a className="active" href="/trade">
+          <a className={activeWorkspace === "terminal" ? "active" : ""} href="/trade#terminal">
             交易终端
           </a>
-          <a href="/trade#portfolio">资产概览</a>
-          <a href="/trade#api-management">API 与账户</a>
-          <a href="/trade#risk">风控中心</a>
-          <a href="/trade#audit">审计中心</a>
-          <a href="/trade#phase4-small-fund-review">小额测试闸门</a>
+          <a className={activeWorkspace === "portfolio" ? "active" : ""} href="/trade#portfolio">
+            资产概览
+          </a>
+          <a className={activeWorkspace === "api-management" ? "active" : ""} href="/trade#api-management">
+            API 与账户
+          </a>
+          <a className={activeWorkspace === "risk" ? "active" : ""} href="/trade#risk">
+            风控中心
+          </a>
+          <a className={activeWorkspace === "market-data" ? "active" : ""} href="/trade#market-data">
+            市场数据
+          </a>
+          <a className={activeWorkspace === "audit" ? "active" : ""} href="/trade#audit">
+            审计中心
+          </a>
+          <a className={activeWorkspace === "small-fund" ? "active" : ""} href="/trade#phase4-small-fund-review">
+            小额测试闸门
+          </a>
           {session.role === "super_admin" && <a href="/">管理控制台</a>}
           <a href="/login">切换账户</a>
         </nav>
@@ -1514,8 +1670,8 @@ export default function TradeWorkspace() {
       <section className="trade-main">
         <header className="trade-topbar">
           <div>
-            <span className="trade-kicker">统一交易所工作区</span>
-            <h1>{activeSymbol} 交易终端</h1>
+            <span className="trade-kicker">统一交易工作区</span>
+            <h1>{activeWorkspace === "terminal" ? `${activeSymbol} 交易终端` : activeWorkspaceLabel}</h1>
           </div>
           <div className="trade-topbar-actions">
             <a href="/trade#api-management">添加 API</a>
@@ -1528,7 +1684,7 @@ export default function TradeWorkspace() {
           </div>
         </header>
 
-        <section className="trade-command-center" id="portfolio">
+        <section className="trade-command-center" id="portfolio" data-workspace="portfolio">
           <article>
             <span>工作区模式</span>
             <strong>模拟 / 测试网 / 真实账户只读</strong>
@@ -1553,7 +1709,7 @@ export default function TradeWorkspace() {
           </article>
         </section>
 
-        <section className="trade-market-strip">
+        <section className="trade-market-strip" data-workspace="terminal">
           {exchanges.map((exchange) => {
             const accountCount = accounts.filter((account) => account.exchange_name === exchange).length;
             return (
@@ -1574,18 +1730,64 @@ export default function TradeWorkspace() {
               </button>
             );
           })}
-          {symbols.map((symbol) => (
-            <button
-              className={symbol === activeSymbol ? "symbol-active" : ""}
-              key={symbol}
-              onClick={() => setActiveSymbol(symbol)}
-            >
-              {symbol}
-            </button>
-          ))}
+          <details className="trade-symbol-picker">
+            <summary>
+              <span>交易对</span>
+              <strong>{activeSymbol}</strong>
+            </summary>
+            <div className="trade-symbol-menu">
+              <input
+                aria-label="搜索交易对"
+                placeholder="搜索 BTC、ETH、USDT"
+                value={symbolSearch}
+                onChange={(event) => setSymbolSearch(event.target.value)}
+              />
+              {favoritePinnedSymbols.length > 0 && (
+                <div className="trade-symbol-pinned" aria-label="常用交易对">
+                  {favoritePinnedSymbols.map((symbol) => (
+                    <button
+                      className={symbol === activeSymbol ? "active" : ""}
+                      key={symbol}
+                      onClick={() => setActiveSymbol(symbol)}
+                      type="button"
+                    >
+                      ★ {symbol}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="trade-symbol-list">
+                {filteredSymbols.map((symbol) => {
+                  const snapshot = marketSnapshots[symbol] ?? marketSnapshots["BTC/USDT"];
+                  const isFavorite = favoriteSymbolSet.has(symbol);
+                  return (
+                    <div className={symbol === activeSymbol ? "trade-symbol-row active" : "trade-symbol-row"} key={symbol}>
+                      <button
+                        className="trade-symbol-star"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          toggleFavoriteSymbol(symbol);
+                        }}
+                        title={isFavorite ? "取消置顶" : "星标置顶"}
+                        type="button"
+                      >
+                        {isFavorite ? "★" : "☆"}
+                      </button>
+                      <button className="trade-symbol-main" onClick={() => setActiveSymbol(symbol)} type="button">
+                        <strong>{symbol}</strong>
+                        <span>
+                          {formatNumber(snapshot.last)} · {snapshot.change}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </details>
         </section>
 
-        <section className="trade-layout-grid">
+        <section className="trade-layout-grid" data-workspace="terminal">
           <div className="trade-card trade-chart">
             <div className="trade-card-head">
               <div>
@@ -1623,7 +1825,7 @@ export default function TradeWorkspace() {
                 </div>
                 <div>
                   <dt>模式</dt>
-                  <dd>{accountMode}</dd>
+                  <dd>{activeAccount ? accountModeLabels[activeAccount.account_mode] : "未选择"}</dd>
                 </div>
                 <div>
                   <dt>路由</dt>
@@ -1658,7 +1860,7 @@ export default function TradeWorkspace() {
           <div className="trade-card trade-ticket">
             <div className="trade-card-head">
               <strong>下单面板</strong>
-              <span>{lastStatus}</span>
+              <span>{resultLabels[lastStatus] ?? lastStatus}</span>
             </div>
             <div className="trade-ticket-mode" aria-label="订单类型选择">
               <button
@@ -1724,7 +1926,7 @@ export default function TradeWorkspace() {
                 ) : (
                   exchangeAccounts.map((account) => (
                     <option key={account.id} value={account.id}>
-                      {account.account_label} / {account.account_mode}
+                      {account.account_label} / {accountModeLabels[account.account_mode]}
                     </option>
                   ))
                 )}
@@ -1738,12 +1940,12 @@ export default function TradeWorkspace() {
               <div>
                 <span>方向</span>
                 <strong className={orderSide === "BUY" ? "preview-buy" : "preview-sell"}>
-                  {orderSide}
+                  {orderSideLabels[orderSide]}
                 </strong>
               </div>
               <div>
                 <span>类型</span>
-                <strong>{orderForm.orderType}</strong>
+                <strong>{orderTypeLabels[orderForm.orderType]}</strong>
               </div>
               <div>
                 <span>预估价格</span>
@@ -1773,7 +1975,7 @@ export default function TradeWorkspace() {
           </div>
         </section>
 
-        <section className="trade-desk-grid" id="risk">
+        <section className="trade-desk-grid" id="risk" data-workspace="risk">
           <article className="trade-desk-panel">
             <div className="trade-card-head">
               <div>
@@ -1805,7 +2007,7 @@ export default function TradeWorkspace() {
           </article>
         </section>
 
-        <section className="trade-market-data-panel" id="market-data">
+        <section className="trade-market-data-panel" id="market-data" data-workspace="market-data">
           <div className="trade-card-head">
             <div>
               <span>市场数据服务</span>
@@ -1821,7 +2023,7 @@ export default function TradeWorkspace() {
           </div>
           <div className="trade-market-data-grid">
             <article className="trade-market-data-status">
-              <span>Provider</span>
+              <span>服务商</span>
               <strong>{gexbotProvider?.name ?? "GEXBot"}</strong>
               <p>
                 {gexbotProvider?.configured
@@ -1831,17 +2033,17 @@ export default function TradeWorkspace() {
               <dl>
                 <div>
                   <dt>模式</dt>
-                  <dd>Read Only</dd>
+                  <dd>只读</dd>
                 </div>
                 <div>
                   <dt>接口</dt>
-                  <dd>{gexbotProvider?.supports?.join(" / ") ?? "tickers / classic / state"}</dd>
+                  <dd>{gexbotProvider?.supports?.join(" / ") ?? "交易对 / 经典数据 / 状态"}</dd>
                 </div>
               </dl>
             </article>
             <article className="trade-market-data-query">
               <label>
-                Ticker
+                代码
                 <input
                   value={marketDataForm.ticker}
                   onChange={(event) =>
@@ -1863,12 +2065,12 @@ export default function TradeWorkspace() {
                     }))
                   }
                 >
-                  <option value="classic">classic</option>
-                  <option value="state">state</option>
+                  <option value="classic">经典数据</option>
+                  <option value="state">状态数据</option>
                 </select>
               </label>
               <label>
-                Category
+                分类
                 <input
                   value={marketDataForm.category}
                   onChange={(event) =>
@@ -1906,7 +2108,7 @@ export default function TradeWorkspace() {
           </div>
         </section>
 
-        <section className="trade-api-manager" id="api-management">
+        <section className="trade-api-manager" id="api-management" data-workspace="api-management">
           <div className="trade-card-head">
             <div>
               <span>API 管理</span>
@@ -1935,9 +2137,9 @@ export default function TradeWorkspace() {
                     >
                       <div>
                         <strong>{account.account_label}</strong>
-                        <span>
-                          {account.account_mode} / {account.trading_enabled ? "交易已开启" : "只读"}
-                        </span>
+                  <span>
+                    {accountModeLabels[account.account_mode]} / {account.trading_enabled ? "交易已开启" : "只读"}
+                  </span>
                       </div>
                       <div className="trade-account-actions">
                         <button onClick={() => selectAccountForTrading(account)}>用于下单面板</button>
@@ -1972,17 +2174,17 @@ export default function TradeWorkspace() {
                   <dd>{apiKeyMetadata.configured ? "已配置" : "未配置"}</dd>
                 </div>
                 <div>
-                  <dt>Passphrase</dt>
-                  <dd>{apiKeyMetadata.has_passphrase ? "Yes" : "No"}</dd>
+                  <dt>Passphrase 口令</dt>
+                  <dd>{apiKeyMetadata.has_passphrase ? "已配置" : "未配置"}</dd>
                 </div>
               </dl>
             </div>
 
             <div className="trade-api-panel">
-              <h2>Create Account</h2>
+              <h2>创建账户</h2>
               <div className="trade-form-grid">
                 <label>
-                  Exchange
+                  交易所
                   <select
                     value={createForm.exchangeName}
                     onChange={(event) => {
@@ -2002,7 +2204,7 @@ export default function TradeWorkspace() {
                   </select>
                 </label>
                 <label>
-                  Mode
+                  账户模式
                   <select
                     value={createForm.accountMode}
                     onChange={(event) =>
@@ -2013,13 +2215,13 @@ export default function TradeWorkspace() {
                     }
                     disabled={createForm.exchangeName === "mock"}
                   >
-                    <option value="SIMULATION">SIMULATION</option>
-                    <option value="TESTNET">TESTNET</option>
+                    <option value="SIMULATION">模拟</option>
+                    <option value="TESTNET">测试网只读</option>
                     <option value="REAL">真实账户只读</option>
                   </select>
                 </label>
                 <label>
-                  Label
+                  账户标签
                   <input
                     value={createForm.accountLabel}
                     onChange={(event) =>
@@ -2034,12 +2236,12 @@ export default function TradeWorkspace() {
                 onClick={createAccount}
                 disabled={!session.token || apiBusy}
               >
-                Create Account
+                创建账户
               </button>
             </div>
 
             <div className="trade-api-panel">
-              <h2>Encrypted Credentials</h2>
+              <h2>加密密钥</h2>
               <div className="trade-form-grid">
                 <label>
                   API Key
@@ -2075,7 +2277,7 @@ export default function TradeWorkspace() {
                   />
                 </label>
                 <label className="span-2">
-                  Current Password
+                  当前登录密码
                   <input
                     autoComplete="current-password"
                     type="password"
@@ -2098,28 +2300,28 @@ export default function TradeWorkspace() {
                     apiBusy
                   }
                 >
-                  Save Encrypted Key
+                  加密保存密钥
                 </button>
                 <button
                   className="trade-submit compact"
                   onClick={runReadOnlyCheck}
                   disabled={!activeAccount || !secretForm.password || apiBusy}
                 >
-                  Run Read-only Check
+                  执行只读认证
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="trade-action-log" aria-label="api management action log">
+          <div className="trade-action-log" aria-label="API 管理执行日志">
             {apiLogs.length === 0 ? (
-              <p className="trade-muted">No API management action yet.</p>
+              <p className="trade-muted">暂无 API 管理操作记录。</p>
             ) : (
               apiLogs.map((log) => (
                 <article key={log.id}>
                   <div>
                     <strong>{log.title}</strong>
-                    <span className={log.ok ? "log-ok" : "log-fail"}>{log.ok ? "PASS" : "FAIL"}</span>
+                    <span className={log.ok ? "log-ok" : "log-fail"}>{log.ok ? "通过" : "失败"}</span>
                   </div>
                   <pre>{prettyJson(log.detail)}</pre>
                 </article>
@@ -2128,10 +2330,10 @@ export default function TradeWorkspace() {
           </div>
         </section>
 
-        <section className="trade-preflight-card" id="pre-real-checklist">
+        <section className="trade-preflight-card" id="pre-real-checklist" data-workspace="small-fund">
           <div className="trade-preflight-head">
             <div>
-              <span>Pre-Real Safety Checklist</span>
+              <span>实盘前安全清单</span>
               <strong>小额资金测试前置检查</strong>
               <p>
                 只汇总登录、账户、密钥、只读认证和审计证据。此清单不会开启真实交易，也不会发送订单。
@@ -2139,31 +2341,31 @@ export default function TradeWorkspace() {
             </div>
             <div className="trade-preflight-status">
               <span className={preRealReady ? "ready" : "blocked"}>
-                {preRealReady ? "READY FOR REVIEW" : "BLOCKED"}
+                {preRealReady ? "可人工复核" : "已锁定"}
               </span>
               <strong>
                 {completedRequiredPreRealItems}/{requiredPreRealItems.length}
               </strong>
-              <small>required checks</small>
+              <small>必检项</small>
             </div>
           </div>
           <div className="trade-preflight-actions">
             <button className="trade-ghost-button" onClick={refreshAccounts} disabled={!session.token || apiBusy}>
-              Refresh Accounts
+              刷新账户
             </button>
             <button
               className="trade-ghost-button"
               onClick={() => activeAccount && focusAuditForAccount(activeAccount)}
               disabled={!activeAccount || !canViewAuditLogs || auditBusy}
             >
-              Load Active Audit
+              加载当前审计
             </button>
             <button
               className="trade-ghost-button"
               onClick={focusTestnetApprovalAudits}
               disabled={!canViewAuditLogs || auditBusy}
             >
-              Load TESTNET Windows
+              加载测试网窗口
             </button>
           </div>
           <div className="trade-checklist-grid">
@@ -2171,27 +2373,26 @@ export default function TradeWorkspace() {
               <article className={`trade-check-item ${item.status}`} key={item.id}>
                 <div>
                   <strong>{item.title}</strong>
-                  <span>{item.required ? "Required" : "Optional"}</span>
+                  <span>{item.required ? "必检" : "可选"}</span>
                 </div>
                 <p>{item.detail}</p>
-                <b>{item.status.toUpperCase()}</b>
+                <b>{resultLabels[item.status.toUpperCase()] ?? item.status.toUpperCase()}</b>
               </article>
             ))}
           </div>
           <div className={preRealReady ? "trade-next-action ready" : "trade-next-action"}>
-            <span>Next action</span>
+            <span>下一步</span>
             <strong>{nextPreRealAction}</strong>
           </div>
         </section>
 
-        <section className="trade-final-readiness-card" id="small-fund-final-readiness">
+        <section className="trade-final-readiness-card" id="small-fund-final-readiness" data-workspace="small-fund">
           <div className="trade-section-heading">
             <div>
-              <span>Final Gate</span>
-              <h2>Small-Fund Test Readiness</h2>
+              <span>最终闸门</span>
+              <h2>小额资金测试就绪状态</h2>
               <p>
-                Consolidated view before any Phase 4 small-fund test. Passing this panel still keeps
-                live order submission locked in the current build.
+                第四阶段小额资金测试前的汇总视图。即使此面板通过，当前版本仍保持真实订单提交锁定。
               </p>
             </div>
           </div>
@@ -2206,24 +2407,23 @@ export default function TradeWorkspace() {
           </div>
         </section>
 
-        <section className="trade-phase4-card" id="phase4-small-fund-review">
+        <section className="trade-phase4-card" id="phase4-small-fund-review" data-workspace="small-fund">
           <div className="trade-phase4-head">
             <div>
-              <span>Phase 4 Control</span>
-              <strong>Small-Fund Review Audit</strong>
+              <span>第四阶段控制</span>
+              <strong>小额资金复核审计</strong>
               <p>
-                Records a super-admin review for the selected REAL OKX account. This does not
-                enable trading, authorize order submission, or expose API secrets.
+                为选中的真实 OKX 账户记录超级管理员复核。此操作不会启用交易、授权下单或暴露 API Secret。
               </p>
             </div>
             <div className={activePhase4Ready ? "phase4-status ready" : "phase4-status blocked"}>
-              <span>{activePhase4Ready ? "READINESS PASS" : "READINESS BLOCKED"}</span>
-              <strong>{latestPhase4ReviewAuditLog ? "REVIEW RECORDED" : "NO REVIEW AUDIT"}</strong>
+              <span>{activePhase4Ready ? "准备就绪" : "准备未完成"}</span>
+              <strong>{latestPhase4ReviewAuditLog ? "复核已记录" : "无复核审计"}</strong>
             </div>
           </div>
           <div className="trade-phase4-grid">
             <label>
-              <span>Max Notional Cap</span>
+              <span>最大名义金额</span>
               <input
                 inputMode="decimal"
                 value={phase4MaxNotional}
@@ -2232,12 +2432,12 @@ export default function TradeWorkspace() {
               />
             </label>
             <label>
-              <span>Current Password</span>
+              <span>当前登录密码</span>
               <input
                 type="password"
                 value={phase4ReviewPassword}
                 onChange={(event) => setPhase4ReviewPassword(event.target.value)}
-                placeholder="Required for reauthentication"
+                placeholder="用于重新认证"
               />
             </label>
             <button
@@ -2245,14 +2445,14 @@ export default function TradeWorkspace() {
               onClick={loadPhase4Readiness}
               disabled={!activeAccount || apiBusy}
             >
-              Load Readiness
+              加载就绪状态
             </button>
             <button
               className="trade-submit compact"
               onClick={recordPhase4SmallFundReview}
               disabled={!canRecordPhase4SmallFundReview || apiBusy}
             >
-              Record Review Audit
+              记录复核审计
             </button>
           </div>
           <div className="trade-phase4-actions">
@@ -2261,10 +2461,10 @@ export default function TradeWorkspace() {
               onClick={focusPhase4ReviewAudits}
               disabled={!activeAccount || !canViewAuditLogs || auditBusy}
             >
-              Load Review Audits
+              加载复核审计
             </button>
             <span>
-              Required acknowledgement: <strong>{phase4SmallFundReviewAck}</strong>
+              必需确认码：<strong>{phase4SmallFundReviewAck}</strong>
             </span>
           </div>
           {phase4Readiness ? (
@@ -2278,7 +2478,7 @@ export default function TradeWorkspace() {
                 >
                   <div>
                     <strong>{check.name}</strong>
-                    <span>{check.status}</span>
+                    <span>{resultLabels[check.status] ?? check.status}</span>
                   </div>
                   <p>{check.detail}</p>
                 </article>
@@ -2286,67 +2486,66 @@ export default function TradeWorkspace() {
             </div>
           ) : (
             <p className="trade-muted">
-              Select a REAL OKX account and load readiness before recording a review audit.
+              选择真实 OKX 账户并加载就绪状态后，才能记录复核审计。
             </p>
           )}
         </section>
 
-        <section className="trade-phase4-card" id="phase4-real-order-window">
+        <section className="trade-phase4-card" id="phase4-real-order-window" data-workspace="small-fund">
           <div className="trade-phase4-head">
             <div>
-              <span>Phase 4 Control</span>
-              <strong>REAL Small-Fund Order Window</strong>
+              <span>第四阶段控制</span>
+              <strong>真实小额订单窗口</strong>
               <p>
-                Records the exact REAL order-window approval as append-only audit evidence.
-                This still does not enable trading or submit an exchange order.
+                将精确的真实订单窗口审批记录为 append-only 审计证据。此操作仍不会启用交易或提交交易所订单。
               </p>
             </div>
             <div className={latestPhase4OrderWindowAuditLog ? "phase4-status ready" : "phase4-status blocked"}>
-              <span>{canRecordPhase4OrderWindow ? "READY TO RECORD" : "WINDOW LOCKED"}</span>
-              <strong>{latestPhase4OrderWindowAuditLog ? "WINDOW RECORDED" : "NO WINDOW AUDIT"}</strong>
+              <span>{canRecordPhase4OrderWindow ? "可记录" : "窗口已锁定"}</span>
+              <strong>{latestPhase4OrderWindowAuditLog ? "窗口已记录" : "无窗口审计"}</strong>
             </div>
           </div>
           <div className="trade-phase4-window-summary">
             <article>
-              <span>Symbol</span>
+              <span>交易对</span>
               <strong>{normalizedPreviewSymbol}</strong>
             </article>
             <article>
-              <span>Side</span>
+              <span>方向</span>
               <strong className={orderSide === "BUY" ? "preview-buy" : "preview-sell"}>
-                {orderSide}
+                {orderSideLabels[orderSide]}
               </strong>
             </article>
             <article>
-              <span>Limit Price</span>
-              <strong>{orderForm.orderType === "LIMIT" ? `${formatNumber(parsedPrice)} USDT` : "LIMIT required"}</strong>
+              <span>限价价格</span>
+              <strong>{orderForm.orderType === "LIMIT" ? `${formatNumber(parsedPrice)} USDT` : "需要限价单"}</strong>
             </article>
             <article>
-              <span>Quantity</span>
+              <span>数量</span>
               <strong>{Number.isFinite(parsedQuantity) ? parsedQuantity : "-"}</strong>
             </article>
             <article>
-              <span>Max Notional</span>
+              <span>最大名义金额</span>
               <strong>{formatNumber(estimatedNotional)} USDT</strong>
             </article>
           </div>
           <div className="trade-phase4-grid">
             <label>
-              <span>Window Duration</span>
+              <span>窗口时长</span>
               <input
                 inputMode="numeric"
                 value={phase4OrderWindowDuration}
                 onChange={(event) => setPhase4OrderWindowDuration(event.target.value)}
-                placeholder="1-10 minutes"
+                placeholder="1-10 分钟"
               />
             </label>
             <label>
-              <span>Current Password</span>
+              <span>当前登录密码</span>
               <input
                 type="password"
                 value={phase4OrderWindowPassword}
                 onChange={(event) => setPhase4OrderWindowPassword(event.target.value)}
-                placeholder="Required for reauthentication"
+                placeholder="用于重新认证"
               />
             </label>
             <button
@@ -2354,71 +2553,70 @@ export default function TradeWorkspace() {
               onClick={focusPhase4OrderWindowAudits}
               disabled={!activeAccount || !canViewAuditLogs || auditBusy}
             >
-              Load Window Audits
+              加载窗口审计
             </button>
             <button
               className="trade-submit compact"
               onClick={recordPhase4OrderWindowApproval}
               disabled={!canRecordPhase4OrderWindow || apiBusy}
             >
-              Record Window Audit
+              记录窗口审计
             </button>
           </div>
           <div className="trade-phase4-actions">
             <span>
-              Required acknowledgement: <strong>{phase4SmallFundOrderWindowAck}</strong>
+              必需确认码：<strong>{phase4SmallFundOrderWindowAck}</strong>
             </span>
-            <span>LIMIT only / review cap {formatNumber(phase4MaxNotionalValue)} USDT / no live order</span>
+            <span>仅限限价 / 复核上限 {formatNumber(phase4MaxNotionalValue)} USDT / 不提交真实订单</span>
           </div>
         </section>
 
-        <section className="trade-phase4-card" id="phase4-final-release-check">
+        <section className="trade-phase4-card" id="phase4-final-release-check" data-workspace="small-fund">
           <div className="trade-phase4-head">
             <div>
-              <span>Phase 4 Final Gate</span>
-              <strong>Final Release Check Audit</strong>
+              <span>第四阶段最终闸门</span>
+              <strong>最终确认审计</strong>
               <p>
-                Records the last pre-small-fund confirmation after the review and order-window
-                audits exist. This is audit-only and still does not authorize or submit orders.
+                在复核与订单窗口审计存在后，记录小额资金测试前最终确认。此操作仅写审计，仍不授权或提交订单。
               </p>
             </div>
             <div className={latestPhase4FinalReleaseAuditLog ? "phase4-status ready" : "phase4-status blocked"}>
-              <span>{canRecordPhase4FinalReleaseCheck ? "READY TO RECORD" : "FINAL GATE LOCKED"}</span>
+              <span>{canRecordPhase4FinalReleaseCheck ? "可记录" : "终审已锁定"}</span>
               <strong>
-                {latestPhase4FinalReleaseAuditLog ? "FINAL CHECK RECORDED" : "NO FINAL CHECK"}
+                {latestPhase4FinalReleaseAuditLog ? "终审已记录" : "无终审记录"}
               </strong>
             </div>
           </div>
           <div className="trade-phase4-window-summary">
             <article>
-              <span>Review Audit</span>
-              <strong>{latestPhase4ReviewAuditLog ? "RECORDED" : "MISSING"}</strong>
+              <span>复核审计</span>
+              <strong>{latestPhase4ReviewAuditLog ? "已记录" : "缺失"}</strong>
             </article>
             <article>
-              <span>Window Audit</span>
-              <strong>{latestPhase4OrderWindowAuditLog ? "RECORDED" : "MISSING"}</strong>
+              <span>窗口审计</span>
+              <strong>{latestPhase4OrderWindowAuditLog ? "已记录" : "缺失"}</strong>
             </article>
             <article>
-              <span>Final Notional</span>
+              <span>最终名义金额</span>
               <strong>{formatNumber(estimatedNotional)} USDT</strong>
             </article>
             <article>
-              <span>Trading Flag</span>
-              <strong>{activeAccount?.trading_enabled ? "ON" : "OFF"}</strong>
+              <span>交易开关</span>
+              <strong>{activeAccount?.trading_enabled ? "开启" : "关闭"}</strong>
             </article>
             <article>
-              <span>Order Auth</span>
-              <strong>AUDIT ONLY</strong>
+              <span>订单授权</span>
+              <strong>仅审计</strong>
             </article>
           </div>
           <div className="trade-final-confirmations">
             {[
-              ["dedicatedAccount", "Dedicated test account is confirmed"],
-              ["accountEmpty", "Account is empty or funded only with approved tiny test amount"],
-              ["withdrawalsDisabled", "Withdrawal permission is disabled on the exchange API key"],
-              ["deleteApiKeyAfterTest", "API key will be deleted after the test"],
-              ["firstOrderStopReview", "First accepted order will stop the process for manual review"],
-              ["noLiveOrderSubmission", "This button records audit only and will not submit an order"],
+              ["dedicatedAccount", "已确认使用专用测试账户"],
+              ["accountEmpty", "账户为空或仅有已批准的小额测试资金"],
+              ["withdrawalsDisabled", "交易所 API Key 已关闭提现权限"],
+              ["deleteApiKeyAfterTest", "测试结束后会删除 API Key"],
+              ["firstOrderStopReview", "首笔被接受订单后立即暂停并人工复核"],
+              ["noLiveOrderSubmission", "此按钮仅记录审计，不会提交订单"],
             ].map(([key, label]) => (
               <label key={key}>
                 <input
@@ -2439,12 +2637,12 @@ export default function TradeWorkspace() {
           </div>
           <div className="trade-phase4-grid">
             <label>
-              <span>Current Password</span>
+              <span>当前登录密码</span>
               <input
                 type="password"
                 value={phase4FinalPassword}
                 onChange={(event) => setPhase4FinalPassword(event.target.value)}
-                placeholder="Required for reauthentication"
+                placeholder="用于重新认证"
               />
             </label>
             <button
@@ -2452,88 +2650,88 @@ export default function TradeWorkspace() {
               onClick={focusPhase4FinalReleaseAudits}
               disabled={!activeAccount || !canViewAuditLogs || auditBusy}
             >
-              Load Final Audits
+              加载最终审计
             </button>
             <button
               className="trade-submit compact"
               onClick={recordPhase4FinalReleaseCheck}
               disabled={!canRecordPhase4FinalReleaseCheck || apiBusy}
             >
-              Record Final Check
+              记录最终确认
             </button>
           </div>
           <div className="trade-phase4-actions">
             <span>
-              Required acknowledgement: <strong>{phase4FinalReleaseCheckAck}</strong>
+              必需确认码：<strong>{phase4FinalReleaseCheckAck}</strong>
             </span>
-            <span>Requires review audit + order-window audit / no live order</span>
+            <span>需要复核审计 + 订单窗口审计 / 不提交真实订单</span>
           </div>
         </section>
 
-        <section className="trade-api-grid">
+        <section className="trade-api-grid" data-workspace="portfolio">
           {exchanges.map((exchange) => {
             const count = accounts.filter((account) => account.exchange_name === exchange).length;
             return (
               <article className="trade-card" key={exchange}>
                 <span>{exchange.toUpperCase()}</span>
                 <strong>{count}</strong>
-                <p>{count === 0 ? "No API account" : "Read-only/test account available"}</p>
+                <p>{count === 0 ? "暂无 API 账户" : "已有只读或测试账户"}</p>
               </article>
             );
           })}
         </section>
 
-        <section className="trade-bottom-grid">
+        <section className="trade-bottom-grid" data-workspace="audit">
           <div className="trade-card">
             <div className="trade-tabs">
               <button
                 className={bottomTab === "positions" ? "active" : ""}
                 onClick={() => setBottomTab("positions")}
               >
-                Positions
+                持仓
               </button>
               <button
                 className={bottomTab === "orders" ? "active" : ""}
                 onClick={() => setBottomTab("orders")}
               >
-                Open Orders
+                当前委托
               </button>
               <button
                 className={bottomTab === "history" ? "active" : ""}
                 onClick={() => setBottomTab("history")}
               >
-                History
+                历史记录
               </button>
               <button
                 className={bottomTab === "audit" ? "active" : ""}
                 onClick={() => setBottomTab("audit")}
               >
-                Audit
+                审计
               </button>
             </div>
             {bottomTab === "positions" && (
               <div className="trade-empty-table">
-                No live position data loaded. Use Console for Mock chain validation.
+                暂未加载真实持仓数据。Mock 链路验证请使用管理控制台。
               </div>
             )}
             {bottomTab === "orders" && (
               <div className="trade-empty-table">
-                No exchange open orders loaded. REAL and TESTNET order submission stays locked in this view.
+                暂未加载交易所当前委托。此视图仍锁定真实和测试网订单提交。
               </div>
             )}
             {bottomTab === "history" && (
               <div className="trade-empty-table">
-                Execution history will show accepted Mock orders and read-only exchange probes.
+                执行历史会展示已接受的 Mock 订单和交易所只读探测结果。
               </div>
             )}
             {bottomTab === "audit" && (
               <div className="trade-audit-panel">
                 <div className="trade-audit-heading">
                   <div>
-                    <strong>Audit Log</strong>
-                    <span>Append-only records, admin read-only query</span>
+                    <strong>审计日志</strong>
+                    <span>仅追加记录，管理员只读查询</span>
                   </div>
-                  <span>{auditLogs.length} loaded{auditLoadedAt ? ` · ${auditLoadedAt}` : ""}</span>
+                  <span>已加载 {auditLogs.length} 条{auditLoadedAt ? ` · ${auditLoadedAt}` : ""}</span>
                 </div>
                 {canViewAuditLogs ? (
                   <>
@@ -2543,45 +2741,45 @@ export default function TradeWorkspace() {
                         onClick={() => setAuditFilterPreset("currentUser")}
                         disabled={!session.userId}
                       >
-                        Current User
+                        当前用户
                       </button>
                       <button
                         className="trade-secondary-button"
                         onClick={() => setAuditFilterPreset("currentAccount")}
                         disabled={!activeAccountId}
                       >
-                        Current Account
+                        当前账户
                       </button>
                       <button
                         className="trade-secondary-button"
                         onClick={() => setAuditFilterPreset("errors")}
                       >
-                        Errors Only
+                        仅错误
                       </button>
                       <button
                         className="trade-secondary-button"
                         onClick={focusAuditForCurrentAccount}
                         disabled={!activeAccountId}
                       >
-                        Active Account Read-only
+                        当前账户只读
                       </button>
                       <button
                         className="trade-secondary-button"
                         onClick={focusTestnetApprovalAudits}
                         disabled={!activeAccountId}
                       >
-                        TESTNET Windows
+                        测试网窗口
                       </button>
                       <button
                         className="trade-secondary-button"
                         onClick={() => setAuditFilterPreset("clear")}
                       >
-                        Clear Filters
+                        清空筛选
                       </button>
                     </div>
                     <div className="trade-audit-filters">
                       <label>
-                        User ID
+                        用户 ID
                         <input
                           value={auditFilters.userId}
                           onChange={(event) =>
@@ -2590,11 +2788,11 @@ export default function TradeWorkspace() {
                               userId: event.target.value,
                             }))
                           }
-                          placeholder="optional"
+                          placeholder="可选"
                         />
                       </label>
                       <label>
-                        Account ID
+                        账户 ID
                         <input
                           value={auditFilters.exchangeAccountId}
                           onChange={(event) =>
@@ -2603,11 +2801,11 @@ export default function TradeWorkspace() {
                               exchangeAccountId: event.target.value,
                             }))
                           }
-                          placeholder="optional"
+                          placeholder="可选"
                         />
                       </label>
                       <label>
-                        Action
+                        动作
                         <select
                           value={auditFilters.action}
                           onChange={(event) =>
@@ -2617,7 +2815,7 @@ export default function TradeWorkspace() {
                             }))
                           }
                         >
-                          <option value="">All</option>
+                          <option value="">全部</option>
                           {auditActionOptions.map((action) => (
                             <option key={action} value={action}>
                               {action}
@@ -2626,7 +2824,7 @@ export default function TradeWorkspace() {
                         </select>
                       </label>
                       <label>
-                        Severity
+                        级别
                         <select
                           value={auditFilters.severity}
                           onChange={(event) =>
@@ -2636,15 +2834,15 @@ export default function TradeWorkspace() {
                             }))
                           }
                         >
-                          <option value="">All</option>
-                          <option value="INFO">INFO</option>
-                          <option value="OK">OK</option>
-                          <option value="WARNING">WARNING</option>
-                          <option value="ERROR">ERROR</option>
+                          <option value="">全部</option>
+                          <option value="INFO">信息</option>
+                          <option value="OK">正常</option>
+                          <option value="WARNING">警告</option>
+                          <option value="ERROR">错误</option>
                         </select>
                       </label>
                       <label>
-                        Created From
+                        开始时间
                         <input
                           type="datetime-local"
                           value={auditFilters.createdFrom}
@@ -2657,7 +2855,7 @@ export default function TradeWorkspace() {
                         />
                       </label>
                       <label>
-                        Created To
+                        结束时间
                         <input
                           type="datetime-local"
                           value={auditFilters.createdTo}
@@ -2670,7 +2868,7 @@ export default function TradeWorkspace() {
                         />
                       </label>
                       <label>
-                        Limit
+                        条数
                         <select
                           value={auditFilters.limit}
                           onChange={(event) =>
@@ -2690,60 +2888,60 @@ export default function TradeWorkspace() {
                         onClick={() => void loadAuditLogs()}
                         disabled={auditBusy || !session.token}
                       >
-                        {auditBusy ? "Loading" : "Load"}
+                        {auditBusy ? "加载中" : "加载"}
                       </button>
                       <button
                         className="trade-secondary-button"
                         onClick={exportAuditReport}
                         disabled={!auditLogs.length}
                       >
-                        Export JSON
+                        导出 JSON
                       </button>
                     </div>
                     <div className="trade-audit-summary">
                       {["INFO", "OK", "WARNING", "ERROR"].map((severity) => (
                         <span key={severity}>
-                          {severity} <strong>{auditSeverityCounts[severity] ?? 0}</strong>
+                          {severityLabels[severity] ?? severity} <strong>{auditSeverityCounts[severity] ?? 0}</strong>
                         </span>
                       ))}
                       <span>
-                        TESTNET Windows <strong>{approvalAuditLogs.length}</strong>
+                        测试网窗口 <strong>{approvalAuditLogs.length}</strong>
                       </span>
                       <span>
-                        Phase 4 Reviews <strong>{phase4ReviewAuditLogs.length}</strong>
+                        第四阶段复核 <strong>{phase4ReviewAuditLogs.length}</strong>
                       </span>
                       <span>
-                        REAL Windows <strong>{phase4OrderWindowAuditLogs.length}</strong>
+                        真实窗口 <strong>{phase4OrderWindowAuditLogs.length}</strong>
                       </span>
                       <span>
-                        Final Checks <strong>{phase4FinalReleaseAuditLogs.length}</strong>
+                        最终确认 <strong>{phase4FinalReleaseAuditLogs.length}</strong>
                       </span>
                     </div>
                     {latestApprovalAuditLog ? (
                       <article className="trade-audit-highlight">
                         <div>
-                          <span>Latest TESTNET approval window</span>
+                        <span>最新测试网审批窗口</span>
                           <strong>{formatDateTime(latestApprovalAuditLog.created_at)}</strong>
                         </div>
                         <dl>
                           <div>
-                            <dt>Symbol</dt>
+                            <dt>交易对</dt>
                             <dd>{String(latestApprovalAuditLog.payload.symbol ?? "-")}</dd>
                           </div>
                           <div>
-                            <dt>Side</dt>
+                            <dt>方向</dt>
                             <dd>{String(latestApprovalAuditLog.payload.side ?? "-")}</dd>
                           </div>
                           <div>
-                            <dt>Order auth</dt>
+                            <dt>订单授权</dt>
                             <dd>
                               {latestApprovalAuditLog.payload.order_submission_authorized === true
-                                ? "AUTHORIZED"
-                                : "AUDIT ONLY"}
+                                ? "已授权"
+                                : "仅审计"}
                             </dd>
                           </div>
                           <div>
-                            <dt>Expires</dt>
+                            <dt>过期时间</dt>
                             <dd>
                               {latestApprovalAuditLog.payload.expires_at
                                 ? formatDateTime(String(latestApprovalAuditLog.payload.expires_at))
@@ -2755,17 +2953,17 @@ export default function TradeWorkspace() {
                     ) : null}
                     {auditLogs.length === 0 ? (
                       <div className="trade-empty-table">
-                        No audit records loaded. Use filters and Load to query.
+                        暂未加载审计记录。请选择筛选条件并点击加载。
                       </div>
                     ) : (
                       <div className="trade-audit-workspace">
-                        <div className="trade-audit-table" role="table" aria-label="Audit log records">
+                        <div className="trade-audit-table" role="table" aria-label="审计日志记录">
                           <div className="trade-audit-table-head" role="row">
-                            <span>Time</span>
-                            <span>Severity</span>
-                            <span>Action</span>
-                            <span>User</span>
-                            <span>Account</span>
+                            <span>时间</span>
+                            <span>级别</span>
+                            <span>动作</span>
+                            <span>用户</span>
+                            <span>账户</span>
                           </div>
                           {auditLogs.map((record) => (
                             <button
@@ -2775,7 +2973,7 @@ export default function TradeWorkspace() {
                               role="row"
                             >
                               <span>{formatDateTime(record.created_at)}</span>
-                              <em>{record.severity}</em>
+                              <em>{severityLabels[record.severity] ?? record.severity}</em>
                               <strong>{record.action}</strong>
                               <span>{record.user_id}</span>
                               <span>{record.exchange_account_id ?? "-"}</span>
@@ -2787,22 +2985,22 @@ export default function TradeWorkspace() {
                             <>
                               <header>
                                 <div>
-                                  <span>Selected Record</span>
+                                  <span>选中记录</span>
                                   <strong>{selectedAuditLog.action}</strong>
                                 </div>
-                                <em>{selectedAuditLog.severity}</em>
+                                <em>{severityLabels[selectedAuditLog.severity] ?? selectedAuditLog.severity}</em>
                               </header>
                               <dl>
                                 <div>
-                                  <dt>Created</dt>
+                                  <dt>创建时间</dt>
                                   <dd>{formatDateTime(selectedAuditLog.created_at)}</dd>
                                 </div>
                                 <div>
-                                  <dt>User</dt>
+                                  <dt>用户</dt>
                                   <dd>{selectedAuditLog.user_id}</dd>
                                 </div>
                                 <div>
-                                  <dt>Account</dt>
+                                  <dt>账户</dt>
                                   <dd>{selectedAuditLog.exchange_account_id ?? "-"}</dd>
                                 </div>
                                 <div>
@@ -2813,35 +3011,35 @@ export default function TradeWorkspace() {
                               {selectedApprovalPayload ? (
                                 <div className="trade-approval-grid">
                                   <div>
-                                    <span>Symbol</span>
+                                    <span>交易对</span>
                                     <strong>{String(selectedApprovalPayload.symbol ?? "-")}</strong>
                                   </div>
                                   <div>
-                                    <span>Side</span>
+                                    <span>方向</span>
                                     <strong>{String(selectedApprovalPayload.side ?? "-")}</strong>
                                   </div>
                                   <div>
-                                    <span>Max Quantity</span>
+                                    <span>最大数量</span>
                                     <strong>{String(selectedApprovalPayload.max_quantity ?? "-")}</strong>
                                   </div>
                                   <div>
-                                    <span>Max Notional</span>
+                                    <span>最大名义金额</span>
                                     <strong>{String(selectedApprovalPayload.max_notional ?? "-")}</strong>
                                   </div>
                                   <div>
-                                    <span>Submission</span>
+                                    <span>提交状态</span>
                                     <strong>
                                       {selectedApprovalPayload.order_submission_authorized === true
-                                        ? "AUTHORIZED"
-                                        : "AUDIT ONLY"}
+                                        ? "已授权"
+                                        : "仅审计"}
                                     </strong>
                                   </div>
                                   <div>
-                                    <span>Trading Flags</span>
+                                    <span>交易标志</span>
                                     <strong>
                                       {selectedApprovalPayload.trading_flags_changed === true
-                                        ? "CHANGED"
-                                        : "UNCHANGED"}
+                                        ? "已变更"
+                                        : "未变更"}
                                     </strong>
                                   </div>
                                 </div>
@@ -2849,7 +3047,7 @@ export default function TradeWorkspace() {
                               <pre>{prettyJson(selectedAuditLog.payload)}</pre>
                             </>
                           ) : (
-                            <div className="trade-empty-table">Select an audit record.</div>
+                            <div className="trade-empty-table">请选择一条审计记录。</div>
                           )}
                         </article>
                       </div>
@@ -2857,7 +3055,7 @@ export default function TradeWorkspace() {
                   </>
                 ) : (
                   <div className="trade-empty-table">
-                    Admin-only audit view. Log in as admin or super_admin to query records.
+                    审计视图仅管理员可见。请使用 admin 或 super_admin 账户查询记录。
                   </div>
                 )}
               </div>
@@ -2865,21 +3063,21 @@ export default function TradeWorkspace() {
           </div>
           <div className="trade-card">
             <div className="trade-card-head">
-              <strong>Risk Snapshot</strong>
-              <span>Unified</span>
+              <strong>风控快照</strong>
+              <span>统一风控</span>
             </div>
             <dl className="trade-risk-list">
               <div>
-                <dt>Trading</dt>
-                <dd>Disabled by default</dd>
+                <dt>交易</dt>
+                <dd>默认关闭</dd>
               </div>
               <div>
-                <dt>REAL</dt>
-                <dd>Read only</dd>
+                <dt>真实账户</dt>
+                <dd>只读</dd>
               </div>
               <div>
-                <dt>Latest result</dt>
-                <dd>{lastStatus}</dd>
+                <dt>最新结果</dt>
+                <dd>{resultLabels[lastStatus] ?? lastStatus}</dd>
               </div>
             </dl>
           </div>
@@ -2895,13 +3093,13 @@ export default function TradeWorkspace() {
           >
             <header>
               <div>
-                <span>Order Preview</span>
+                <span>订单预览</span>
                 <h2 id="order-preview-title">
-                  {activeSymbol} {orderSide}
+                  {activeSymbol} {orderSideLabels[orderSide]}
                 </h2>
               </div>
               <button
-                aria-label="Close order preview"
+                aria-label="关闭订单预览"
                 className="trade-icon-button"
                 onClick={() => setIsOrderPreviewOpen(false)}
               >
@@ -2909,52 +3107,53 @@ export default function TradeWorkspace() {
               </button>
             </header>
             <div className="trade-preview-warning">
-              <strong>{canRecordTestnetOrderWindow ? "Testnet Approval Window" : orderLocked ? "Locked" : "Preview Only"}</strong>
-              <span>
-                {selectedAccountRoute} This screen never submits an exchange order. TESTNET approval records
-                an audit-only window after password reauthentication.
-              </span>
+               <strong>{canRecordTestnetOrderWindow ? "测试网审批窗口" : orderLocked ? "已锁定" : "仅预览"}</strong>
+               <span>
+                 {selectedAccountRoute} 此页面不会提交交易所订单。测试网审批仅在密码重新认证后记录审计窗口。
+               </span>
             </div>
             <dl className="trade-preview-grid">
               <div>
-                <dt>Exchange</dt>
+                 <dt>交易所</dt>
                 <dd>{activeExchangeProfile.label}</dd>
               </div>
               <div>
-                <dt>Account</dt>
+                 <dt>账户</dt>
                 <dd>{activeAccount?.account_label ?? "-"}</dd>
               </div>
               <div>
-                <dt>Mode</dt>
-                <dd>{activeAccount?.account_mode ?? "-"}</dd>
+                 <dt>模式</dt>
+                 <dd>{activeAccount ? accountModeLabels[activeAccount.account_mode] : "-"}</dd>
               </div>
               <div>
-                <dt>Account Status</dt>
+                 <dt>账户状态</dt>
                 <dd>{activeAccountHealth}</dd>
               </div>
               <div>
-                <dt>Order Type</dt>
-                <dd>{orderForm.orderType}</dd>
+                 <dt>订单类型</dt>
+                 <dd>{orderTypeLabels[orderForm.orderType]}</dd>
               </div>
               <div>
-                <dt>Side</dt>
-                <dd className={orderSide === "BUY" ? "preview-buy" : "preview-sell"}>{orderSide}</dd>
+                 <dt>方向</dt>
+                 <dd className={orderSide === "BUY" ? "preview-buy" : "preview-sell"}>
+                   {orderSideLabels[orderSide]}
+                 </dd>
               </div>
               <div>
-                <dt>Reference Price</dt>
+                 <dt>参考价格</dt>
                 <dd>{formatNumber(referencePrice)} USDT</dd>
               </div>
               <div>
-                <dt>Quantity</dt>
+                 <dt>数量</dt>
                 <dd>{Number.isFinite(parsedQuantity) ? parsedQuantity : "-"}</dd>
               </div>
               <div>
-                <dt>Estimated Notional</dt>
+                 <dt>预估名义金额</dt>
                 <dd>{formatNumber(estimatedNotional)} USDT</dd>
               </div>
             </dl>
             <div className="trade-route-panel">
-              <span>Client Order ID Preview</span>
+               <span>客户端订单 ID 预览</span>
               <code>{clientOrderIdPreview}</code>
             </div>
             {lockReasons.length > 0 && (
@@ -2966,8 +3165,8 @@ export default function TradeWorkspace() {
             )}
             {activeAccount?.account_mode === "TESTNET" && activeExchange !== "mock" && (
               <div className="trade-route-panel">
-                <span>Testnet Order Window</span>
-                <strong>Audit only / 5 minutes / no trading flags changed</strong>
+                 <span>测试网订单窗口</span>
+                 <strong>仅审计 / 5 分钟 / 不改变交易标志</strong>
                 {testnetWindowReasons.length > 0 ? (
                   <ul className="trade-lock-list compact">
                     {testnetWindowReasons.map((reason) => (
@@ -2976,12 +3175,12 @@ export default function TradeWorkspace() {
                   </ul>
                 ) : (
                   <label className="trade-field">
-                    Current password
+                     当前登录密码
                     <input
                       type="password"
                       value={orderApprovalPassword}
                       onChange={(event) => setOrderApprovalPassword(event.target.value)}
-                      placeholder="Required for approval audit"
+                       placeholder="用于审批审计"
                     />
                   </label>
                 )}
@@ -2990,10 +3189,10 @@ export default function TradeWorkspace() {
             <pre className="trade-preview-json">{prettyJson(orderPreviewPayload)}</pre>
             <footer>
               <button className="trade-secondary-button" onClick={focusAuditForCurrentAccount}>
-                Related Audit
+                 相关审计
               </button>
               <button className="trade-secondary-button" onClick={() => setIsOrderPreviewOpen(false)}>
-                Cancel
+                 取消
               </button>
               {activeAccount?.account_mode === "TESTNET" && activeExchange !== "mock" && (
                 <button
@@ -3001,11 +3200,11 @@ export default function TradeWorkspace() {
                   disabled={!canRecordTestnetOrderWindow || apiBusy}
                   onClick={recordTestnetOrderWindowApproval}
                 >
-                  Record Testnet Window
+                   记录测试网窗口
                 </button>
               )}
               <button className="trade-submit compact" disabled={orderLocked} onClick={confirmOrderPreview}>
-                Confirm Preview
+                 确认预览
               </button>
             </footer>
           </section>
