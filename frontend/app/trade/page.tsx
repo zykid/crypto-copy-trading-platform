@@ -391,6 +391,7 @@ export default function TradeWorkspace() {
   });
   const [lastStatus, setLastStatus] = useState("只读");
   const [apiKeyMetadata, setApiKeyMetadata] = useState<ApiKeyMetadata>(emptyMetadata);
+  const [apiMetadataLoading, setApiMetadataLoading] = useState(false);
   const [apiBusy, setApiBusy] = useState(false);
   const [apiLogs, setApiLogs] = useState<ApiActionLog[]>([]);
   const [isOrderPreviewOpen, setIsOrderPreviewOpen] = useState(false);
@@ -566,10 +567,13 @@ export default function TradeWorkspace() {
   useEffect(() => {
     if (!activeAccountId || !session.token) {
       setApiKeyMetadata(emptyMetadata);
+      setApiMetadataLoading(false);
       return;
     }
     let cancelled = false;
     async function loadMetadata() {
+      setApiKeyMetadata(emptyMetadata);
+      setApiMetadataLoading(true);
       try {
         const metadata = (await apiRequest(
           "GET",
@@ -582,6 +586,10 @@ export default function TradeWorkspace() {
         if (!cancelled) {
           setApiKeyMetadata(emptyMetadata);
           appendApiLog("读取 API Key 状态", false, String(error));
+        }
+      } finally {
+        if (!cancelled) {
+          setApiMetadataLoading(false);
         }
       }
     }
@@ -635,6 +643,8 @@ export default function TradeWorkspace() {
   }, [favoriteSymbols]);
 
   const activeAccount = allSelectedAccount;
+  const selectedApiKeyMetadata =
+    apiKeyMetadata.exchange_account_id === activeAccountId ? apiKeyMetadata : emptyMetadata;
   const accountMode = activeAccount?.account_mode ?? "UNSELECTED";
   const activeExchangeProfile = exchangeProfiles[activeExchange];
   const activeWorkspaceLabel = workspaceLabels[activeWorkspace];
@@ -701,7 +711,7 @@ export default function TradeWorkspace() {
     quantity: Number.isFinite(parsedQuantity) ? parsedQuantity : null,
     estimated_notional: estimatedNotional,
     client_order_id: clientOrderIdPreview,
-    secret_configured: apiKeyMetadata.configured,
+    secret_configured: selectedApiKeyMetadata.configured,
     trading_enabled: activeAccount?.trading_enabled ?? false,
   };
   const lockReasons = [
@@ -723,7 +733,7 @@ export default function TradeWorkspace() {
     activeAccount?.account_mode !== "TESTNET" ? "账户模式必须为测试网" : null,
     activeExchange === "mock" ? "Mock 使用模拟流程，不进入测试网窗口" : null,
     activeAccount?.trading_enabled ? "审批前账户交易标记必须保持关闭" : null,
-    !apiKeyMetadata.configured ? "需要先配置加密 API Key 元数据" : null,
+    !selectedApiKeyMetadata.configured ? "需要先配置加密 API Key 元数据" : null,
     !Number.isFinite(parsedQuantity) || parsedQuantity <= 0 ? "数量必须大于 0" : null,
     estimatedNotional <= 0 ? "预估名义金额必须大于 0" : null,
   ].filter(Boolean) as string[];
@@ -871,11 +881,11 @@ export default function TradeWorkspace() {
     {
       id: "secret",
       title: "密钥加密元数据",
-      detail: apiKeyMetadata.configured
+      detail: selectedApiKeyMetadata.configured
         ? "Secret 已配置，且不会返回浏览器。"
         : "为选中账户保存 API Key 与 Secret。",
       required: true,
-      status: apiKeyMetadata.configured ? "pass" : "pending",
+      status: selectedApiKeyMetadata.configured ? "pass" : "pending",
     },
     {
       id: "read-only-auth",
@@ -1024,6 +1034,24 @@ export default function TradeWorkspace() {
     }
   }
 
+  async function reloadAccounts() {
+    if (!session.token) {
+      appendApiLog("刷新账户", false, "请先登录");
+      return;
+    }
+    setApiBusy(true);
+    try {
+      await refreshAccounts();
+      appendApiLog("刷新账户", true, {
+        selected_account_id: activeAccountId || null,
+      });
+    } catch (error) {
+      appendApiLog("刷新账户", false, String(error));
+    } finally {
+      setApiBusy(false);
+    }
+  }
+
   async function createReauthenticationToken(password: string) {
     const payload = (await apiRequest("POST", "/auth/reauthenticate", { password })) as {
       reauthentication_token?: string;
@@ -1081,7 +1109,7 @@ export default function TradeWorkspace() {
       appendApiLog("测试连接", false, "模拟账户不使用交易所 API");
       return;
     }
-    if (!apiKeyMetadata.configured) {
+    if (!selectedApiKeyMetadata.configured) {
       appendApiLog("测试连接", false, "请先加密保存密钥；连接测试是可选步骤，不会阻止保存");
       return;
     }
@@ -1112,7 +1140,7 @@ export default function TradeWorkspace() {
       appendApiLog("删除密钥", false, "请先选择账户");
       return;
     }
-    if (!apiKeyMetadata.configured) {
+    if (!selectedApiKeyMetadata.configured) {
       appendApiLog("删除密钥", false, "当前账户没有已保存的密钥");
       return;
     }
@@ -1125,6 +1153,12 @@ export default function TradeWorkspace() {
     try {
       await apiRequest("DELETE", `/exchange-accounts/${activeAccount.id}/api-key`, undefined, 204);
       setApiKeyMetadata(emptyMetadata);
+      setSecretForm({
+        apiKey: "",
+        apiSecret: "",
+        passphrase: "",
+        password: "",
+      });
       appendApiLog("删除密钥", true, {
         exchange_account_id: activeAccount.id,
         configured: false,
@@ -1874,7 +1908,13 @@ export default function TradeWorkspace() {
                 </div>
                 <div>
                   <dt>密钥</dt>
-                  <dd>{apiKeyMetadata.configured ? "已配置" : "未配置"}</dd>
+                  <dd>
+                    {apiMetadataLoading
+                      ? "读取中"
+                      : selectedApiKeyMetadata.configured
+                        ? "已配置"
+                        : "未配置"}
+                  </dd>
                 </div>
               </dl>
               <div className="trade-window-route">
@@ -2027,7 +2067,7 @@ export default function TradeWorkspace() {
             </div>
             <div className="trade-route-steps">
               <span className={activeAccount ? "done" : ""}>1. 选择账户</span>
-              <span className={apiKeyMetadata.configured ? "done" : ""}>2. 验证密钥</span>
+              <span className={selectedApiKeyMetadata.configured ? "done" : ""}>2. 验证密钥</span>
               <span className={estimatedNotional > 0 ? "done" : ""}>3. 生成预览</span>
               <span className={lockReasons.length === 0 ? "done" : ""}>4. 安全闸门</span>
             </div>
@@ -2155,7 +2195,7 @@ export default function TradeWorkspace() {
               <span>API 管理</span>
               <strong>统一添加 / 密钥状态 / 测试连接</strong>
             </div>
-            <button className="trade-secondary-button" onClick={refreshAccounts} disabled={!session.token || apiBusy}>
+            <button className="trade-secondary-button" onClick={reloadAccounts} disabled={!session.token}>
               刷新
             </button>
           </div>
@@ -2175,6 +2215,20 @@ export default function TradeWorkspace() {
                           : "trade-account-option"
                       }
                       key={account.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        if ((event.target as HTMLElement).closest("button")) {
+                          return;
+                        }
+                        selectAccountForTrading(account);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          selectAccountForTrading(account);
+                        }
+                      }}
                     >
                       <div>
                         <strong>{account.account_label}</strong>
@@ -2212,11 +2266,17 @@ export default function TradeWorkspace() {
                 </div>
                 <div>
                   <dt>密钥</dt>
-                  <dd>{apiKeyMetadata.configured ? "已配置" : "未配置"}</dd>
+                  <dd>
+                    {apiMetadataLoading
+                      ? "读取中"
+                      : selectedApiKeyMetadata.configured
+                        ? "已配置"
+                        : "未配置"}
+                  </dd>
                 </div>
                 <div>
                   <dt>Passphrase 口令</dt>
-                  <dd>{apiKeyMetadata.has_passphrase ? "已配置" : "未配置"}</dd>
+                  <dd>{selectedApiKeyMetadata.has_passphrase ? "已配置" : "未配置"}</dd>
                 </div>
               </dl>
             </div>
@@ -2348,14 +2408,14 @@ export default function TradeWorkspace() {
                 <button
                   className="trade-submit compact"
                   onClick={runReadOnlyCheck}
-                  disabled={!activeAccount || !apiKeyMetadata.configured || !secretForm.password || apiBusy}
+                  disabled={!activeAccount || !selectedApiKeyMetadata.configured || !secretForm.password || apiBusy}
                 >
                   测试连接
                 </button>
                 <button
                   className="trade-danger-button span-2"
                   onClick={deleteApiKey}
-                  disabled={!activeAccount || !apiKeyMetadata.configured || apiBusy}
+                  disabled={!activeAccount || !selectedApiKeyMetadata.configured || apiBusy}
                 >
                   删除密钥
                 </button>
@@ -2400,7 +2460,7 @@ export default function TradeWorkspace() {
             </div>
           </div>
           <div className="trade-preflight-actions">
-            <button className="trade-ghost-button" onClick={refreshAccounts} disabled={!session.token || apiBusy}>
+            <button className="trade-ghost-button" onClick={reloadAccounts} disabled={!session.token}>
               刷新账户
             </button>
             <button
