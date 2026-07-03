@@ -261,6 +261,7 @@ function formatNumber(value: number, maximumFractionDigits = 2) {
 export default function TradeWorkspace() {
   const [apiRoot] = useState(resolveApiBase);
   const [session, setSession] = useState<SessionState>(emptySession);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [accounts, setAccounts] = useState<ExchangeAccount[]>([]);
   const [activeExchange, setActiveExchange] = useState<ExchangeName>("okx");
   const [activeSymbol, setActiveSymbol] = useState("BTC/USDT");
@@ -375,6 +376,8 @@ export default function TradeWorkspace() {
   useEffect(() => {
     const token = readStoredToken();
     if (!token) {
+      setSessionChecked(true);
+      window.location.replace("/login");
       return;
     }
 
@@ -388,6 +391,8 @@ export default function TradeWorkspace() {
       if (!meResponse.ok) {
         localStorage.removeItem("trading_platform_token");
         setSession(emptySession);
+        setSessionChecked(true);
+        window.location.replace("/login");
         return;
       }
 
@@ -403,9 +408,16 @@ export default function TradeWorkspace() {
         role: me.role ?? "",
       });
       setAccounts(accountPayload);
+      setSessionChecked(true);
     }
 
-    void loadSession().catch(() => setLastStatus("SESSION CHECK FAILED"));
+    void loadSession().catch(() => {
+      localStorage.removeItem("trading_platform_token");
+      setSession(emptySession);
+      setLastStatus("SESSION CHECK FAILED");
+      setSessionChecked(true);
+      window.location.replace("/login");
+    });
   }, [apiRoot]);
 
   useEffect(() => {
@@ -1441,6 +1453,30 @@ export default function TradeWorkspace() {
     focusAuditForAccount(activeAccount);
   }
 
+  if (!sessionChecked) {
+    return (
+      <main className="trade-auth-loading">
+        <section>
+          <span>SESSION CHECK</span>
+          <h1>正在恢复交易会话</h1>
+          <p>登录会话确认完成后会进入交易终端。</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!session.token) {
+    return (
+      <main className="trade-auth-loading">
+        <section>
+          <span>AUTH REQUIRED</span>
+          <h1>需要登录</h1>
+          <p>正在跳转到登录页面。</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="trade-terminal">
       <aside className="trade-sidebar">
@@ -1458,7 +1494,7 @@ export default function TradeWorkspace() {
           <a href="/trade#audit">审计中心</a>
           <a href="/trade#phase4-small-fund-review">小额测试闸门</a>
           {session.role === "super_admin" && <a href="/">管理控制台</a>}
-          <a href="/login">登录</a>
+          <a href="/login">切换账户</a>
         </nav>
         <div className="trade-guardrail">
           <span>运行边界</span>

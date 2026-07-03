@@ -1904,6 +1904,45 @@ body {
   margin: 12px 0 10px;
 }
 
+.trade-auth-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(245, 189, 66, 0.16), transparent 28%),
+    radial-gradient(circle at 86% 100%, rgba(0, 137, 123, 0.16), transparent 28%),
+    #0b0f16;
+  color: #e5edf5;
+  padding: 24px;
+}
+
+.trade-auth-loading section {
+  width: min(560px, 100%);
+  border: 1px solid #243244;
+  border-radius: 8px;
+  background: #0f1620;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  padding: 28px;
+}
+
+.trade-auth-loading span {
+  color: #f5bd42;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.trade-auth-loading h1 {
+  color: #f8fafc;
+  font-size: 30px;
+  margin: 12px 0 10px;
+}
+
+.trade-auth-loading p {
+  color: #91a3b8;
+  margin: 0;
+}
+
 .console-access-card p {
   color: #95a3af;
   line-height: 1.65;

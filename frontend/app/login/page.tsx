@@ -165,7 +165,7 @@ export default function LoginPage() {
       ok: true,
       message: `已登录 ${profile.username}，角色 ${profile.role}`,
     });
-    window.location.href = "/";
+    window.location.href = "/trade";
   }
 
   async function submitLogin() {
