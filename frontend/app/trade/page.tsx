@@ -22,6 +22,13 @@ type ExchangeAccount = {
   is_active: boolean;
 };
 
+type ExchangeAccountPayload = Partial<ExchangeAccount> & {
+  account_id?: string;
+  exchange?: ExchangeName;
+  mode?: AccountMode;
+  label?: string;
+};
+
 type ApiKeyMetadata = {
   exchange_account_id: string;
   configured: boolean;
@@ -114,6 +121,12 @@ const emptyMetadata: ApiKeyMetadata = {
   exchange_account_id: "",
   configured: false,
   has_passphrase: false,
+};
+const emptySecretForm = {
+  apiKey: "",
+  apiSecret: "",
+  passphrase: "",
+  password: "",
 };
 
 const apiBaseFallback = "http://localhost:8000/api/v1";
@@ -336,6 +349,13 @@ function prettyJson(value: unknown) {
   }
 }
 
+function createClientLogId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `log-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function formatDateTime(value: string | null) {
   if (!value) {
     return "-";
@@ -373,6 +393,37 @@ function safeAccountModeLabel(mode: AccountMode | string | undefined) {
     return "未选择";
   }
   return accountModeLabels[mode as AccountMode] ?? String(mode);
+}
+
+function normalizeExchangeAccount(value: unknown): ExchangeAccount | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const payload = value as ExchangeAccountPayload;
+  const id = payload.id ?? payload.account_id;
+  const exchangeName = payload.exchange_name ?? payload.exchange;
+  const accountMode = payload.account_mode ?? payload.mode;
+  if (!id || !exchangeName || !accountMode) {
+    return null;
+  }
+  return {
+    id,
+    user_id: payload.user_id,
+    exchange_name: exchangeName,
+    account_label: payload.account_label ?? payload.label ?? defaultAccountLabel(exchangeName, accountMode),
+    account_mode: accountMode,
+    trading_enabled: Boolean(payload.trading_enabled),
+    is_active: payload.is_active ?? true,
+  };
+}
+
+function normalizeExchangeAccounts(value: unknown): ExchangeAccount[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => normalizeExchangeAccount(item))
+    .filter((account): account is ExchangeAccount => Boolean(account));
 }
 
 function formatNumber(value: number, maximumFractionDigits = 2) {
@@ -439,12 +490,7 @@ export default function TradeWorkspace() {
     accountMode: "TESTNET" as AccountMode,
     accountLabel: "",
   });
-  const [secretForm, setSecretForm] = useState({
-    apiKey: "",
-    apiSecret: "",
-    passphrase: "",
-    password: "",
-  });
+  const [secretForm, setSecretForm] = useState(emptySecretForm);
   const [marketDataProviders, setMarketDataProviders] = useState<MarketDataProvider[]>([]);
   const [marketDataBusy, setMarketDataBusy] = useState(false);
   const [marketDataForm, setMarketDataForm] = useState({
@@ -456,7 +502,7 @@ export default function TradeWorkspace() {
 
   const appendApiLog = useCallback((title: string, ok: boolean, detail: unknown) => {
     setApiLogs((current) => [
-      { id: crypto.randomUUID(), title, ok, detail: sanitizeDetail(detail) },
+      { id: createClientLogId(), title, ok, detail: sanitizeDetail(detail) },
       ...current.slice(0, 5),
     ]);
     setLastStatus(ok ? "PASS" : "FAIL");
@@ -489,21 +535,24 @@ export default function TradeWorkspace() {
     [apiRoot],
   );
 
-  const refreshAccounts = useCallback(async () => {
+  const clearApiAccountState = useCallback(() => {
+    setActiveAccountId("");
+    setApiKeyMetadata(emptyMetadata);
+    setApiMetadataLoading(false);
+    setSecretForm(emptySecretForm);
+  }, []);
+
+  const refreshAccounts = useCallback(async (preferredAccountId = "") => {
     const payload = await apiRequest("GET", "/exchange-accounts");
-    const nextAccounts = Array.isArray(payload) ? (payload as ExchangeAccount[]) : [];
+    const nextAccounts = normalizeExchangeAccounts(payload);
     setAccounts(nextAccounts);
     setActiveAccountId((current) => {
+      if (preferredAccountId && nextAccounts.some((account) => account.id === preferredAccountId)) {
+        return preferredAccountId;
+      }
       if (current && nextAccounts.some((account) => account.id === current)) {
         return current;
       }
-      setApiKeyMetadata(emptyMetadata);
-      setSecretForm({
-        apiKey: "",
-        apiSecret: "",
-        passphrase: "",
-        password: "",
-      });
       return "";
     });
     return nextAccounts;
@@ -540,9 +589,7 @@ export default function TradeWorkspace() {
       }
 
       const me = (await meResponse.json()) as Record<string, string>;
-      const accountPayload = accountsResponse.ok
-        ? ((await accountsResponse.json()) as ExchangeAccount[])
-        : [];
+      const accountPayload = accountsResponse.ok ? await accountsResponse.json() : [];
 
       setSession({
         token,
@@ -550,7 +597,7 @@ export default function TradeWorkspace() {
         username: me.username ?? me.email ?? "",
         role: me.role ?? "",
       });
-      setAccounts(accountPayload);
+      setAccounts(normalizeExchangeAccounts(accountPayload));
       setSessionChecked(true);
     }
 
@@ -585,9 +632,9 @@ export default function TradeWorkspace() {
       return;
     }
     if (!accounts.some((account) => account.id === activeAccountId)) {
-      setActiveAccountId("");
+      clearApiAccountState();
     }
-  }, [activeAccountId, accounts]);
+  }, [activeAccountId, accounts, clearApiAccountState]);
 
   useEffect(() => {
     if (!selectedMetadataAccountId || !session.token) {
@@ -720,7 +767,7 @@ export default function TradeWorkspace() {
   const estimatedNotional =
     Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity * referencePrice : 0;
   const normalizedPreviewSymbol = activeSymbol.replace("/", "");
-  const clientOrderIdPreview = activeAccount
+  const clientOrderIdPreview = activeAccount?.id
     ? `preview-${activeExchange}-${activeAccount.id.slice(0, 8)}-${activeSymbol.replace("/", "")}`
     : "preview-unassigned";
   const orderPreviewPayload = {
@@ -1037,7 +1084,7 @@ export default function TradeWorkspace() {
     }
     setApiBusy(true);
     try {
-      const account = (await apiRequest(
+      const payload = await apiRequest(
         "POST",
         "/exchange-accounts",
         {
@@ -1049,10 +1096,14 @@ export default function TradeWorkspace() {
           trading_enabled: createForm.exchangeName === "mock",
         },
         201,
-      )) as ExchangeAccount;
-      await refreshAccounts();
+      );
+      const account = normalizeExchangeAccount(payload);
+      if (!account) {
+        throw new Error("创建账户返回缺少账户 ID，请刷新后重试");
+      }
       setActiveExchange(account.exchange_name);
       setActiveAccountId(account.id);
+      await refreshAccounts(account.id);
       appendApiLog("创建交易所账户", true, account);
     } catch (error) {
       appendApiLog("创建交易所账户", false, String(error));
@@ -1068,12 +1119,13 @@ export default function TradeWorkspace() {
     }
     setApiBusy(true);
     try {
-      const nextAccounts = await refreshAccounts();
+      const selectedBeforeRefresh = activeAccountId;
+      const nextAccounts = await refreshAccounts(selectedBeforeRefresh);
       const selectedAccountStillExists =
-        activeAccountId && nextAccounts.some((account) => account.id === activeAccountId);
+        selectedBeforeRefresh && nextAccounts.some((account) => account.id === selectedBeforeRefresh);
       appendApiLog("刷新账户", true, {
         account_count: nextAccounts.length,
-        selected_account_id: selectedAccountStillExists ? activeAccountId : null,
+        selected_account_id: selectedAccountStillExists ? selectedBeforeRefresh : null,
       });
     } catch (error) {
       appendApiLog("刷新账户", false, String(error));
@@ -1098,6 +1150,10 @@ export default function TradeWorkspace() {
       appendApiLog("保存加密 API Key", false, "请先选择账户");
       return;
     }
+    if (!selectedAccount.id) {
+      appendApiLog("保存加密 API Key", false, "账户 ID 缺失，请刷新后重试");
+      return;
+    }
     if (selectedAccount.exchange_name === "okx" && !secretForm.passphrase) {
       appendApiLog("保存加密 API Key", false, "OKX 需要填写 Passphrase 口令");
       return;
@@ -1117,12 +1173,7 @@ export default function TradeWorkspace() {
         { "X-Reauthentication-Token": reauthToken },
       )) as ApiKeyMetadata;
       setApiKeyMetadata(metadata);
-      setSecretForm({
-        apiKey: "",
-        apiSecret: "",
-        passphrase: "",
-        password: "",
-      });
+      setSecretForm(emptySecretForm);
       appendApiLog("保存加密 API Key", true, metadata);
     } catch (error) {
       appendApiLog("保存加密 API Key", false, String(error));
@@ -1136,6 +1187,10 @@ export default function TradeWorkspace() {
     const selectedMetadata = selectedApiKeyMetadata;
     if (!selectedAccount) {
       appendApiLog("测试连接", false, "请先选择账户");
+      return;
+    }
+    if (!selectedAccount.id) {
+      appendApiLog("测试连接", false, "账户 ID 缺失，请刷新后重试");
       return;
     }
     if (selectedAccount.account_mode === "SIMULATION") {
@@ -1175,6 +1230,10 @@ export default function TradeWorkspace() {
       appendApiLog("删除密钥", false, "请先选择账户");
       return;
     }
+    if (!selectedAccount.id) {
+      appendApiLog("删除密钥", false, "账户 ID 缺失，请刷新后重试");
+      return;
+    }
     if (!selectedMetadata.configured) {
       appendApiLog("删除密钥", false, "当前账户没有已保存的密钥");
       return;
@@ -1188,17 +1247,12 @@ export default function TradeWorkspace() {
     try {
       await apiRequest("DELETE", `/exchange-accounts/${selectedAccount.id}/api-key`, undefined, 204);
       setApiKeyMetadata(emptyMetadata);
-      setSecretForm({
-        apiKey: "",
-        apiSecret: "",
-        passphrase: "",
-        password: "",
-      });
+      setSecretForm(emptySecretForm);
       appendApiLog("删除密钥", true, {
         exchange_account_id: selectedAccount.id,
         configured: false,
       });
-      await refreshAccounts();
+      await refreshAccounts(selectedAccount.id);
     } catch (error) {
       appendApiLog("删除密钥", false, String(error));
     } finally {
@@ -1212,6 +1266,10 @@ export default function TradeWorkspace() {
       appendApiLog("删除账户", false, "请先选择账户");
       return;
     }
+    if (!selectedAccount.id) {
+      appendApiLog("删除账户", false, "账户 ID 缺失，请刷新后重试");
+      return;
+    }
     const confirmed = window.confirm(
       `确认删除账户「${selectedAccount.account_label}」？这只会删除平台内的账户记录和已保存密钥，不会删除交易所真实账户。`,
     );
@@ -1220,22 +1278,16 @@ export default function TradeWorkspace() {
       return;
     }
     const deletedAccountId = selectedAccount.id;
+    const deletedAccountLabel = selectedAccount.account_label;
     setApiBusy(true);
     try {
+      clearApiAccountState();
       await apiRequest("DELETE", `/exchange-accounts/${deletedAccountId}`, undefined, 204);
-      setActiveAccountId("");
-      setApiKeyMetadata(emptyMetadata);
-      setSecretForm({
-        apiKey: "",
-        apiSecret: "",
-        passphrase: "",
-        password: "",
-      });
+      await refreshAccounts();
       appendApiLog("删除账户", true, {
         exchange_account_id: deletedAccountId,
-        account_label: selectedAccount.account_label,
+        account_label: deletedAccountLabel,
       });
-      await refreshAccounts();
     } catch (error) {
       appendApiLog("删除账户", false, String(error));
       await refreshAccounts().catch(() => undefined);
