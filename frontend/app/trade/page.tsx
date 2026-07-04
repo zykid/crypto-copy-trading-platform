@@ -568,6 +568,7 @@ export default function TradeWorkspace() {
     [accounts, activeExchange],
   );
   const allSelectedAccount = accounts.find((account) => account.id === activeAccountId);
+  const selectedMetadataAccountId = allSelectedAccount?.id ?? "";
 
   useEffect(() => {
     if (!activeAccountId) {
@@ -579,7 +580,7 @@ export default function TradeWorkspace() {
   }, [activeAccountId, accounts]);
 
   useEffect(() => {
-    if (!activeAccountId || !session.token) {
+    if (!selectedMetadataAccountId || !session.token) {
       setApiKeyMetadata(emptyMetadata);
       setApiMetadataLoading(false);
       return;
@@ -591,7 +592,7 @@ export default function TradeWorkspace() {
       try {
         const metadata = (await apiRequest(
           "GET",
-          `/exchange-accounts/${activeAccountId}/api-key`,
+          `/exchange-accounts/${selectedMetadataAccountId}/api-key`,
         )) as ApiKeyMetadata;
         if (!cancelled) {
           setApiKeyMetadata(metadata);
@@ -611,7 +612,7 @@ export default function TradeWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [activeAccountId, apiRequest, appendApiLog, session.token]);
+  }, [selectedMetadataAccountId, apiRequest, appendApiLog, session.token]);
 
   useEffect(() => {
     setPhase4Readiness(null);
@@ -1208,25 +1209,27 @@ export default function TradeWorkspace() {
       appendApiLog("删除账户", false, "用户取消删除");
       return;
     }
+    const deletedAccountId = selectedAccount.id;
     setApiBusy(true);
+    setActiveAccountId("");
+    setApiKeyMetadata(emptyMetadata);
+    setSecretForm({
+      apiKey: "",
+      apiSecret: "",
+      passphrase: "",
+      password: "",
+    });
+    setAccounts((current) => current.filter((account) => account.id !== deletedAccountId));
     try {
-      await apiRequest("DELETE", `/exchange-accounts/${selectedAccount.id}`, undefined, 204);
-      setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));
-      setActiveAccountId("");
-      setApiKeyMetadata(emptyMetadata);
-      setSecretForm({
-        apiKey: "",
-        apiSecret: "",
-        passphrase: "",
-        password: "",
-      });
+      await apiRequest("DELETE", `/exchange-accounts/${deletedAccountId}`, undefined, 204);
       appendApiLog("删除账户", true, {
-        exchange_account_id: selectedAccount.id,
+        exchange_account_id: deletedAccountId,
         account_label: selectedAccount.account_label,
       });
       await refreshAccounts();
     } catch (error) {
       appendApiLog("删除账户", false, String(error));
+      await refreshAccounts().catch(() => undefined);
     } finally {
       setApiBusy(false);
     }

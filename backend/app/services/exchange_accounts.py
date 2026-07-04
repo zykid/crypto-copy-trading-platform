@@ -7,7 +7,14 @@ from app.exchanges.http_client import ExchangeCredentials
 
 
 def list_accounts(db: Session, *, user_id: str) -> list[ExchangeAccount]:
-    return list(db.scalars(select(ExchangeAccount).where(ExchangeAccount.user_id == user_id)))
+    return list(
+        db.scalars(
+            select(ExchangeAccount).where(
+                ExchangeAccount.user_id == user_id,
+                ExchangeAccount.is_active.is_(True),
+            )
+        )
+    )
 
 
 def create_account(db: Session, *, user_id: str, data: dict[str, object]) -> ExchangeAccount:

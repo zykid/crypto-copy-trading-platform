@@ -10,6 +10,7 @@ from app.db.models.user import User
 from app.schemas.exchange_account import ApiKeySecretMetadata
 from app.services.exchange_accounts import (
     create_account,
+    delete_account,
     get_api_key_secret_metadata,
     get_owned_account,
     list_accounts,
@@ -97,6 +98,29 @@ def test_exchange_account_queries_are_scoped_by_user_id(db_session: Session) -> 
 
     assert [account.user_id for account in alice_accounts] == [alice.id]
     assert get_owned_account(db_session, user_id=bob.id, account_id=alice_account.id) is None
+
+
+def test_deleted_exchange_accounts_are_hidden_from_user_list(db_session: Session) -> None:
+    user = create_user(
+        db_session,
+        email="alice@example.com",
+        username="alice",
+        password="very-strong-password",
+    )
+    account = create_account(
+        db_session,
+        user_id=user.id,
+        data={
+            "exchange_name": ExchangeName.MOCK,
+            "account_mode": AccountMode.SIMULATION,
+            "account_label": "deleted mock",
+            "trading_enabled": False,
+        },
+    )
+
+    delete_account(account, db_session)
+
+    assert list_accounts(db_session, user_id=user.id) == []
 
 
 def test_api_key_secret_is_encrypted_and_metadata_does_not_expose_plaintext(
