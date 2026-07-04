@@ -493,9 +493,19 @@ export default function TradeWorkspace() {
     const payload = await apiRequest("GET", "/exchange-accounts");
     const nextAccounts = Array.isArray(payload) ? (payload as ExchangeAccount[]) : [];
     setAccounts(nextAccounts);
-    setActiveAccountId((current) =>
-      current && nextAccounts.some((account) => account.id === current) ? current : "",
-    );
+    setActiveAccountId((current) => {
+      if (current && nextAccounts.some((account) => account.id === current)) {
+        return current;
+      }
+      setApiKeyMetadata(emptyMetadata);
+      setSecretForm({
+        apiKey: "",
+        apiSecret: "",
+        passphrase: "",
+        password: "",
+      });
+      return "";
+    });
     return nextAccounts;
   }, [apiRequest]);
 
@@ -1211,17 +1221,16 @@ export default function TradeWorkspace() {
     }
     const deletedAccountId = selectedAccount.id;
     setApiBusy(true);
-    setActiveAccountId("");
-    setApiKeyMetadata(emptyMetadata);
-    setSecretForm({
-      apiKey: "",
-      apiSecret: "",
-      passphrase: "",
-      password: "",
-    });
-    setAccounts((current) => current.filter((account) => account.id !== deletedAccountId));
     try {
       await apiRequest("DELETE", `/exchange-accounts/${deletedAccountId}`, undefined, 204);
+      setActiveAccountId("");
+      setApiKeyMetadata(emptyMetadata);
+      setSecretForm({
+        apiKey: "",
+        apiSecret: "",
+        passphrase: "",
+        password: "",
+      });
       appendApiLog("删除账户", true, {
         exchange_account_id: deletedAccountId,
         account_label: selectedAccount.account_label,
