@@ -320,10 +320,20 @@ function sanitizeDetail(value: unknown): unknown {
 }
 
 function prettyJson(value: unknown) {
-  if (typeof value === "string") {
-    return value;
+  try {
+    if (typeof value === "string") {
+      return value;
+    }
+    return (
+      JSON.stringify(
+        sanitizeDetail(value),
+        (_key, item) => (typeof item === "bigint" ? item.toString() : item),
+        2,
+      ) ?? ""
+    );
+  } catch (error) {
+    return `无法显示详情：${String(error)}`;
   }
-  return JSON.stringify(sanitizeDetail(value), null, 2);
 }
 
 function formatDateTime(value: string | null) {
@@ -560,14 +570,13 @@ export default function TradeWorkspace() {
   const allSelectedAccount = accounts.find((account) => account.id === activeAccountId);
 
   useEffect(() => {
-    if (exchangeAccounts.length === 0) {
-      setActiveAccountId("");
+    if (!activeAccountId) {
       return;
     }
-    if (!exchangeAccounts.some((account) => account.id === activeAccountId)) {
-      setActiveAccountId(exchangeAccounts[0].id);
+    if (!accounts.some((account) => account.id === activeAccountId)) {
+      setActiveAccountId("");
     }
-  }, [activeAccountId, exchangeAccounts]);
+  }, [activeAccountId, accounts]);
 
   useEffect(() => {
     if (!activeAccountId || !session.token) {
@@ -649,7 +658,9 @@ export default function TradeWorkspace() {
 
   const activeAccount = allSelectedAccount;
   const selectedApiKeyMetadata =
-    apiKeyMetadata.exchange_account_id === activeAccountId ? apiKeyMetadata : emptyMetadata;
+    activeAccount && apiKeyMetadata.exchange_account_id === activeAccount.id
+      ? apiKeyMetadata
+      : emptyMetadata;
   const accountMode = activeAccount?.account_mode ?? "UNSELECTED";
   const activeExchangeProfile = exchangeProfiles[activeExchange];
   const activeWorkspaceLabel = workspaceLabels[activeWorkspace];
@@ -1047,9 +1058,11 @@ export default function TradeWorkspace() {
     setApiBusy(true);
     try {
       const nextAccounts = await refreshAccounts();
+      const selectedAccountStillExists =
+        activeAccountId && nextAccounts.some((account) => account.id === activeAccountId);
       appendApiLog("刷新账户", true, {
         account_count: nextAccounts.length,
-        selected_account_id: activeAccountId || null,
+        selected_account_id: selectedAccountStillExists ? activeAccountId : null,
       });
     } catch (error) {
       appendApiLog("刷新账户", false, String(error));
@@ -1069,11 +1082,12 @@ export default function TradeWorkspace() {
   }
 
   async function saveApiKey() {
-    if (!activeAccount) {
+    const selectedAccount = activeAccount;
+    if (!selectedAccount) {
       appendApiLog("保存加密 API Key", false, "请先选择账户");
       return;
     }
-    if (activeAccount.exchange_name === "okx" && !secretForm.passphrase) {
+    if (selectedAccount.exchange_name === "okx" && !secretForm.passphrase) {
       appendApiLog("保存加密 API Key", false, "OKX 需要填写 Passphrase 口令");
       return;
     }
@@ -1082,7 +1096,7 @@ export default function TradeWorkspace() {
       const reauthToken = await createReauthenticationToken(secretForm.password);
       const metadata = (await apiRequest(
         "POST",
-        `/exchange-accounts/${activeAccount.id}/api-key`,
+        `/exchange-accounts/${selectedAccount.id}/api-key`,
         {
           api_key: secretForm.apiKey,
           api_secret: secretForm.apiSecret,
@@ -1107,15 +1121,17 @@ export default function TradeWorkspace() {
   }
 
   async function runReadOnlyCheck() {
-    if (!activeAccount) {
+    const selectedAccount = activeAccount;
+    const selectedMetadata = selectedApiKeyMetadata;
+    if (!selectedAccount) {
       appendApiLog("测试连接", false, "请先选择账户");
       return;
     }
-    if (activeAccount.account_mode === "SIMULATION") {
+    if (selectedAccount.account_mode === "SIMULATION") {
       appendApiLog("测试连接", false, "模拟账户不使用交易所 API");
       return;
     }
-    if (!selectedApiKeyMetadata.configured) {
+    if (!selectedMetadata.configured) {
       appendApiLog("测试连接", false, "请先加密保存密钥；连接测试是可选步骤，不会阻止保存");
       return;
     }
@@ -1123,12 +1139,12 @@ export default function TradeWorkspace() {
     try {
       const reauthToken = await createReauthenticationToken(secretForm.password);
       const checkPath =
-        activeAccount.account_mode === "REAL"
+        selectedAccount.account_mode === "REAL"
           ? "real-read-only-check"
           : "testnet-read-only-check";
       const result = await apiRequest(
         "POST",
-        `/exchange-accounts/${activeAccount.id}/${checkPath}`,
+        `/exchange-accounts/${selectedAccount.id}/${checkPath}`,
         undefined,
         200,
         { "X-Reauthentication-Token": reauthToken },
@@ -1142,11 +1158,13 @@ export default function TradeWorkspace() {
   }
 
   async function deleteApiKey() {
-    if (!activeAccount) {
+    const selectedAccount = activeAccount;
+    const selectedMetadata = selectedApiKeyMetadata;
+    if (!selectedAccount) {
       appendApiLog("删除密钥", false, "请先选择账户");
       return;
     }
-    if (!selectedApiKeyMetadata.configured) {
+    if (!selectedMetadata.configured) {
       appendApiLog("删除密钥", false, "当前账户没有已保存的密钥");
       return;
     }
@@ -1157,7 +1175,7 @@ export default function TradeWorkspace() {
     }
     setApiBusy(true);
     try {
-      await apiRequest("DELETE", `/exchange-accounts/${activeAccount.id}/api-key`, undefined, 204);
+      await apiRequest("DELETE", `/exchange-accounts/${selectedAccount.id}/api-key`, undefined, 204);
       setApiKeyMetadata(emptyMetadata);
       setSecretForm({
         apiKey: "",
@@ -1166,7 +1184,7 @@ export default function TradeWorkspace() {
         password: "",
       });
       appendApiLog("删除密钥", true, {
-        exchange_account_id: activeAccount.id,
+        exchange_account_id: selectedAccount.id,
         configured: false,
       });
       await refreshAccounts();
@@ -1178,12 +1196,13 @@ export default function TradeWorkspace() {
   }
 
   async function deleteExchangeAccount() {
-    if (!activeAccount) {
+    const selectedAccount = activeAccount;
+    if (!selectedAccount) {
       appendApiLog("删除账户", false, "请先选择账户");
       return;
     }
     const confirmed = window.confirm(
-      `确认删除账户「${activeAccount.account_label}」？这只会删除平台内的账户记录和已保存密钥，不会删除交易所真实账户。`,
+      `确认删除账户「${selectedAccount.account_label}」？这只会删除平台内的账户记录和已保存密钥，不会删除交易所真实账户。`,
     );
     if (!confirmed) {
       appendApiLog("删除账户", false, "用户取消删除");
@@ -1191,9 +1210,8 @@ export default function TradeWorkspace() {
     }
     setApiBusy(true);
     try {
-      const deletedAccount = activeAccount;
-      await apiRequest("DELETE", `/exchange-accounts/${deletedAccount.id}`, undefined, 204);
-      setAccounts((current) => current.filter((account) => account.id !== deletedAccount.id));
+      await apiRequest("DELETE", `/exchange-accounts/${selectedAccount.id}`, undefined, 204);
+      setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));
       setActiveAccountId("");
       setApiKeyMetadata(emptyMetadata);
       setSecretForm({
@@ -1203,8 +1221,8 @@ export default function TradeWorkspace() {
         password: "",
       });
       appendApiLog("删除账户", true, {
-        exchange_account_id: deletedAccount.id,
-        account_label: deletedAccount.account_label,
+        exchange_account_id: selectedAccount.id,
+        account_label: selectedAccount.account_label,
       });
       await refreshAccounts();
     } catch (error) {
@@ -2238,7 +2256,11 @@ export default function TradeWorkspace() {
               <span>API 管理</span>
               <strong>统一添加 / 密钥状态 / 测试连接</strong>
             </div>
-            <button className="trade-secondary-button" onClick={reloadAccounts} disabled={!session.token}>
+            <button
+              className="trade-secondary-button"
+              onClick={reloadAccounts}
+              disabled={!session.token || apiBusy}
+            >
               刷新
             </button>
           </div>
@@ -2510,7 +2532,11 @@ export default function TradeWorkspace() {
             </div>
           </div>
           <div className="trade-preflight-actions">
-            <button className="trade-ghost-button" onClick={reloadAccounts} disabled={!session.token}>
+            <button
+              className="trade-ghost-button"
+              onClick={reloadAccounts}
+              disabled={!session.token || apiBusy}
+            >
               刷新账户
             </button>
             <button
