@@ -181,6 +181,9 @@ const accountModeLabels: Record<AccountMode, string> = {
   TESTNET: "测试网",
   REAL: "真实只读",
 };
+
+const exchangeNames: readonly ExchangeName[] = ["binance", "bybit", "okx", "mock"];
+const accountModes: readonly AccountMode[] = ["SIMULATION", "TESTNET", "REAL"];
 const resultLabels: Record<string, string> = {
   PASS: "通过",
   FAIL: "失败",
@@ -395,6 +398,18 @@ function safeAccountModeLabel(mode: AccountMode | string | undefined) {
   return accountModeLabels[mode as AccountMode] ?? String(mode);
 }
 
+function isExchangeName(value: unknown): value is ExchangeName {
+  return typeof value === "string" && exchangeNames.includes(value as ExchangeName);
+}
+
+function isAccountMode(value: unknown): value is AccountMode {
+  return typeof value === "string" && accountModes.includes(value as AccountMode);
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function normalizeExchangeAccount(value: unknown): ExchangeAccount | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -403,7 +418,7 @@ function normalizeExchangeAccount(value: unknown): ExchangeAccount | null {
   const id = payload.id ?? payload.account_id;
   const exchangeName = payload.exchange_name ?? payload.exchange;
   const accountMode = payload.account_mode ?? payload.mode;
-  if (!id || !exchangeName || !accountMode) {
+  if (typeof id !== "string" || !isExchangeName(exchangeName) || !isAccountMode(accountMode)) {
     return null;
   }
   return {
@@ -546,17 +561,21 @@ export default function TradeWorkspace() {
     const payload = await apiRequest("GET", "/exchange-accounts");
     const nextAccounts = normalizeExchangeAccounts(payload);
     setAccounts(nextAccounts);
-    setActiveAccountId((current) => {
-      if (preferredAccountId && nextAccounts.some((account) => account.id === preferredAccountId)) {
-        return preferredAccountId;
-      }
-      if (current && nextAccounts.some((account) => account.id === current)) {
-        return current;
-      }
-      return "";
-    });
+    const currentAccountId = activeAccountId;
+    const nextActiveAccountId =
+      preferredAccountId && nextAccounts.some((account) => account.id === preferredAccountId)
+        ? preferredAccountId
+        : currentAccountId && nextAccounts.some((account) => account.id === currentAccountId)
+          ? currentAccountId
+          : "";
+    setActiveAccountId(nextActiveAccountId);
+    if (!nextActiveAccountId) {
+      setApiKeyMetadata(emptyMetadata);
+      setApiMetadataLoading(false);
+      setSecretForm(emptySecretForm);
+    }
     return nextAccounts;
-  }, [apiRequest]);
+  }, [activeAccountId, apiRequest]);
 
   const refreshMarketDataProviders = useCallback(async () => {
     const payload = (await apiRequest("GET", "/market-data/providers")) as {
@@ -616,7 +635,7 @@ export default function TradeWorkspace() {
       return;
     }
     void refreshMarketDataProviders().catch((error) =>
-      appendApiLog("加载市场数据服务商", false, String(error)),
+      appendApiLog("加载市场数据服务商", false, errorMessage(error)),
     );
   }, [appendApiLog, refreshMarketDataProviders, session.token]);
 
@@ -657,7 +676,7 @@ export default function TradeWorkspace() {
       } catch (error) {
         if (!cancelled) {
           setApiKeyMetadata(emptyMetadata);
-          appendApiLog("读取 API Key 状态", false, String(error));
+          appendApiLog("读取 API Key 状态", false, errorMessage(error));
         }
       } finally {
         if (!cancelled) {
@@ -1106,7 +1125,7 @@ export default function TradeWorkspace() {
       await refreshAccounts(account.id);
       appendApiLog("创建交易所账户", true, account);
     } catch (error) {
-      appendApiLog("创建交易所账户", false, String(error));
+      appendApiLog("创建交易所账户", false, errorMessage(error));
     } finally {
       setApiBusy(false);
     }
@@ -1128,7 +1147,7 @@ export default function TradeWorkspace() {
         selected_account_id: selectedAccountStillExists ? selectedBeforeRefresh : null,
       });
     } catch (error) {
-      appendApiLog("刷新账户", false, String(error));
+      appendApiLog("刷新账户", false, errorMessage(error));
     } finally {
       setApiBusy(false);
     }
@@ -1176,7 +1195,7 @@ export default function TradeWorkspace() {
       setSecretForm(emptySecretForm);
       appendApiLog("保存加密 API Key", true, metadata);
     } catch (error) {
-      appendApiLog("保存加密 API Key", false, String(error));
+      appendApiLog("保存加密 API Key", false, errorMessage(error));
     } finally {
       setApiBusy(false);
     }
@@ -1217,7 +1236,7 @@ export default function TradeWorkspace() {
       );
       appendApiLog("测试连接", true, result);
     } catch (error) {
-      appendApiLog("测试连接", false, String(error));
+      appendApiLog("测试连接", false, errorMessage(error));
     } finally {
       setApiBusy(false);
     }
@@ -1252,9 +1271,11 @@ export default function TradeWorkspace() {
         exchange_account_id: selectedAccount.id,
         configured: false,
       });
-      await refreshAccounts(selectedAccount.id);
+      await refreshAccounts(selectedAccount.id).catch((refreshError) => {
+        appendApiLog("删除密钥后刷新", false, errorMessage(refreshError));
+      });
     } catch (error) {
-      appendApiLog("删除密钥", false, String(error));
+      appendApiLog("删除密钥", false, errorMessage(error));
     } finally {
       setApiBusy(false);
     }
@@ -1281,16 +1302,25 @@ export default function TradeWorkspace() {
     const deletedAccountLabel = selectedAccount.account_label;
     setApiBusy(true);
     try {
-      clearApiAccountState();
       await apiRequest("DELETE", `/exchange-accounts/${deletedAccountId}`, undefined, 204);
-      await refreshAccounts();
+      setAccounts((currentAccounts) =>
+        currentAccounts.filter((account) => account.id !== deletedAccountId),
+      );
+      if (activeAccountId === deletedAccountId) {
+        clearApiAccountState();
+      }
       appendApiLog("删除账户", true, {
         exchange_account_id: deletedAccountId,
         account_label: deletedAccountLabel,
       });
+      await refreshAccounts().catch((refreshError) => {
+        appendApiLog("删除账户后刷新", false, errorMessage(refreshError));
+      });
     } catch (error) {
-      appendApiLog("删除账户", false, String(error));
-      await refreshAccounts().catch(() => undefined);
+      appendApiLog("删除账户", false, errorMessage(error));
+      await refreshAccounts().catch((refreshError) => {
+        appendApiLog("删除失败后刷新", false, errorMessage(refreshError));
+      });
     } finally {
       setApiBusy(false);
     }
@@ -1307,7 +1337,7 @@ export default function TradeWorkspace() {
       setMarketDataResult(result);
       appendApiLog("加载 GEXBot 交易对", true, result);
     } catch (error) {
-      appendApiLog("加载 GEXBot 交易对", false, String(error));
+      appendApiLog("加载 GEXBot 交易对", false, errorMessage(error));
     } finally {
       setMarketDataBusy(false);
     }
@@ -1336,7 +1366,7 @@ export default function TradeWorkspace() {
       setMarketDataResult(result);
       appendApiLog("加载 GEXBot 数据集", true, result);
     } catch (error) {
-      appendApiLog("加载 GEXBot 数据集", false, String(error));
+      appendApiLog("加载 GEXBot 数据集", false, errorMessage(error));
     } finally {
       setMarketDataBusy(false);
     }
@@ -1415,7 +1445,7 @@ export default function TradeWorkspace() {
         created_to: createdTo || "*",
       });
     } catch (error) {
-      appendApiLog("加载审计日志", false, String(error));
+      appendApiLog("加载审计日志", false, errorMessage(error));
     } finally {
       setAuditBusy(false);
     }
@@ -1583,7 +1613,7 @@ export default function TradeWorkspace() {
       appendApiLog("加载第四阶段就绪状态", report.overall_status === "PASS", report);
     } catch (error) {
       setPhase4Readiness(null);
-      appendApiLog("加载第四阶段就绪状态", false, String(error));
+      appendApiLog("加载第四阶段就绪状态", false, errorMessage(error));
     } finally {
       setApiBusy(false);
     }
@@ -1629,7 +1659,7 @@ export default function TradeWorkspace() {
         await loadAuditLogs(nextFilters, reviewAuditLogId);
       }
     } catch (error) {
-      appendApiLog("记录第四阶段复核", false, String(error));
+      appendApiLog("记录第四阶段复核", false, errorMessage(error));
     } finally {
       setApiBusy(false);
     }
@@ -1679,7 +1709,7 @@ export default function TradeWorkspace() {
         await loadAuditLogs(nextFilters, approvalAuditLogId);
       }
     } catch (error) {
-      appendApiLog("记录第四阶段真实订单窗口", false, String(error));
+      appendApiLog("记录第四阶段真实订单窗口", false, errorMessage(error));
     } finally {
       setApiBusy(false);
     }
@@ -1731,7 +1761,7 @@ export default function TradeWorkspace() {
         await loadAuditLogs(nextFilters, finalAuditLogId);
       }
     } catch (error) {
-      appendApiLog("记录第四阶段最终确认", false, String(error));
+      appendApiLog("记录第四阶段最终确认", false, errorMessage(error));
     } finally {
       setApiBusy(false);
     }
@@ -1790,7 +1820,7 @@ export default function TradeWorkspace() {
         await loadAuditLogs(nextFilters, approvalAuditLogId);
       }
     } catch (error) {
-      appendApiLog("记录测试网订单窗口", false, String(error));
+      appendApiLog("记录测试网订单窗口", false, errorMessage(error));
     } finally {
       setApiBusy(false);
     }
