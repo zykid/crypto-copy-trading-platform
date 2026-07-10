@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type AuthMode = "login" | "register";
@@ -82,7 +81,6 @@ function formatError(value: unknown) {
 }
 
 export default function LoginPage() {
-  const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("login");
   const [apiRoot] = useState(resolveApiRoot);
   const [busy, setBusy] = useState(false);
@@ -172,10 +170,9 @@ export default function LoginPage() {
       ok: true,
       message: `已登录 ${profile.username}，角色 ${profile.role}`,
     });
-    router.replace("/trade");
-    window.setTimeout(() => {
-      window.location.assign("/trade");
-    }, 100);
+    // Use one full-page navigation so the protected page reads the persisted
+    // token from a fresh document without competing client-side redirects.
+    window.location.replace("/trade");
   }
 
   async function submitLogin() {
@@ -287,7 +284,15 @@ export default function LoginPage() {
           </div>
 
           {mode === "login" ? (
-            <div className="auth-form">
+            <form
+              className="auth-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!busy && canSubmitLogin) {
+                  void submitLogin();
+                }
+              }}
+            >
               <label>
                 用户名或邮箱
                 <input
@@ -345,12 +350,11 @@ export default function LoginPage() {
               <button
                 className="auth-submit"
                 disabled={busy || !canSubmitLogin}
-                onClick={submitLogin}
-                type="button"
+                type="submit"
               >
-                登录
+                {busy ? "正在登录..." : "登录"}
               </button>
-            </div>
+            </form>
           ) : (
             <div className="auth-form">
               <div className="auth-two-column">
