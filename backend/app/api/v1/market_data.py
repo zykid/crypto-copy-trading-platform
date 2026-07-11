@@ -12,7 +12,10 @@ from app.services.gexbot_market_data import (
     GexbotMarketDataError,
     GexbotValidationError,
 )
-from app.services.public_market_data import PublicMarketDataError, get_public_candles
+from app.services.public_market_data import (
+    PublicMarketDataError,
+    get_public_candles_with_fallback,
+)
 
 router = APIRouter()
 
@@ -26,7 +29,7 @@ def get_exchange_candles(
     _: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
-        candles = get_public_candles(
+        result = get_public_candles_with_fallback(
             exchange_name=exchange,
             symbol=symbol,
             interval=interval,
@@ -39,9 +42,11 @@ def get_exchange_candles(
         ) from exc
     return {
         "exchange": exchange.value,
+        "source_exchange": result.source_exchange.value,
+        "fallback_used": result.fallback_used,
         "symbol": symbol.upper(),
         "interval": interval,
-        "candles": candles,
+        "candles": result.candles,
     }
 
 

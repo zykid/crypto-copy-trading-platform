@@ -13,6 +13,11 @@ PUBLIC_MARKET_BASE_URLS = {
     ExchangeName.BINANCE: "https://api.binance.com",
     ExchangeName.BYBIT: "https://api.bybit.com",
 }
+PUBLIC_MARKET_FALLBACK_ORDER = (
+    ExchangeName.BINANCE,
+    ExchangeName.BYBIT,
+    ExchangeName.OKX,
+)
 
 
 class PublicMarketDataError(RuntimeError):
@@ -39,6 +44,54 @@ class NormalizedCandle:
             "close": self.close,
             "volume": self.volume,
         }
+
+
+@dataclass(frozen=True)
+class PublicCandleResult:
+    requested_exchange: ExchangeName
+    source_exchange: ExchangeName
+    candles: list[dict[str, int | float]]
+
+    @property
+    def fallback_used(self) -> bool:
+        return self.requested_exchange != self.source_exchange
+
+
+def get_public_candles_with_fallback(
+    *,
+    exchange_name: ExchangeName,
+    symbol: str,
+    interval: str,
+    limit: int = 200,
+) -> PublicCandleResult:
+    candidates = (exchange_name,) + tuple(
+        candidate
+        for candidate in PUBLIC_MARKET_FALLBACK_ORDER
+        if candidate != exchange_name
+    )
+    last_error: PublicMarketDataError | None = None
+    for candidate in candidates:
+        try:
+            candles = get_public_candles(
+                exchange_name=candidate,
+                symbol=symbol,
+                interval=interval,
+                limit=limit,
+            )
+        except PublicMarketDataError as exc:
+            last_error = exc
+            if exc.failure_type == "invalid_response":
+                raise
+            continue
+        return PublicCandleResult(
+            requested_exchange=exchange_name,
+            source_exchange=candidate,
+            candles=candles,
+        )
+    raise PublicMarketDataError(
+        "all exchange market-data sources failed",
+        failure_type=last_error.failure_type if last_error else "transport_error",
+    )
 
 
 def get_public_candles(

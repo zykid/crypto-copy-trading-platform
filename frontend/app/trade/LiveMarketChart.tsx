@@ -54,6 +54,8 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
   const [interval, setIntervalValue] = useState<ChartInterval>("1m");
   const [connectionState, setConnectionState] = useState<ConnectionState>("loading");
   const [lastPrice, setLastPrice] = useState<number | null>(null);
+  const [sourceExchange, setSourceExchange] =
+    useState<Exclude<ExchangeName, "mock"> | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
@@ -105,6 +107,7 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
     let reconnectAttempt = 0;
 
     setLastPrice(null);
+    setSourceExchange(null);
     onPriceUpdate?.(null);
     setErrorMessage("");
     if (exchange === "mock") {
@@ -113,6 +116,7 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
       return;
     }
     const marketExchange = exchange as Exclude<ExchangeName, "mock">;
+    let activeMarketExchange = marketExchange;
 
     async function fetchCandles(limit: number) {
       const query = new URLSearchParams({ exchange, symbol, interval, limit: String(limit) });
@@ -125,12 +129,18 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
         throw new Error(payload?.detail?.reason ?? `历史行情请求失败 (${response.status})`);
       }
       const candles = Array.isArray(payload?.candles) ? payload.candles : [];
-      return candles.map(toChartCandle).filter(isChartCandle);
+      const payloadSource = payload?.source_exchange;
+      const nextSource = isLiveExchange(payloadSource) ? payloadSource : marketExchange;
+      return {
+        candles: candles.map(toChartCandle).filter(isChartCandle),
+        sourceExchange: nextSource,
+      };
     }
 
     async function loadHistory() {
       setConnectionState("loading");
-      const chartData = await fetchCandles(240);
+      const history = await fetchCandles(240);
+      const chartData = history.candles;
       if (chartData.length === 0) {
         throw new Error("交易所未返回有效 K 线");
       }
@@ -138,23 +148,27 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
         return;
       }
       seriesRef.current?.setData(chartData);
+      activeMarketExchange = history.sourceExchange;
+      setSourceExchange(history.sourceExchange);
       seriesRef.current?.priceScale().applyOptions({ autoScale: true });
       const price = chartData[chartData.length - 1].close;
       setLastPrice(price);
-      onPriceUpdate?.(price);
-      connectSocket();
+      onPriceUpdate?.(activeMarketExchange === marketExchange ? price : null);
+      connectSocket(activeMarketExchange);
     }
 
     async function pollLatestCandle() {
       try {
-        const chartData = await fetchCandles(20);
-        const candle = chartData[chartData.length - 1];
+        const latest = await fetchCandles(20);
+        const candle = latest.candles[latest.candles.length - 1];
         if (!candle || cancelled) {
           return;
         }
         seriesRef.current?.update(candle);
+        activeMarketExchange = latest.sourceExchange;
+        setSourceExchange(latest.sourceExchange);
         setLastPrice(candle.close);
-        onPriceUpdate?.(candle.close);
+        onPriceUpdate?.(activeMarketExchange === marketExchange ? candle.close : null);
         setConnectionState("polling");
       } catch {
         if (!cancelled) {
@@ -163,11 +177,12 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
       }
     }
 
-    function connectSocket() {
+    function connectSocket(socketExchange = activeMarketExchange) {
       if (cancelled) {
         return;
       }
-      socket = new WebSocket(webSocketUrl(marketExchange, symbol, interval));
+      activeMarketExchange = socketExchange;
+      socket = new WebSocket(webSocketUrl(socketExchange, symbol, interval));
       socket.onopen = () => {
         reconnectAttempt = 0;
         if (pollingTimer) {
@@ -175,11 +190,11 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
           pollingTimer = null;
         }
         setConnectionState("live");
-        const message = subscriptionMessage(marketExchange, symbol, interval);
+        const message = subscriptionMessage(socketExchange, symbol, interval);
         if (message && socket?.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify(message));
         }
-        if (exchange === "okx") {
+        if (socketExchange === "okx") {
           keepAliveTimer = setInterval(() => {
             if (socket?.readyState === WebSocket.OPEN) {
               socket.send("ping");
@@ -192,13 +207,13 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
           return;
         }
         try {
-          const candle = parseSocketCandle(marketExchange, JSON.parse(event.data));
+          const candle = parseSocketCandle(socketExchange, JSON.parse(event.data));
           if (!candle || cancelled) {
             return;
           }
           seriesRef.current?.update(candle);
           setLastPrice(candle.close);
-          onPriceUpdate?.(candle.close);
+          onPriceUpdate?.(socketExchange === marketExchange ? candle.close : null);
           setConnectionState("live");
         } catch {
           // Ignore acknowledgement and unrelated exchange messages.
@@ -219,7 +234,10 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
           void pollLatestCandle();
           pollingTimer = setInterval(() => void pollLatestCandle(), 5_000);
         }
-        reconnectTimer = setTimeout(connectSocket, Math.min(1000 * 2 ** reconnectAttempt, 15_000));
+        reconnectTimer = setTimeout(
+          () => connectSocket(activeMarketExchange),
+          Math.min(1000 * 2 ** reconnectAttempt, 15_000),
+        );
       };
     }
 
@@ -267,7 +285,12 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
       </div>
       <div ref={containerRef} className="live-market-canvas" aria-label={`${symbol} 实时 K 线图`} />
       {errorMessage && <p className="live-market-error">{errorMessage}</p>}
-      <p className="live-market-source">行情来源：{exchange.toUpperCase()} 公开市场数据，无需 API 密钥</p>
+      <p className="live-market-source">
+        行情来源：{(sourceExchange ?? exchange).toUpperCase()} 公开市场数据，无需 API 密钥
+        {sourceExchange && sourceExchange !== exchange
+          ? `（${exchange.toUpperCase()} 暂不可用，已自动切换；备用价格不用于下单预览）`
+          : ""}
+      </p>
     </div>
   );
 }
@@ -293,6 +316,10 @@ function toChartCandle(value: CandlePayload): CandlestickData | null {
 
 function isChartCandle(value: CandlestickData | null): value is CandlestickData {
   return value !== null;
+}
+
+function isLiveExchange(value: unknown): value is Exclude<ExchangeName, "mock"> {
+  return value === "okx" || value === "binance" || value === "bybit";
 }
 
 function normalizedSymbol(symbol: string) {
