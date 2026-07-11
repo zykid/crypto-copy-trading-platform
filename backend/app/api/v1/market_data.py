@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import get_current_user
 from app.core.config import settings
+from app.db.models.exchange_account import ExchangeName
 from app.db.models.user import User
 from app.services.gexbot_market_data import (
     GexbotConfigurationError,
@@ -11,8 +12,37 @@ from app.services.gexbot_market_data import (
     GexbotMarketDataError,
     GexbotValidationError,
 )
+from app.services.public_market_data import PublicMarketDataError, get_public_candles
 
 router = APIRouter()
+
+
+@router.get("/public/candles")
+def get_exchange_candles(
+    exchange: ExchangeName,
+    symbol: str,
+    interval: str = "1m",
+    limit: int = 200,
+    _: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    try:
+        candles = get_public_candles(
+            exchange_name=exchange,
+            symbol=symbol,
+            interval=interval,
+            limit=limit,
+        )
+    except PublicMarketDataError as exc:
+        raise HTTPException(
+            status_code=502 if exc.failure_type != "invalid_response" else 422,
+            detail={"reason": str(exc), "failure_type": exc.failure_type},
+        ) from exc
+    return {
+        "exchange": exchange.value,
+        "symbol": symbol.upper(),
+        "interval": interval,
+        "candles": candles,
+    }
 
 
 @router.get("/providers")

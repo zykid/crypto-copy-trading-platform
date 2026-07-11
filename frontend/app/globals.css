@@ -2303,29 +2303,84 @@ body {
   font-style: normal;
 }
 
-.trade-chart-canvas {
-  min-height: 460px;
+.live-market-chart {
   display: grid;
-  grid-template-columns: repeat(34, 1fr);
-  align-items: end;
-  gap: 5px;
+  gap: 8px;
   border: 1px solid #1f2937;
   border-radius: 8px;
-  background:
-    linear-gradient(#182232 1px, transparent 1px),
-    linear-gradient(90deg, #182232 1px, transparent 1px),
-    #0b1220;
-  background-size: 100% 68px, 68px 100%, auto;
-  padding: 16px;
+  overflow: hidden;
+  background: #0b1220;
 }
 
-.trade-chart-canvas span {
-  border-radius: 4px 4px 0 0;
-  background: #20c997;
+.live-market-toolbar {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #1f2937;
+  padding: 6px 10px;
 }
 
-.trade-chart-canvas span.down {
-  background: #ef4444;
+.live-market-intervals {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.live-market-intervals button {
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #94a3b8;
+  background: transparent;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.live-market-intervals button.active {
+  border-color: #f5b800;
+  color: #f8fafc;
+  background: rgba(245, 184, 0, 0.12);
+}
+
+.live-market-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.live-market-state span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.live-market-state.live span,
+.live-market-state.polling span {
+  color: #20c997;
+}
+
+.live-market-state.error span,
+.live-market-state.unavailable span {
+  color: #ef4444;
+}
+
+.live-market-canvas {
+  width: 100%;
+  height: 460px;
+}
+
+.live-market-error,
+.live-market-source {
+  margin: 0;
+  padding: 0 10px 8px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.live-market-error {
+  color: #f87171;
 }
 
 .trade-exchange-window {

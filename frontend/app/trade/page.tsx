@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import LiveMarketChart from "./LiveMarketChart";
+
 type SessionState = {
   token: string;
   userId: string;
@@ -455,6 +457,7 @@ export default function TradeWorkspace() {
   const [accounts, setAccounts] = useState<ExchangeAccount[]>([]);
   const [activeExchange, setActiveExchange] = useState<ExchangeName>("okx");
   const [activeSymbol, setActiveSymbol] = useState("BTC/USDT");
+  const [liveMarketPrice, setLiveMarketPrice] = useState<number | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceSection>("terminal");
   const [symbolSearch, setSymbolSearch] = useState("");
   const [favoriteSymbols, setFavoriteSymbols] = useState<string[]>(["BTC/USDT", "ETH/USDT", "SOL/USDT"]);
@@ -782,7 +785,7 @@ export default function TradeWorkspace() {
   const referencePrice =
     orderForm.orderType === "LIMIT" && Number.isFinite(parsedPrice) && parsedPrice > 0
       ? parsedPrice
-      : activeMarket.last;
+      : liveMarketPrice ?? activeMarket.last;
   const estimatedNotional =
     Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity * referencePrice : 0;
   const normalizedPreviewSymbol = activeSymbol.replace("/", "");
@@ -2027,18 +2030,16 @@ export default function TradeWorkspace() {
                 </strong>
               </div>
               <em>
-                {formatNumber(activeMarket.last)} USDT {activeMarket.change}
+                {formatNumber(liveMarketPrice ?? activeMarket.last)} USDT {activeMarket.change}
               </em>
             </div>
-            <div className="trade-chart-canvas" aria-label="行情图预览">
-              {Array.from({ length: 34 }, (_, index) => (
-                <span
-                  className={index % 3 === 0 ? "down" : "up"}
-                  key={index}
-                  style={{ height: `${28 + ((index * 13) % 112)}px` }}
-                />
-              ))}
-            </div>
+            <LiveMarketChart
+              apiRoot={apiRoot}
+              exchange={activeExchange}
+              onPriceUpdate={setLiveMarketPrice}
+              symbol={activeSymbol}
+              token={session.token}
+            />
             <div className="trade-exchange-window">
               <div>
                 <span>交易所窗口</span>
