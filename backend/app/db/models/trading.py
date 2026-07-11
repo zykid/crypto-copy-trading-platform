@@ -151,3 +151,22 @@ class OrderExecution(Base):
     updated_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class OrderExecutionTransition(Base):
+    __tablename__ = "order_execution_transitions"
+    __table_args__ = (UniqueConstraint("order_execution_id", "sequence_number"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    order_execution_id: Mapped[str] = mapped_column(
+        ForeignKey("order_executions.id"), index=True, nullable=False
+    )
+    sequence_number: Mapped[int] = mapped_column(nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    to_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str] = mapped_column(String(120), nullable=False)
+    details: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

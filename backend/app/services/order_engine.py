@@ -14,6 +14,10 @@ from app.db.models.trading import (
 )
 from app.exchanges.mock import MockExchange
 from app.services.emergency_stop import assert_new_orders_allowed
+from app.services.order_state_machine import (
+    record_initial_order_state,
+    transition_order_execution,
+)
 from app.services.position_engine import apply_fill, calculate_delta, get_or_create_position
 from app.services.risk_engine import RiskOrderInput, check_order_risk, get_or_create_risk_settings
 
@@ -65,6 +69,8 @@ def execute_signal_for_account(
         status=OrderExecutionStatus.CREATED,
     )
     db.add(execution)
+    db.flush()
+    record_initial_order_state(db, execution=execution)
     db.commit()
     db.refresh(execution)
 
@@ -85,8 +91,17 @@ def execute_signal_for_account(
     )
     execution.risk_result = risk_result.to_dict()
     if risk_result.decision != RiskDecision.PASSED or quantity <= 0:
-        execution.status = OrderExecutionStatus.FAILED
         execution.error_message = "; ".join(risk_result.reasons) or "zero quantity order"
+        transition_order_execution(
+            db,
+            execution=execution,
+            to_status=OrderExecutionStatus.FAILED,
+            reason=(
+                "risk_rejected"
+                if risk_result.decision != RiskDecision.PASSED
+                else "zero_quantity"
+            ),
+        )
         db.commit()
         db.refresh(execution)
         _notify_order_failure(
@@ -100,10 +115,21 @@ def execute_signal_for_account(
         )
         return execution
 
-    execution.status = OrderExecutionStatus.RISK_PASSED
+    transition_order_execution(
+        db,
+        execution=execution,
+        to_status=OrderExecutionStatus.RISK_PASSED,
+        reason="risk_passed",
+    )
     db.commit()
     adapter = exchange or MockExchange()
-    execution.status = OrderExecutionStatus.SUBMITTED
+    transition_order_execution(
+        db,
+        execution=execution,
+        to_status=OrderExecutionStatus.SUBMITTED,
+        reason="mock_order_submitted",
+    )
+    db.commit()
     response = adapter.place_order(
         client_order_id=client_order_id,
         symbol=signal.symbol,
@@ -114,7 +140,12 @@ def execute_signal_for_account(
     )
     execution.exchange_order_id = str(response["exchange_order_id"])
     execution.exchange_response = response
-    execution.status = OrderExecutionStatus.FILLED
+    transition_order_execution(
+        db,
+        execution=execution,
+        to_status=OrderExecutionStatus.FILLED,
+        reason="mock_order_filled",
+    )
     apply_fill(
         db,
         user_id=user_id,

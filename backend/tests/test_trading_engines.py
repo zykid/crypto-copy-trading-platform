@@ -4,7 +4,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.exchange_account import AccountMode, ExchangeName
-from app.db.models.trading import OrderExecution, OrderExecutionStatus, OrderSide, OrderType
+from app.db.models.trading import (
+    OrderExecution,
+    OrderExecutionStatus,
+    OrderExecutionTransition,
+    OrderSide,
+    OrderType,
+)
 from app.exchanges.mock import MockExchange
 from app.services.exchange_accounts import create_account
 from app.services.order_engine import execute_signal_for_account
@@ -196,6 +202,17 @@ def test_order_engine_executes_mock_order_and_updates_position(db_session: Sessi
     assert execution.exchange_order_id is not None
     assert execution.risk_result == {"decision": "PASSED", "reasons": []}
     assert position.quantity == Decimal("0.25")
+    transitions = db_session.scalars(
+        select(OrderExecutionTransition)
+        .where(OrderExecutionTransition.order_execution_id == execution.id)
+        .order_by(OrderExecutionTransition.sequence_number)
+    ).all()
+    assert [transition.to_status for transition in transitions] == [
+        "CREATED",
+        "RISK_PASSED",
+        "SUBMITTED",
+        "FILLED",
+    ]
 
 
 def test_order_engine_alerts_on_risk_rejected_terminal_failure(
