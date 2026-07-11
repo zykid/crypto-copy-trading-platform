@@ -6,6 +6,7 @@ from app.db.models.observability import (
     NotificationPreference,
     SystemEvent,
 )
+from app.db.models.system_control import SystemControl
 from app.db.models.trading import (
     Balance,
     OrderExecution,
@@ -39,6 +40,7 @@ __all__ = [
     "RiskSetting",
     "SignalSource",
     "SystemEvent",
+    "SystemControl",
     "TradingSignal",
     "User",
     "UserPermission",

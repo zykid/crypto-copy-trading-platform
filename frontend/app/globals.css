@@ -1053,6 +1053,65 @@ body {
   letter-spacing: 0;
 }
 
+.emergency-stop-panel {
+  grid-column: 1 / -1;
+  border-top: 3px solid var(--danger);
+}
+
+.emergency-stop-active {
+  background: #fff7f6;
+  border-color: var(--danger);
+}
+
+.emergency-stop-heading-actions,
+.emergency-stop-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.emergency-stop-heading-actions {
+  align-items: center;
+}
+
+.emergency-stop-heading-actions span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.emergency-stop-heading-actions .stop-on {
+  border-color: #e79890;
+  background: #fff1f0;
+  color: var(--danger);
+}
+
+.emergency-stop-heading-actions .stop-off {
+  border-color: #89c7bc;
+  background: #f0fbf8;
+  color: var(--success);
+}
+
+.emergency-stop-controls {
+  margin-top: 14px;
+}
+
+.emergency-stop-controls label {
+  flex: 1 1 240px;
+}
+
+.emergency-stop-controls button {
+  flex: 0 0 auto;
+}
+
+.emergency-stop-last-reason {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .panel-heading {
   border-bottom: 1px solid var(--soft);
   padding-bottom: 10px;

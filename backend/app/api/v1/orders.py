@@ -15,6 +15,7 @@ from app.schemas.trading import (
     TestnetOrderWindowApprovalResponse,
     TestnetOrderWindowPlanResponse,
 )
+from app.services.emergency_stop import EmergencyStopEnabledError, assert_new_orders_allowed
 from app.services.external_alerts import ExternalAlertConfig
 from app.services.operational_alert_runtime import OperationalAlertRuntime
 from app.services.order_engine import execute_signal_for_account
@@ -55,6 +56,8 @@ def execute_signal(
             exchange_account_id=payload.exchange_account_id,
             alert_runtime=_operational_alert_runtime(),
         )
+    except EmergencyStopEnabledError as exc:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -179,6 +182,7 @@ def submit_testnet_order(
     db: Session = Depends(get_db),
 ):
     try:
+        assert_new_orders_allowed(db)
         context = build_testnet_order_api_context(
             db,
             user_id=current_user.id,
@@ -196,6 +200,8 @@ def submit_testnet_order(
             rate_limiter=runtime_rate_limit_service,
             exchange_account_id=context.account.id,
         )
+    except EmergencyStopEnabledError as exc:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except TestnetOrderApiBlockedError as exc:

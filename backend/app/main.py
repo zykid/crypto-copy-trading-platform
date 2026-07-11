@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.metrics import router as metrics_router
 from app.api.v1.admin_observability import router as admin_observability_router
 from app.api.v1.admin_storage import router as admin_storage_router
+from app.api.v1.admin_system_control import router as admin_system_control_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.exchange_accounts import router as exchange_accounts_router
 from app.api.v1.health import router as health_router
@@ -74,6 +75,11 @@ def create_app() -> FastAPI:
         admin_storage_router,
         prefix="/api/v1/admin/storage",
         tags=["admin-storage"],
+    )
+    app.include_router(
+        admin_system_control_router,
+        prefix="/api/v1/admin/system-control",
+        tags=["admin-system-control"],
     )
     return app
 

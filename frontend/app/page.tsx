@@ -42,6 +42,13 @@ type ExchangeAccount = {
   is_active: boolean;
 };
 
+type EmergencyStopState = {
+  enabled: boolean;
+  reason: string | null;
+  changed_by_user_id: string | null;
+  changed_at: string;
+};
+
 type AuditLogRecord = {
   id: string;
   user_id: string;
@@ -235,6 +242,12 @@ export default function Home() {
     manualEntryKey: "",
     recoveryCodes: [] as string[],
   });
+  const [emergencyStop, setEmergencyStop] =
+    useState<EmergencyStopState | null>(null);
+  const [emergencyStopForm, setEmergencyStopForm] = useState({
+    reason: "",
+    password: "",
+  });
   const [exchangeAccounts, setExchangeAccounts] = useState<ExchangeAccount[]>([]);
   const [testnetAccountId, setTestnetAccountId] = useState("");
   const [testnetAdmissionReport, setTestnetAdmissionReport] =
@@ -424,6 +437,19 @@ export default function Home() {
         enabled: Boolean(mfaResult.enabled),
         enrollmentPending: Boolean(mfaResult.enrollment_pending),
       };
+
+      const emergencyResult = requireObject(
+        await apiRequest(
+          "GET",
+          "/admin/system-control/emergency-stop",
+          undefined,
+          token,
+        ),
+        "全局紧急停止状态",
+      );
+      setEmergencyStop(emergencyResult as EmergencyStopState);
+    } else {
+      setEmergencyStop(null);
     }
 
     setSession((current) => ({
@@ -713,6 +739,66 @@ export default function Home() {
       "密码再认证",
     );
     return String(result.reauthentication_token);
+  }
+
+  async function refreshEmergencyStop() {
+    await runStep("刷新全局紧急停止状态", async () => {
+      const result = requireObject(
+        await apiRequest("GET", "/admin/system-control/emergency-stop"),
+        "全局紧急停止状态",
+      ) as EmergencyStopState;
+      setEmergencyStop(result);
+      return result;
+    });
+  }
+
+  async function activateEmergencyStop() {
+    const reason = emergencyStopForm.reason.trim();
+    if (reason.length < 3) {
+      appendLog("启用全局紧急停止", false, "请输入至少 3 个字符的原因");
+      return;
+    }
+    await runStep("启用全局紧急停止", async () => {
+      const result = requireObject(
+        await apiRequest("POST", "/admin/system-control/emergency-stop/activate", {
+          reason,
+        }),
+        "全局紧急停止状态",
+      ) as EmergencyStopState;
+      setEmergencyStop(result);
+      setEmergencyStopForm({ reason: "", password: "" });
+      return result;
+    });
+  }
+
+  async function deactivateEmergencyStop() {
+    const reason = emergencyStopForm.reason.trim();
+    if (reason.length < 3 || !emergencyStopForm.password) {
+      appendLog("解除全局紧急停止", false, "请输入解除原因和当前登录密码");
+      return;
+    }
+    const password = emergencyStopForm.password;
+    try {
+      await runStep("解除全局紧急停止", async () => {
+        const reauthenticationToken = await createReauthenticationToken(password);
+        const result = requireObject(
+          await apiRequest(
+            "POST",
+            "/admin/system-control/emergency-stop/deactivate",
+            { reason },
+            session.token,
+            200,
+            { "X-Reauthentication-Token": reauthenticationToken },
+          ),
+          "全局紧急停止状态",
+        ) as EmergencyStopState;
+        setEmergencyStop(result);
+        setEmergencyStopForm({ reason: "", password: "" });
+        return result;
+      });
+    } finally {
+      setEmergencyStopForm((current) => ({ ...current, password: "" }));
+    }
   }
 
   async function createTestnetAccount() {
@@ -1385,6 +1471,9 @@ export default function Home() {
           <a href="#mock-flow">Mock 交易</a>
           <a href="#session">会话</a>
           <a href="#security">安全</a>
+          {session.role === "super_admin" && (
+            <a href="#emergency-stop">紧急停止</a>
+          )}
           <a href="#exchange-accounts">交易所账户</a>
           <a href="#testnet-window">测试网窗口</a>
           {session.role === "super_admin" && <a href="#storage">存储</a>}
@@ -1458,6 +1547,80 @@ export default function Home() {
           </div>
           <span className="safety-badge">禁止实盘下单</span>
         </section>
+
+        {session.role === "super_admin" && (
+          <section
+            className={`panel emergency-stop-panel ${
+              emergencyStop?.enabled ? "emergency-stop-active" : ""
+            }`}
+            id="emergency-stop"
+          >
+            <div className="panel-heading">
+              <div>
+                <h2>全局紧急停止</h2>
+                <p className="panel-note">
+                  启用后立即禁止所有新订单并强制关闭账户与风控交易开关。查询、登录和审计保持可用。
+                </p>
+              </div>
+              <div className="emergency-stop-heading-actions">
+                <span className={emergencyStop?.enabled ? "stop-on" : "stop-off"}>
+                  {emergencyStop?.enabled ? "已停止" : "正常待命"}
+                </span>
+                <button onClick={() => void refreshEmergencyStop()} disabled={busy}>
+                  刷新
+                </button>
+              </div>
+            </div>
+            <div className="emergency-stop-controls">
+              <label>
+                {emergencyStop?.enabled ? "解除原因" : "停止原因"}
+                <input
+                  value={emergencyStopForm.reason}
+                  onChange={(event) =>
+                    setEmergencyStopForm((current) => ({
+                      ...current,
+                      reason: event.target.value,
+                    }))
+                  }
+                  placeholder="必填，将写入只增不改审计日志"
+                />
+              </label>
+              {emergencyStop?.enabled && (
+                <label>
+                  当前登录密码
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={emergencyStopForm.password}
+                    onChange={(event) =>
+                      setEmergencyStopForm((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }))
+                    }
+                    placeholder="解除停止前必须重新认证"
+                  />
+                </label>
+              )}
+              <button
+                className={emergencyStop?.enabled ? "" : "danger-action"}
+                onClick={() =>
+                  void (emergencyStop?.enabled
+                    ? deactivateEmergencyStop()
+                    : activateEmergencyStop())
+                }
+                disabled={busy || !emergencyStop}
+              >
+                {emergencyStop?.enabled ? "解除紧急停止" : "立即停止所有新订单"}
+              </button>
+            </div>
+            {emergencyStop?.reason && (
+              <p className="emergency-stop-last-reason">
+                最近原因：{emergencyStop.reason}
+              </p>
+            )}
+          </section>
+        )}
 
         <section className="market-metrics" aria-label="测试模块状态">
           <article>

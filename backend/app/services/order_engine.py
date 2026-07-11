@@ -13,6 +13,7 @@ from app.db.models.trading import (
     TradingSignal,
 )
 from app.exchanges.mock import MockExchange
+from app.services.emergency_stop import assert_new_orders_allowed
 from app.services.position_engine import apply_fill, calculate_delta, get_or_create_position
 from app.services.risk_engine import RiskOrderInput, check_order_risk, get_or_create_risk_settings
 
@@ -35,6 +36,7 @@ def execute_signal_for_account(
     exchange: MockExchange | None = None,
     alert_runtime: OrderFailureAlertRuntime | None = None,
 ) -> OrderExecution:
+    assert_new_orders_allowed(db)
     signal = _get_owned_signal(db, user_id=user_id, signal_id=signal_id)
     account = _get_owned_account(db, user_id=user_id, exchange_account_id=exchange_account_id)
 
