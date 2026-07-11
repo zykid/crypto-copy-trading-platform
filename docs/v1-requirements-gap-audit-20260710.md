@@ -42,7 +42,7 @@ REAL 订单提交 API。
 | 初始要求 | 当前限制 | 完成条件 |
 | --- | --- | --- |
 | 统一 Risk Engine | 已检查数量、禁用币种和单笔金额；最大仓位、最大杠杆字段尚未真正执行，每日亏损未实现。 | 增加组合仓位/杠杆检查、每日已实现盈亏限额、测试和详细审计。 |
-| Order State Machine | 已有统一状态转换校验和只追加转换历史，Mock 执行已接入；测试网交易所事件尚未接入统一转换器。 | 将 WebSocket/REST 订单事件接入转换器，补齐部分成交、撤单、超时与对账处理。 |
+| Order State Machine | 已有统一状态转换校验和只追加转换历史，Mock 执行已接入；Binance、Bybit、OKX 测试网订单事件已有标准化和租户隔离处理器，可去重并拒绝乱序或非法转换，但尚未接入持续消费进程。 | 持久化 TESTNET 提交执行，接入持续 WebSocket 消费与 REST 补数，并补齐超时和对账处理。 |
 | Exchange Adapter | 已有公开和私有只读请求；生产适配器未实现 `get_open_orders`、`get_order_status`、`place_order`、`cancel_order`。 | 按交易所实现签名请求、标准化错误和完整测试。 |
 | WebSocket 优先 | 已有部分测试网私有用户流组件，但订单、余额、持仓和行情尚未全部由 WebSocket 驱动。 | 增加受监管连接、断线恢复、缺口补数、REST 对账和健康状态。 |
 | Position Reconciliation 调度 | Worker 和只读修复建议存在；生产调度与自动修复未开启。 | 增加调度所有权、租约、指标和单独审批的修复执行器。 |
