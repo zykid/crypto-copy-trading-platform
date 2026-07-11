@@ -13,7 +13,9 @@ from app.services.gexbot_market_data import (
     GexbotValidationError,
 )
 from app.services.public_market_data import (
+    PublicCandleResult,
     PublicMarketDataError,
+    get_public_candles,
     get_public_candles_with_fallback,
 )
 
@@ -26,15 +28,28 @@ def get_exchange_candles(
     symbol: str,
     interval: str = "1m",
     limit: int = 200,
+    allow_fallback: bool = True,
     _: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
-        result = get_public_candles_with_fallback(
-            exchange_name=exchange,
-            symbol=symbol,
-            interval=interval,
-            limit=limit,
-        )
+        if allow_fallback:
+            result = get_public_candles_with_fallback(
+                exchange_name=exchange,
+                symbol=symbol,
+                interval=interval,
+                limit=limit,
+            )
+        else:
+            result = PublicCandleResult(
+                requested_exchange=exchange,
+                source_exchange=exchange,
+                candles=get_public_candles(
+                    exchange_name=exchange,
+                    symbol=symbol,
+                    interval=interval,
+                    limit=limit,
+                ),
+            )
     except PublicMarketDataError as exc:
         raise HTTPException(
             status_code=502 if exc.failure_type != "invalid_response" else 422,

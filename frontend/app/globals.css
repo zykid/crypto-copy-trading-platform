@@ -2381,6 +2381,36 @@ body {
   padding: 6px 10px;
 }
 
+.live-market-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.live-market-sources {
+  display: flex;
+  gap: 4px;
+  padding-right: 12px;
+  border-right: 1px solid #243244;
+}
+
+.live-market-sources button {
+  min-width: 54px;
+  min-height: 28px;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  background: #111827;
+  color: #94a3b8;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.live-market-sources button.active {
+  border-color: #f5b800;
+  background: rgba(245, 184, 0, 0.12);
+  color: #f8c94a;
+}
+
 .live-market-intervals {
   display: flex;
   gap: 4px;

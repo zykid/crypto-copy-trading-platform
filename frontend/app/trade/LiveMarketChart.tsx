@@ -13,6 +13,7 @@ import {
 
 type ExchangeName = "binance" | "bybit" | "okx" | "mock";
 type ChartInterval = "1m" | "5m" | "15m" | "1h";
+type DataSourceMode = "auto" | Exclude<ExchangeName, "mock">;
 type ConnectionState = "loading" | "live" | "polling" | "reconnecting" | "error" | "unavailable";
 
 type CandlePayload = {
@@ -48,10 +49,18 @@ const stateLabels: Record<ConnectionState, string> = {
   unavailable: "无真实行情",
 };
 
+const dataSourceLabels: Record<DataSourceMode, string> = {
+  auto: "自动",
+  okx: "OKX",
+  binance: "Binance",
+  bybit: "Bybit",
+};
+
 export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPriceUpdate }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const [interval, setIntervalValue] = useState<ChartInterval>("1m");
+  const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>("auto");
   const [connectionState, setConnectionState] = useState<ConnectionState>("loading");
   const [lastPrice, setLastPrice] = useState<number | null>(null);
   const [sourceExchange, setSourceExchange] =
@@ -110,16 +119,25 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
     setSourceExchange(null);
     onPriceUpdate?.(null);
     setErrorMessage("");
-    if (exchange === "mock") {
+    if (dataSourceMode === "auto" && exchange === "mock") {
       seriesRef.current?.setData([]);
       setConnectionState("unavailable");
       return;
     }
-    const marketExchange = exchange as Exclude<ExchangeName, "mock">;
+    const marketExchange = dataSourceMode === "auto"
+      ? exchange as Exclude<ExchangeName, "mock">
+      : dataSourceMode;
+    const previewExchange = exchange;
     let activeMarketExchange = marketExchange;
 
     async function fetchCandles(limit: number) {
-      const query = new URLSearchParams({ exchange, symbol, interval, limit: String(limit) });
+      const query = new URLSearchParams({
+        exchange: marketExchange,
+        symbol,
+        interval,
+        limit: String(limit),
+        allow_fallback: String(dataSourceMode === "auto"),
+      });
       const response = await fetch(`${apiRoot}/market-data/public/candles?${query.toString()}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         cache: "no-store",
@@ -153,7 +171,7 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
       seriesRef.current?.priceScale().applyOptions({ autoScale: true });
       const price = chartData[chartData.length - 1].close;
       setLastPrice(price);
-      onPriceUpdate?.(activeMarketExchange === marketExchange ? price : null);
+      onPriceUpdate?.(activeMarketExchange === previewExchange ? price : null);
       connectSocket(activeMarketExchange);
     }
 
@@ -168,7 +186,7 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
         activeMarketExchange = latest.sourceExchange;
         setSourceExchange(latest.sourceExchange);
         setLastPrice(candle.close);
-        onPriceUpdate?.(activeMarketExchange === marketExchange ? candle.close : null);
+        onPriceUpdate?.(activeMarketExchange === previewExchange ? candle.close : null);
         setConnectionState("polling");
       } catch {
         if (!cancelled) {
@@ -213,7 +231,7 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
           }
           seriesRef.current?.update(candle);
           setLastPrice(candle.close);
-          onPriceUpdate?.(socketExchange === marketExchange ? candle.close : null);
+          onPriceUpdate?.(socketExchange === previewExchange ? candle.close : null);
           setConnectionState("live");
         } catch {
           // Ignore acknowledgement and unrelated exchange messages.
@@ -261,22 +279,36 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
         clearInterval(pollingTimer);
       }
     };
-  }, [apiRoot, exchange, interval, onPriceUpdate, symbol, token]);
+  }, [apiRoot, dataSourceMode, exchange, interval, onPriceUpdate, symbol, token]);
 
   return (
     <div className="live-market-chart">
       <div className="live-market-toolbar">
-        <div className="live-market-intervals" aria-label="K 线周期">
-          {(Object.keys(intervalLabels) as ChartInterval[]).map((value) => (
-            <button
-              className={interval === value ? "active" : ""}
-              key={value}
-              onClick={() => setIntervalValue(value)}
-              type="button"
-            >
-              {intervalLabels[value]}
-            </button>
-          ))}
+        <div className="live-market-controls">
+          <div className="live-market-sources" aria-label="行情数据来源">
+            {(Object.keys(dataSourceLabels) as DataSourceMode[]).map((value) => (
+              <button
+                className={dataSourceMode === value ? "active" : ""}
+                key={value}
+                onClick={() => setDataSourceMode(value)}
+                type="button"
+              >
+                {dataSourceLabels[value]}
+              </button>
+            ))}
+          </div>
+          <div className="live-market-intervals" aria-label="K 线周期">
+            {(Object.keys(intervalLabels) as ChartInterval[]).map((value) => (
+              <button
+                className={interval === value ? "active" : ""}
+                key={value}
+                onClick={() => setIntervalValue(value)}
+                type="button"
+              >
+                {intervalLabels[value]}
+              </button>
+            ))}
+          </div>
         </div>
         <div className={`live-market-state ${connectionState}`}>
           <span>{stateLabels[connectionState]}</span>
@@ -286,9 +318,13 @@ export default function LiveMarketChart({ apiRoot, exchange, symbol, token, onPr
       <div ref={containerRef} className="live-market-canvas" aria-label={`${symbol} 实时 K 线图`} />
       {errorMessage && <p className="live-market-error">{errorMessage}</p>}
       <p className="live-market-source">
-        行情来源：{(sourceExchange ?? exchange).toUpperCase()} 公开市场数据，无需 API 密钥
-        {sourceExchange && sourceExchange !== exchange
+        行情来源：{(sourceExchange ?? (dataSourceMode === "auto" ? exchange : dataSourceMode)).toUpperCase()}
+        公开市场数据，无需 API 密钥
+        {dataSourceMode === "auto" && sourceExchange && sourceExchange !== exchange
           ? `（${exchange.toUpperCase()} 暂不可用，已自动切换；备用价格不用于下单预览）`
+          : ""}
+        {dataSourceMode !== "auto" && dataSourceMode !== exchange
+          ? "（当前为跨交易所对比行情，不用于下单预览）"
           : ""}
       </p>
     </div>
