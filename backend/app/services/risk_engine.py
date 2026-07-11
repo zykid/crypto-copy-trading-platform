@@ -82,9 +82,10 @@ def check_order_risk(
     account: ExchangeAccount,
     settings: RiskSetting,
     order: RiskOrderInput,
+    allow_non_simulation: bool = False,
 ) -> RiskCheckResult:
     reasons: list[str] = []
-    if account.account_mode != AccountMode.SIMULATION:
+    if account.account_mode != AccountMode.SIMULATION and not allow_non_simulation:
         reasons.append("only SIMULATION mode is enabled in V1")
     if not account.trading_enabled:
         reasons.append("exchange account trading is disabled")

@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import settings
+from app.db.models.exchange_account import ExchangeName
+from app.db.models.trading import OrderExecution
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.trading import (
@@ -28,9 +30,19 @@ from app.services.testnet_http_client import create_testnet_signed_http_client
 from app.services.testnet_order_admission import build_testnet_order_admission_report
 from app.services.testnet_order_api import (
     TestnetOrderApiBlockedError,
+    TestnetOrderApiContext,
     build_testnet_order_api_context,
 )
 from app.services.testnet_order_execution import execute_testnet_order
+from app.services.testnet_order_persistence import (
+    TestnetExchangeOrderRejectedError,
+    TestnetOrderIdempotencyConflictError,
+    TestnetOrderRiskRejectedError,
+    TestnetSubmissionRecord,
+    create_or_get_testnet_submission_execution,
+    record_testnet_submission_accepted,
+    record_testnet_submission_failure,
+)
 from app.services.testnet_order_window import build_testnet_order_window_plan
 from app.services.testnet_order_window_approval import (
     TestnetOrderWindowApprovalBlockedError,
@@ -181,6 +193,7 @@ def submit_testnet_order(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    submission: TestnetSubmissionRecord | None = None
     try:
         assert_new_orders_allowed(db)
         context = build_testnet_order_api_context(
@@ -189,6 +202,17 @@ def submit_testnet_order(
             payload=payload,
             testnet_adapters_enabled=settings.testnet_adapters_enabled,
         )
+        submission = create_or_get_testnet_submission_execution(
+            db,
+            user_id=current_user.id,
+            context=context,
+        )
+        if submission.idempotent_replay:
+            return _testnet_submit_response(
+                context=context,
+                execution=submission.execution,
+                idempotent_replay=True,
+            )
         http_client = create_testnet_signed_http_client(
             exchange_name=context.account.exchange_name,
         )
@@ -200,42 +224,96 @@ def submit_testnet_order(
             rate_limiter=runtime_rate_limit_service,
             exchange_account_id=context.account.id,
         )
+        execution = record_testnet_submission_accepted(
+            db,
+            execution=submission.execution,
+            result=result,
+        )
     except EmergencyStopEnabledError as exc:
         raise HTTPException(status_code=status.HTTP_423_LOCKED, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except TestnetOrderIdempotencyConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except TestnetOrderRiskRejectedError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except TestnetOrderApiBlockedError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"reasons": list(exc.reasons)},
         ) from exc
     except RateLimitStoreUnavailableError as exc:
+        _record_testnet_submission_failure(
+            db,
+            submission,
+            failure_type="rate_limit_store_unavailable",
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="testnet order rate limit service unavailable",
         ) from exc
     except RateLimitExceededError as exc:
+        _record_testnet_submission_failure(db, submission, failure_type="rate_limited")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="testnet order rate limit exceeded",
             headers={"Retry-After": str(exc.retry_after_seconds)},
         ) from exc
-    except RuntimeError as exc:
+    except (TestnetExchangeOrderRejectedError, RuntimeError) as exc:
+        _record_testnet_submission_failure(db, submission, failure_type="exchange_request_failed")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="testnet exchange request failed",
         ) from exc
 
+    return _testnet_submit_response(
+        context=context,
+        execution=execution,
+        idempotent_replay=False,
+    )
+
+
+def _testnet_submit_response(
+    *,
+    context: TestnetOrderApiContext,
+    execution: OrderExecution,
+    idempotent_replay: bool,
+) -> TestnetOrderSubmitResponse:
     return TestnetOrderSubmitResponse(
+        execution_id=execution.execution_id,
+        order_status=execution.status,
+        idempotent_replay=idempotent_replay,
         exchange_account_id=context.account.id,
-        exchange_name=result.exchange_name,
-        client_order_id=result.client_order_id,
-        request_method=result.request_method,
-        request_path=result.request_path,
+        exchange_name=context.account.exchange_name,
+        client_order_id=execution.client_order_id,
+        request_method="POST",
+        request_path=_testnet_order_request_path(context.account.exchange_name),
         approval_audit_log_id=context.authorization.audit_log_id,
         approval_expires_at=context.authorization.expires_at.isoformat(),
-        exchange_response=result.exchange_response,
+        exchange_response=execution.exchange_response or {},
     )
+
+
+def _record_testnet_submission_failure(
+    db: Session,
+    submission: TestnetSubmissionRecord | None,
+    *,
+    failure_type: str,
+) -> None:
+    if submission is not None and not submission.idempotent_replay:
+        record_testnet_submission_failure(
+            db,
+            execution=submission.execution,
+            failure_type=failure_type,
+        )
+
+
+def _testnet_order_request_path(exchange_name: ExchangeName) -> str:
+    return {
+        ExchangeName.BINANCE: "/api/v3/order",
+        ExchangeName.BYBIT: "/v5/order/create",
+        ExchangeName.OKX: "/api/v5/trade/order",
+    }[exchange_name]
 
 
 def _operational_alert_runtime() -> OperationalAlertRuntime:

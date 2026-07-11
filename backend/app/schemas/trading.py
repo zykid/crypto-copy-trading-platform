@@ -65,6 +65,9 @@ class TestnetOrderSubmitRequest(BaseModel):
 
 
 class TestnetOrderSubmitResponse(BaseModel):
+    execution_id: str
+    order_status: OrderExecutionStatus
+    idempotent_replay: bool
     exchange_account_id: str
     exchange_name: ExchangeName
     client_order_id: str
