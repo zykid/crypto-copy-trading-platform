@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 1.6 seconds
-Output:
 from dataclasses import dataclass
 
 import pytest
@@ -108,4 +105,3 @@ def test_bounded_user_stream_requires_explicit_testnet_enablement(
             testnet_adapters_enabled=False,
             max_messages=1,
         )
-

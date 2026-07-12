@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 2.4 seconds
-Output:
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -191,4 +188,3 @@ class Phase4FinalReleaseCheckResponse(BaseModel):
     order_window_audit_log_id: str
     order_submission_authorized: bool
     trading_flags_changed: bool
-

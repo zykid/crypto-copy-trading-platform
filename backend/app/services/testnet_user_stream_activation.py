@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 3.2 seconds
-Output:
 from dataclasses import replace
 from typing import Any
 
@@ -41,4 +38,3 @@ def _listen_key(response: object) -> str:
     if not listen_key or len(listen_key) > 256 or "/" in listen_key:
         raise TestnetUserStreamActivationError("testnet user stream listen key is invalid")
     return listen_key
-

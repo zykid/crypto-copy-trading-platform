@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 2.1 seconds
-Output:
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -143,4 +140,3 @@ def _write_audit(
         )
     )
     db.commit()
-

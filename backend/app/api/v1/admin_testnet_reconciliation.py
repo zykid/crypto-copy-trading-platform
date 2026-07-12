@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 1.7 seconds
-Output:
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -121,4 +118,3 @@ def _require_testnet_enabled() -> None:
             status_code=status.HTTP_409_CONFLICT,
             detail="TESTNET_ADAPTERS_ENABLED must be true before this operation",
         )
-

@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 1.2 seconds
-Output:
 from dataclasses import dataclass
 
 import pytest
@@ -60,4 +57,3 @@ def test_activation_rejects_missing_listen_key() -> None:
             plan=plan,
             http_client=FakeHttpClient(response={}),
         )
-
