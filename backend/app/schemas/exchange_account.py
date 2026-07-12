@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 2.4 seconds
+Output:
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -72,6 +75,19 @@ class TestnetOrderReconciliationResponse(BaseModel):
     transitioned: int
     failed: int
     items: list[TestnetOrderReconciliationItemResponse]
+
+
+class TestnetUserStreamConsumeRequest(BaseModel):
+    max_messages: int = Field(ge=1, le=20)
+    acknowledgement: str = Field(min_length=1, max_length=80)
+
+
+class TestnetUserStreamConsumeResponse(BaseModel):
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    status: str
+    messages_processed: int
+    reconnect_attempts: int
 
 
 class TestnetOrderWindowApprovalRequest(BaseModel):
@@ -175,3 +191,4 @@ class Phase4FinalReleaseCheckResponse(BaseModel):
     order_window_audit_log_id: str
     order_submission_authorized: bool
     trading_flags_changed: bool
+
