@@ -12,6 +12,7 @@ class OKXAdapter(ReadOnlyTestnetAdapter):
     symbol_rules_path = "/api/v5/public/instruments"
     balances_path = "/api/v5/account/balance"
     positions_path = "/api/v5/account/positions"
+    open_orders_path = "/api/v5/trade/orders-pending"
 
     def __init__(
         self,
@@ -83,6 +84,30 @@ class OKXAdapter(ReadOnlyTestnetAdapter):
                 "entry_price": item.get("avgPx"),
                 "unrealized_pnl": item.get("upl"),
                 "raw": item,
+            }
+            for item in response.get("data", [])
+        ]
+
+    def get_open_orders(self) -> list[dict[str, Any]]:
+        self._ensure_enabled()
+        response = self.http_client.get_private(
+            self.open_orders_path,
+            credentials=self._require_credentials(),
+            params={"instType": "SPOT"},
+            security_type=self.private_security_type,
+        )
+        return [
+            {
+                "exchange": ExchangeName.OKX.value,
+                "order_id": item.get("ordId"),
+                "symbol": item.get("instId"),
+                "side": item.get("side"),
+                "order_type": item.get("ordType"),
+                "status": item.get("state"),
+                "price": item.get("px"),
+                "quantity": item.get("sz"),
+                "filled_quantity": item.get("accFillSz"),
+                "created_at": item.get("cTime"),
             }
             for item in response.get("data", [])
         ]

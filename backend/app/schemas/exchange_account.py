@@ -59,6 +59,25 @@ class RealReadOnlyCheckResponse(BaseModel):
     balance_asset_count: int
 
 
+class RealOpenOrderResponse(BaseModel):
+    order_id: str | None
+    symbol: str | None
+    side: str | None
+    order_type: str | None
+    status: str | None
+    price: str | None
+    quantity: str | None
+    filled_quantity: str | None
+    created_at: str | None
+
+
+class RealOpenOrdersResponse(BaseModel):
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    read_only: bool = True
+    orders: list[RealOpenOrderResponse]
+
+
 class TestnetOrderReconciliationItemResponse(BaseModel):
     execution_id: str
     status: str
