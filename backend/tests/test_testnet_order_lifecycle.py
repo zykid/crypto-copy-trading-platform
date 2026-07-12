@@ -26,6 +26,7 @@ from app.services.testnet_order_lifecycle import (
     TestnetOrderLifecycleProcessor as OrderLifecycleProcessor,
 )
 from app.services.testnet_order_lifecycle import (
+    normalize_testnet_rest_order_status,
     normalize_testnet_user_stream_order_event,
 )
 from app.services.testnet_user_stream_runtime import parse_testnet_user_stream_event
@@ -190,6 +191,71 @@ def test_testnet_order_event_rejects_invalid_filled_quantity() -> None:
                 "z": {"unexpected": "value"},
             },
         )
+
+
+@pytest.mark.parametrize(
+    ("exchange_name", "payload", "expected_status", "client_order_id"),
+    [
+        (
+            ExchangeName.BINANCE,
+            {
+                "clientOrderId": "rest-client-1",
+                "orderId": 1,
+                "status": "FILLED",
+                "executedQty": "0.01",
+            },
+            OrderExecutionStatus.FILLED,
+            "rest-client-1",
+        ),
+        (
+            ExchangeName.BYBIT,
+            {
+                "retCode": 0,
+                "result": {
+                    "list": [
+                        {
+                            "orderLinkId": "rest-client-2",
+                            "orderId": "2",
+                            "orderStatus": "New",
+                            "cumExecQty": "0",
+                        }
+                    ]
+                },
+            },
+            OrderExecutionStatus.ACCEPTED,
+            "rest-client-2",
+        ),
+        (
+            ExchangeName.OKX,
+            {
+                "code": "0",
+                "data": [
+                    {
+                        "clOrdId": "rest-client-3",
+                        "ordId": "3",
+                        "state": "partially_filled",
+                        "accFillSz": "0.01",
+                    }
+                ],
+            },
+            OrderExecutionStatus.PARTIALLY_FILLED,
+            "rest-client-3",
+        ),
+    ],
+)
+def test_normalize_testnet_rest_order_statuses(
+    exchange_name: ExchangeName,
+    payload: dict[str, object],
+    expected_status: OrderExecutionStatus,
+    client_order_id: str,
+) -> None:
+    event = normalize_testnet_rest_order_status(
+        exchange_name=exchange_name,
+        payload=payload,
+    )
+
+    assert event.status == expected_status
+    assert event.client_order_id == client_order_id
 
 
 def _submitted_execution(

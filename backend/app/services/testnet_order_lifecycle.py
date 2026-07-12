@@ -69,6 +69,8 @@ class TestnetOrderLifecycleProcessor:
     def apply(
         self,
         event: NormalizedTestnetOrderEvent,
+        *,
+        transition_reason: str = "testnet_user_stream_event",
     ) -> TestnetOrderLifecycleResult:
         execution = self._find_execution(event)
         if execution is None:
@@ -96,7 +98,7 @@ class TestnetOrderLifecycleProcessor:
                 self._db,
                 execution=execution,
                 to_status=event.status,
-                reason="testnet_user_stream_event",
+                reason=transition_reason,
                 details=_safe_transition_details(event),
             )
         except InvalidOrderStateTransitionError:
@@ -150,6 +152,21 @@ def normalize_testnet_user_stream_order_event(
     if exchange_name == ExchangeName.OKX:
         return _normalize_okx(payload)
     raise TestnetOrderEventValidationError("unsupported testnet order event exchange")
+
+
+def normalize_testnet_rest_order_status(
+    *,
+    exchange_name: ExchangeName,
+    payload: dict[str, Any],
+) -> NormalizedTestnetOrderEvent:
+    """Normalize a single private REST order lookup without exposing credentials."""
+    if exchange_name == ExchangeName.BINANCE:
+        return _normalize_binance_rest(payload)
+    if exchange_name == ExchangeName.BYBIT:
+        return _normalize_bybit_rest(payload)
+    if exchange_name == ExchangeName.OKX:
+        return _normalize_okx_rest(payload)
+    raise TestnetOrderEventValidationError("unsupported testnet REST order exchange")
 
 
 def _normalize_binance(payload: dict[str, Any]) -> NormalizedTestnetOrderEvent:
@@ -220,6 +237,41 @@ def _normalize_okx(payload: dict[str, Any]) -> NormalizedTestnetOrderEvent:
     )
 
 
+def _normalize_binance_rest(payload: dict[str, Any]) -> NormalizedTestnetOrderEvent:
+    return NormalizedTestnetOrderEvent(
+        exchange_name=ExchangeName.BINANCE,
+        client_order_id=_optional_text(payload.get("clientOrderId")),
+        exchange_order_id=_optional_text(payload.get("orderId")),
+        status=_status(
+            payload.get("status"),
+            {
+                "NEW": OrderExecutionStatus.ACCEPTED,
+                "PENDING_NEW": OrderExecutionStatus.SUBMITTED,
+                "PARTIALLY_FILLED": OrderExecutionStatus.PARTIALLY_FILLED,
+                "FILLED": OrderExecutionStatus.FILLED,
+                "CANCELED": OrderExecutionStatus.CANCELLED,
+                "REJECTED": OrderExecutionStatus.REJECTED,
+                "EXPIRED": OrderExecutionStatus.TIMEOUT,
+                "EXPIRED_IN_MATCH": OrderExecutionStatus.TIMEOUT,
+            },
+        ),
+        event_id=_optional_text(payload.get("updateTime")),
+        filled_quantity=_optional_decimal(payload.get("executedQty")),
+    )
+
+
+def _normalize_bybit_rest(payload: dict[str, Any]) -> NormalizedTestnetOrderEvent:
+    if payload.get("retCode") not in (None, 0, "0"):
+        raise TestnetOrderEventValidationError("Bybit REST order lookup was rejected")
+    return _normalize_bybit({"data": _mapping(payload.get("result")).get("list")})
+
+
+def _normalize_okx_rest(payload: dict[str, Any]) -> NormalizedTestnetOrderEvent:
+    if payload.get("code") not in (None, 0, "0"):
+        raise TestnetOrderEventValidationError("OKX REST order lookup was rejected")
+    return _normalize_okx({"data": payload.get("data")})
+
+
 def _status(
     raw_status: Any,
     mapping: dict[str, OrderExecutionStatus],
@@ -234,6 +286,10 @@ def _first_mapping(value: Any) -> dict[str, Any]:
     if not isinstance(value, list) or not value or not isinstance(value[0], dict):
         raise TestnetOrderEventValidationError("testnet order event data is missing")
     return value[0]
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def _optional_text(value: Any) -> str | None:
