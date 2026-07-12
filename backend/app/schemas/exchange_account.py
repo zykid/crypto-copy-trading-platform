@@ -59,6 +59,21 @@ class RealReadOnlyCheckResponse(BaseModel):
     balance_asset_count: int
 
 
+class TestnetOrderReconciliationItemResponse(BaseModel):
+    execution_id: str
+    status: str
+    transitioned: bool
+    failure_type: str | None
+
+
+class TestnetOrderReconciliationResponse(BaseModel):
+    exchange_account_id: str
+    attempted: int
+    transitioned: int
+    failed: int
+    items: list[TestnetOrderReconciliationItemResponse]
+
+
 class TestnetOrderWindowApprovalRequest(BaseModel):
     symbol: str = Field(min_length=1, max_length=32)
     side: OrderSide

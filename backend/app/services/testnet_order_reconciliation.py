@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.exchange_account import AccountMode, ExchangeName
+from app.db.models.observability import AuditLog
 from app.db.models.trading import OrderExecution, OrderExecutionStatus
 from app.exchanges.http_client import (
     ExchangeCredentials,
@@ -104,7 +105,7 @@ def reconcile_pending_testnet_orders(
         )
         for execution in executions
     )
-    return TestnetOrderReconciliationResult(
+    result = TestnetOrderReconciliationResult(
         exchange_account_id=exchange_account_id,
         attempted=len(items),
         transitioned=sum(
@@ -115,6 +116,8 @@ def reconcile_pending_testnet_orders(
         failed=sum(item.failure_type is not None for item in items),
         items=items,
     )
+    _write_audit(db, user_id=user_id, result=result, exchange_name=account.exchange_name)
+    return result
 
 
 def _reconcile_execution(
@@ -192,3 +195,28 @@ def _okx_symbol(symbol: str) -> str:
     if normalized.endswith("USDT"):
         return f"{normalized[:-4]}-USDT"
     return normalized
+
+
+def _write_audit(
+    db: Session,
+    *,
+    user_id: str,
+    exchange_name: ExchangeName,
+    result: TestnetOrderReconciliationResult,
+) -> None:
+    db.add(
+        AuditLog(
+            user_id=user_id,
+            exchange_account_id=result.exchange_account_id,
+            action="testnet.order.reconciliation.requested",
+            severity="WARNING" if result.failed else "INFO",
+            payload={
+                "exchange_name": exchange_name.value,
+                "account_mode": AccountMode.TESTNET.value,
+                "attempted": result.attempted,
+                "transitioned": result.transitioned,
+                "failed": result.failed,
+            },
+        )
+    )
+    db.commit()

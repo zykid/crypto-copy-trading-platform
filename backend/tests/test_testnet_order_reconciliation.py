@@ -5,6 +5,7 @@ from test_testnet_order_lifecycle import _submitted_execution
 
 from app.core.encryption import encrypt_secret
 from app.db.models.exchange_account import ApiKeySecret, ExchangeName
+from app.db.models.observability import AuditLog
 from app.db.models.trading import OrderExecutionStatus
 from app.exchanges.http_client import ExchangeHttpRequestError, PreparedExchangeRequest
 from app.services.testnet_order_reconciliation import reconcile_pending_testnet_orders
@@ -66,6 +67,15 @@ def test_reconciliation_applies_rest_status_without_submitting_an_order(
     assert transport.prepared is not None
     assert transport.prepared.method == "GET"
     assert transport.prepared.path == "/api/v3/order"
+    audit = db_session.query(AuditLog).one()
+    assert audit.action == "testnet.order.reconciliation.requested"
+    assert audit.payload == {
+        "exchange_name": "binance",
+        "account_mode": "TESTNET",
+        "attempted": 1,
+        "transitioned": 1,
+        "failed": 0,
+    }
 
 
 def test_reconciliation_preserves_pending_status_on_transport_error(
