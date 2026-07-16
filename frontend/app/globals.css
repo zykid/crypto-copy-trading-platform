@@ -2078,12 +2078,13 @@ body {
 
 .trade-workspace-terminal .trade-main > .trade-market-strip[data-workspace="terminal"],
 .trade-workspace-terminal .trade-main > .trade-layout-grid[data-workspace="terminal"],
+.trade-workspace-terminal .trade-main > .trade-bottom-grid[data-workspace="terminal-audit"],
 .trade-workspace-portfolio .trade-main > .trade-command-center[data-workspace="portfolio"],
 .trade-workspace-portfolio .trade-main > .trade-api-grid[data-workspace="portfolio"],
 .trade-workspace-api-management .trade-main > .trade-api-manager[data-workspace="api-management"],
 .trade-workspace-risk .trade-main > .trade-desk-grid[data-workspace="risk"],
 .trade-workspace-market-data .trade-main > .trade-market-data-panel[data-workspace="market-data"],
-.trade-workspace-audit .trade-main > .trade-bottom-grid[data-workspace="audit"],
+.trade-workspace-audit .trade-main > .trade-bottom-grid[data-workspace="terminal-audit"],
 .trade-workspace-small-fund .trade-main > .trade-preflight-card[data-workspace="small-fund"],
 .trade-workspace-small-fund .trade-main > .trade-final-readiness-card[data-workspace="small-fund"],
 .trade-workspace-small-fund .trade-main > .trade-phase4-card[data-workspace="small-fund"] {
@@ -3806,6 +3807,65 @@ body {
   border-radius: 8px;
   color: #94a3b8;
   padding: 26px;
+}
+
+.trade-open-orders-table {
+  display: grid;
+  gap: 1px;
+  overflow-x: auto;
+  border: 1px solid #243244;
+  background: #243244;
+}
+
+.trade-open-orders-row {
+  display: grid;
+  grid-template-columns: 1.1fr 0.7fr 0.8fr 1fr 1.3fr 0.9fr;
+  min-width: 680px;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #0b1220;
+  font-size: 13px;
+}
+
+.trade-open-orders-header {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.trade-open-orders-time {
+  display: block;
+  margin-top: 10px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.trade-balances-table {
+  display: grid;
+  gap: 1px;
+  overflow-x: auto;
+  border: 1px solid #243244;
+  background: #243244;
+}
+
+.trade-balances-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) repeat(3, minmax(150px, 1fr));
+  min-width: 650px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #0b1220;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-balances-header {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.trade-balance-asset {
+  color: #f8fafc;
 }
 
 .trade-audit-panel {

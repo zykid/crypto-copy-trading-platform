@@ -78,6 +78,20 @@ class RealOpenOrdersResponse(BaseModel):
     orders: list[RealOpenOrderResponse]
 
 
+class RealBalanceResponse(BaseModel):
+    asset: str
+    free: str | None
+    locked: str | None
+    total: str | None
+
+
+class RealBalancesResponse(BaseModel):
+    exchange_account_id: str
+    exchange_name: ExchangeName
+    read_only: bool = True
+    balances: list[RealBalanceResponse]
+
+
 class TestnetOrderReconciliationItemResponse(BaseModel):
     execution_id: str
     status: str

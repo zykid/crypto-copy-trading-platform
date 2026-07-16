@@ -18,6 +18,7 @@ from app.schemas.exchange_account import (
     Phase4SmallFundOrderWindowApprovalResponse,
     Phase4SmallFundReviewRequest,
     Phase4SmallFundReviewResponse,
+    RealBalancesResponse,
     RealOpenOrdersResponse,
     RealReadOnlyCheckResponse,
     TestnetOrderWindowApprovalRequest,
@@ -46,6 +47,11 @@ from app.services.phase4_small_fund_order_window import (
 from app.services.phase4_small_fund_review import (
     Phase4SmallFundReviewBlockedError,
     record_phase4_small_fund_review,
+)
+from app.services.real_balances import (
+    RealBalancesAuthenticationError,
+    RealBalancesBlockedError,
+    read_real_balances,
 )
 from app.services.real_open_orders import (
     RealOpenOrdersAuthenticationError,
@@ -305,6 +311,42 @@ def read_real_open_orders_endpoint(
         exchange_account_id=result.exchange_account_id,
         exchange_name=result.exchange_name,
         orders=result.orders,
+    )
+
+
+@router.get(
+    "/{account_id}/real-balances",
+    response_model=RealBalancesResponse,
+)
+def read_real_balances_endpoint(
+    account_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RealBalancesResponse:
+    try:
+        result = read_real_balances(
+            db,
+            user_id=current_user.id,
+            exchange_account_id=account_id,
+        )
+    except RealBalancesBlockedError as exc:
+        status_code = status.HTTP_400_BAD_REQUEST
+        if "account not found" in exc.reasons:
+            status_code = status.HTTP_404_NOT_FOUND
+        raise HTTPException(status_code=status_code, detail={"reasons": list(exc.reasons)}) from exc
+    except RealBalancesAuthenticationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "reason": "production balances request failed",
+                "failure_type": exc.failure_type,
+                "exchange_code": exc.exchange_code,
+            },
+        ) from exc
+    return RealBalancesResponse(
+        exchange_account_id=result.exchange_account_id,
+        exchange_name=result.exchange_name,
+        balances=list(result.balances),
     )
 
 

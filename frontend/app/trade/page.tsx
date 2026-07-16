@@ -86,7 +86,7 @@ type AuditLogRecord = {
   created_at: string | null;
 };
 
-type BottomTab = "positions" | "orders" | "history" | "audit";
+type BottomTab = "balances" | "orders" | "history" | "audit";
 type WorkspaceSection =
   | "terminal"
   | "portfolio"
@@ -135,6 +135,12 @@ type RealOpenOrder = {
   quantity: string | null;
   filled_quantity: string | null;
   created_at: string | null;
+};
+type RealBalance = {
+  asset: string;
+  free: string | null;
+  locked: string | null;
+  total: string | null;
 };
 const emptySecretForm = {
   apiKey: "",
@@ -488,6 +494,9 @@ export default function TradeWorkspace() {
   const [openOrders, setOpenOrders] = useState<RealOpenOrder[]>([]);
   const [openOrdersLoading, setOpenOrdersLoading] = useState(false);
   const [openOrdersLoadedAt, setOpenOrdersLoadedAt] = useState("");
+  const [balances, setBalances] = useState<RealBalance[]>([]);
+  const [balancesLoading, setBalancesLoading] = useState(false);
+  const [balancesLoadedAt, setBalancesLoadedAt] = useState("");
   const [isOrderPreviewOpen, setIsOrderPreviewOpen] = useState(false);
   const [orderApprovalPassword, setOrderApprovalPassword] = useState("");
   const [phase4Readiness, setPhase4Readiness] = useState<Phase4ReadinessReport | null>(null);
@@ -504,7 +513,7 @@ export default function TradeWorkspace() {
     firstOrderStopReview: false,
     noLiveOrderSubmission: false,
   });
-  const [bottomTab, setBottomTab] = useState<BottomTab>("positions");
+  const [bottomTab, setBottomTab] = useState<BottomTab>("balances");
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
   const [auditLoadedAt, setAuditLoadedAt] = useState("");
@@ -575,6 +584,8 @@ export default function TradeWorkspace() {
     setSecretForm(emptySecretForm);
     setOpenOrders([]);
     setOpenOrdersLoadedAt("");
+    setBalances([]);
+    setBalancesLoadedAt("");
   }, []);
 
   const refreshAccounts = useCallback(async (preferredAccountId = "") => {
@@ -766,6 +777,7 @@ export default function TradeWorkspace() {
       !activeAccount.trading_enabled &&
       selectedApiKeyMetadata.configured,
   );
+  const canLoadBalances = canLoadOpenOrders;
   const accountMode = activeAccount?.account_mode ?? "UNSELECTED";
   const activeExchangeProfile = exchangeProfiles[activeExchange];
   const activeWorkspaceLabel = workspaceLabels[activeWorkspace];
@@ -1381,6 +1393,41 @@ export default function TradeWorkspace() {
     }
   }
 
+  async function loadBalances() {
+    const selectedAccount = activeAccount;
+    if (!selectedAccount) {
+      appendApiLog("加载账户资产", false, "请先选择 OKX 正式只读账户");
+      return;
+    }
+    setBalancesLoading(true);
+    try {
+      const result = (await apiRequest(
+        "GET",
+        `/exchange-accounts/${selectedAccount.id}/real-balances`,
+      )) as { balances?: unknown };
+      const nextBalances = Array.isArray(result.balances)
+        ? result.balances.filter(
+            (item): item is RealBalance =>
+              Boolean(
+                item &&
+                  typeof item === "object" &&
+                  "asset" in item &&
+                  typeof item.asset === "string",
+              ),
+          )
+        : [];
+      setBalances(nextBalances);
+      setBalancesLoadedAt(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
+      appendApiLog("加载账户资产", true, { asset_count: nextBalances.length, read_only: true });
+    } catch (error) {
+      setBalances([]);
+      setBalancesLoadedAt("");
+      appendApiLog("加载账户资产", false, errorMessage(error));
+    } finally {
+      setBalancesLoading(false);
+    }
+  }
+
   async function loadGexbotTickers() {
     if (!session.token) {
       appendApiLog("加载 GEXBot 交易对", false, "请先登录");
@@ -1556,7 +1603,7 @@ export default function TradeWorkspace() {
   function selectAccountForTrading(account: ExchangeAccount) {
     setActiveExchange(account.exchange_name);
     setActiveAccountId(account.id);
-    setBottomTab("positions");
+    setBottomTab("balances");
     setLastStatus("账户已选择");
   }
 
@@ -2453,7 +2500,7 @@ export default function TradeWorkspace() {
                         <button
                           onClick={() => {
                             selectAccountForTrading(account);
-                            setBottomTab("positions");
+                            setBottomTab("balances");
                           }}
                         >
                           交易所窗口
@@ -3014,14 +3061,14 @@ export default function TradeWorkspace() {
           })}
         </section>
 
-        <section className="trade-bottom-grid" data-workspace="audit">
+        <section className="trade-bottom-grid" data-workspace="terminal-audit">
           <div className="trade-card">
             <div className="trade-tabs">
               <button
-                className={bottomTab === "positions" ? "active" : ""}
-                onClick={() => setBottomTab("positions")}
+                className={bottomTab === "balances" ? "active" : ""}
+                onClick={() => setBottomTab("balances")}
               >
-                持仓
+                资产
               </button>
               <button
                 className={bottomTab === "orders" ? "active" : ""}
@@ -3042,9 +3089,54 @@ export default function TradeWorkspace() {
                 审计
               </button>
             </div>
-            {bottomTab === "positions" && (
-              <div className="trade-empty-table">
-                暂未加载真实持仓数据。Mock 链路验证请使用管理控制台。
+            {bottomTab === "balances" && (
+              <div className="trade-audit-panel">
+                <div className="trade-audit-heading">
+                  <div>
+                    <strong>账户资产</strong>
+                    <span>只读读取所选 OKX 正式账户余额，按原始币种展示，不进行估值换算。</span>
+                  </div>
+                  <button
+                    className="trade-secondary-button"
+                    onClick={loadBalances}
+                    disabled={!canLoadBalances || balancesLoading}
+                  >
+                    {balancesLoading ? "读取中" : "刷新资产"}
+                  </button>
+                </div>
+                {!canLoadBalances && (
+                  <div className="trade-empty-table">
+                    请选择已配置密钥、交易标记关闭的 OKX 正式只读账户后再读取资产。
+                  </div>
+                )}
+                {canLoadBalances && balances.length === 0 && !balancesLoading && (
+                  <div className="trade-empty-table">
+                    {balancesLoadedAt ? "账户当前没有返回资产余额。" : "尚未读取账户资产。"}
+                  </div>
+                )}
+                {balances.length > 0 && (
+                  <div className="trade-balances-table">
+                    <div className="trade-balances-row trade-balances-header">
+                      <span>币种</span>
+                      <span>可用</span>
+                      <span>冻结</span>
+                      <span>总额</span>
+                    </div>
+                    {balances.map((balance) => (
+                      <div className="trade-balances-row" key={balance.asset}>
+                        <strong className="trade-balance-asset">{balance.asset}</strong>
+                        <span>{balance.free ?? "-"}</span>
+                        <span>{balance.locked ?? "-"}</span>
+                        <span>{balance.total ?? "-"}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {balancesLoadedAt && (
+                  <span className="trade-open-orders-time">
+                    最后读取：{balancesLoadedAt} · {balances.length} 个币种
+                  </span>
+                )}
               </div>
             )}
             {bottomTab === "orders" && (
